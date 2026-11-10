@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3ab4f60f492db5f4db546d62e1ed9c72
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 348520
+  packageName: Retro Desktop Terminal
+  packageVersion: 1.0
+  assetPath: Assets/Retro Desktop Terminal/Materials/Terminal_keyboard.mat
+  uploadId: 832450

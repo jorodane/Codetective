@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e226b7b220f81bf4eb5034a78334b9c5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 348520
+  packageName: Retro Desktop Terminal
+  packageVersion: 1.0
+  assetPath: Assets/Retro Desktop Terminal/Materials/Terminal.mat
+  uploadId: 832450

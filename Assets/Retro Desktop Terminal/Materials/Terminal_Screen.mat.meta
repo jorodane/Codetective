@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 9500ad4749a409046a52b3d6eeb012cc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 348520
+  packageName: Retro Desktop Terminal
+  packageVersion: 1.0
+  assetPath: Assets/Retro Desktop Terminal/Materials/Terminal_Screen.mat
+  uploadId: 832450
