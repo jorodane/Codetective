@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 7bf37c3eca3a12b43929af012eec307a
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 408444
+  packageName: Steampunk Inventor's Workshop
+  packageVersion: 1.0
+  assetPath: Assets/Akairo/Steampunk Inventor's Workshop/HDRP/Art/Shadergraphs/S_Unique_Master_Decal.shadergraph
+  uploadId: 997304

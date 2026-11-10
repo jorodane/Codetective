@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 0ace5c468b0b3e648adbfe41ab088330
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 408444
+  packageName: Steampunk Inventor's Workshop
+  packageVersion: 1.0
+  assetPath: Assets/Akairo/Steampunk Inventor's Workshop/HDRP/Art/Shadergraphs/S_Simple_Asset.shadergraph
+  uploadId: 997304

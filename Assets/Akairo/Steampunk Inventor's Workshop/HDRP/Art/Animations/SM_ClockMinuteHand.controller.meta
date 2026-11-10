@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 141f3836409c80a46ac63fc2dc2afda4
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 408444
+  packageName: Steampunk Inventor's Workshop
+  packageVersion: 1.0
+  assetPath: Assets/Akairo/Steampunk Inventor's Workshop/HDRP/Art/Animations/SM_ClockMinuteHand.controller
+  uploadId: 997304
