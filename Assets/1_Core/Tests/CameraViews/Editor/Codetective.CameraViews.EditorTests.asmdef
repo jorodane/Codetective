@@ -1,0 +1,6 @@
+{
+    "name": "Codetective.CameraViews.EditorTests",
+    "references": ["Codetective.CameraViews"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"]
+}

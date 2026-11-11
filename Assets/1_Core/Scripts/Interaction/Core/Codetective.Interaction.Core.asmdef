@@ -1,0 +1,5 @@
+{
+    "name": "Codetective.Interaction.Core",
+    "rootNamespace": "Codetective.Interaction",
+    "noEngineReferences": true
+}

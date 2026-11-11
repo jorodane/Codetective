@@ -1,0 +1,5 @@
+{
+    "name": "Codetective.CameraViews",
+    "rootNamespace": "Codetective.CameraViews",
+    "references": ["Unity.InputSystem"]
+}
