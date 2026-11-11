@@ -11,12 +11,12 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 27fc61aa419d9049ead0fe8adbf0627d, type: 3}
   m_Name: Monitor
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   angleId: monitor
-  position: {x: -0.3000003, y: 1.2627725, z: -3.59999987}
-  eulerAngles: {x: 7, y: 0, z: 0}
+  position: {x: -0.3000003, y: 1.2627724, z: -3.6}
+  eulerAngles: {x: 7, y: 15, z: 0}
   fieldOfView: 16
-  transitionDuration: 0.65
+  transitionDuration: 0.4
   blendCurve:
     serializedVersion: 2
     m_Curve:
