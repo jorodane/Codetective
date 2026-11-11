@@ -4,6 +4,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using Codetective.Operations;
 
 namespace Codetective.Terminal
 {
@@ -50,7 +51,18 @@ namespace Codetective.Terminal
 
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);
         private static readonly Color NormalColor = new Color(0.055f, 0.10f, 0.09f, 1f);
-        private readonly TerminalSession session = new TerminalSession();
+        private TerminalSession session = new TerminalSession();
+        private readonly Queue<string> reports = new Queue<string>();
+        private int runtimeRevision = -1;
+        public void AttachRuntime(KernelRuntime runtime)
+        {
+            session.Runtime.Message -= QueueReport;
+            session = new TerminalSession(runtime);
+            session.Runtime.Message += QueueReport;
+            runtimeRevision = -1;
+        }
+        private void QueueReport(string message) => reports.Enqueue(message);
+        private void OnDestroy() => session.Runtime.Message -= QueueReport;
         private readonly TerminalHistory history = new TerminalHistory();
         private IReadOnlyList<TerminalCompletion> completions = Array.Empty<TerminalCompletion>();
         private int selectedCompletion;
@@ -86,7 +98,7 @@ namespace Codetective.Terminal
                 canvas.worldCamera = Camera.main;
 
             history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
-                           "save 이름 / free 이름\nhelp로 명령어 목록을 확인하세요.\n\n" +
+                           "Kernel 작전망 연결 완료\nhq. 로 권한 목록을 확인하세요.\nhelp로 명령 형식을 확인할 수 있습니다.\n\n" +
                            "Enter 실행 · Tab 자동완성\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
             transcript.text = history.Text;
             RefreshMemory();
@@ -107,6 +119,13 @@ namespace Codetective.Terminal
 
         private void LateUpdate()
         {
+            while (reports.Count > 0) AppendHistory("[보고] " + reports.Dequeue());
+            if (runtimeRevision != session.Runtime.Revision)
+            {
+                runtimeRevision = session.Runtime.Revision;
+                RefreshMemory();
+                RefreshCompletions();
+            }
             TerminalCompletionInput current = input.CompletionInput;
             bool textChanged = current.Text != lastText || current.IsComposing != lastComposing;
             if (textChanged || current.Caret != lastCaret || current.Anchor != lastAnchor ||
@@ -143,12 +162,23 @@ namespace Codetective.Terminal
                 return;
 
             CommandResult result = session.Execute(line);
+            AppendHistory("> " + line + "\n" + (result.Success ? "" : "오류 ") + result.Message);
+            RefreshMemory();
+
+            input.SetTextWithoutNotify(string.Empty);
+            input.FocusAtEnd();
+            dismissed = false;
+            RefreshCompletions();
+        }
+
+        private void AppendHistory(string entry)
+        {
             RectTransform content = transcriptScroll.content;
             followTranscript = TerminalHistory.ShouldFollowLatest(content.rect.height,
                 TranscriptViewport.rect.height, content.anchoredPosition.y);
             preservedTranscriptPosition = content.anchoredPosition;
             string before = history.Text;
-            string removed = history.Append("> " + line + "\n" + (result.Success ? "OK   " : "오류 ") + result.Message);
+            string removed = history.Append(entry);
             if (!followTranscript && removed.Length > 0)
             {
                 string remaining = before.Substring(Math.Min(removed.Length, before.Length));
@@ -156,12 +186,6 @@ namespace Codetective.Terminal
             }
             transcript.text = history.Text;
             scrollTranscript = true;
-            RefreshMemory();
-
-            input.SetTextWithoutNotify(string.Empty);
-            input.FocusAtEnd();
-            dismissed = false;
-            RefreshCompletions();
         }
 
         private RectTransform TranscriptViewport => transcriptScroll.viewport != null ?
@@ -177,7 +201,7 @@ namespace Codetective.Terminal
 
         private void RefreshMemory()
         {
-            memoryHeading.text = "MEMORY / " + session.Count;
+            memoryHeading.text = "데이터 / " + session.Count;
             if (session.Count == 0)
             {
                 memoryList.text = "할당된 공간 없음\n\nsave 이름\n명령으로 공간을\n만들어 보세요.";
@@ -186,7 +210,7 @@ namespace Codetective.Terminal
 
             var text = new StringBuilder();
             foreach (var slot in session.Memory)
-                text.Append('#').Append(slot.Id.ToString("D4")).Append("  ").Append(slot.Name).Append('\n');
+                text.Append(slot.Name).Append("\n").Append(slot.Value.kind).Append(" · ").Append(slot.Value.label).Append("\n\n");
             memoryList.text = text.ToString();
         }
 
@@ -243,7 +267,7 @@ namespace Codetective.Terminal
             int visibleRows = completionButtons.Length;
             firstVisibleCompletion = Mathf.Clamp(selectedCompletion - visibleRows + 1, 0,
                 Mathf.Max(0, completions.Count - visibleRows));
-            completionHeading.text = $"자동완성  {selectedCompletion + 1}/{completions.Count}";
+            completionHeading.text = $"권한 목록  {selectedCompletion + 1}/{completions.Count}";
             for (int row = 0; row < visibleRows; row++)
             {
                 int index = firstVisibleCompletion + row;
@@ -281,8 +305,8 @@ namespace Codetective.Terminal
 
             input.SetTextWithoutNotify(completions[selectedCompletion].ReplacementText);
             input.FocusAtEnd();
-            // Completing a command opens its argument candidates. Completing a name closes the menu.
-            dismissed = !input.text.EndsWith(" ", StringComparison.Ordinal);
+            dismissed = !(input.text.EndsWith(" ", StringComparison.Ordinal) || input.text.EndsWith(".", StringComparison.Ordinal) ||
+                input.text.EndsWith("(", StringComparison.Ordinal));
             selectedCompletion = 0;
             RefreshCompletions();
         }

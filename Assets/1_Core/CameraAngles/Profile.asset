@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 27fc61aa419d9049ead0fe8adbf0627d, type: 3}
   m_Name: Profile
   m_EditorClassIdentifier: 
-  angleId: overview
+  angleId: profile
   position: {x: -0.726, y: 1.171, z: -2.437}
   eulerAngles: {x: 77, y: 0, z: 0}
   fieldOfView: 60

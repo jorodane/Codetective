@@ -1,0 +1,5 @@
+{
+    "name": "Codetective.Operations.Core",
+    "rootNamespace": "Codetective.Operations",
+    "noEngineReferences": true
+}

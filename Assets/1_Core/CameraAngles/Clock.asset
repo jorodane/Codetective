@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 27fc61aa419d9049ead0fe8adbf0627d, type: 3}
   m_Name: Clock
   m_EditorClassIdentifier: 
-  angleId: overview
+  angleId: clock
   position: {x: -0.833, y: 1.234, z: -2.199}
   eulerAngles: {x: 353.5674, y: 345.88364, z: 0}
   fieldOfView: 30

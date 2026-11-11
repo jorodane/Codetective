@@ -1,5 +1,6 @@
 {
     "name": "Codetective.Terminal.Core",
     "rootNamespace": "Codetective.Terminal",
+    "references": ["Codetective.Operations.Core"],
     "noEngineReferences": true
 }

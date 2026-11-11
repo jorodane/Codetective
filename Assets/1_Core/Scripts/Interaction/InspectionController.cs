@@ -1,5 +1,6 @@
 using Codetective.CameraViews;
 using Codetective.Terminal;
+using System;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -31,6 +32,11 @@ namespace Codetective.Interaction
         private bool started;
 
         public InspectionMode Mode => flow.Mode;
+        public event Action<CameraAnglePreset> AngleEntered;
+        public event Action OverviewEntered;
+        public Func<bool> BackHandler { get; set; }
+        public Func<Vector2, bool> PointerBlocked { get; set; }
+        public bool ModalInputBlocked { get; set; }
 
         private void Awake()
         {
@@ -75,11 +81,15 @@ namespace Codetective.Interaction
             {
                 // Let the IME cancel/commit its composition before treating Escape as navigation.
                 if (activeTerminal == null || !activeTerminal.InteractionEnabled || !activeTerminal.IsCompositionProtected)
+                {
+                    if (BackHandler != null && BackHandler()) return;
                     HandleEscape();
+                }
                 return;
             }
             if (flow.Mode == InspectionMode.Menu)
                 return;
+            if (ModalInputBlocked) return;
 
             if (enableAngleShortcuts && keyboard != null && views.AngleSet != null)
             {
@@ -101,14 +111,14 @@ namespace Codetective.Interaction
         private void LateUpdate()
         {
             // The click that starts the zoom must not also activate a terminal control.
-            bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning;
+            bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked;
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
                 activeTerminal.SetInteractionEnabled(ready);
         }
 
         public void InspectAtScreenPoint(Vector2 point)
         {
-            if (flow.Mode != InspectionMode.Overview)
+            if (flow.Mode != InspectionMode.Overview || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
                 return;
             Ray ray = views.ControlledCamera.ScreenPointToRay(point);
             if (Physics.Raycast(ray, out RaycastHit hit, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide))
@@ -147,6 +157,7 @@ namespace Codetective.Interaction
             if (activeTerminal != null)
                 activeTerminal.SetInteractionEnabled(false);
             flow.Inspect();
+            AngleEntered?.Invoke(angle);
         }
 
         private TerminalController FindTerminalFor(CameraAnglePreset angle)
@@ -163,6 +174,7 @@ namespace Codetective.Interaction
                 return;
             DisableTerminal();
             flow.ReturnToOverview();
+            OverviewEntered?.Invoke();
         }
 
         private bool RequestOverview()
@@ -180,6 +192,7 @@ namespace Codetective.Interaction
             {
                 case EscapeAction.ReturnToOverview:
                     DisableTerminal();
+                    OverviewEntered?.Invoke();
                     break;
                 case EscapeAction.OpenMenu:
                     DisableTerminal();

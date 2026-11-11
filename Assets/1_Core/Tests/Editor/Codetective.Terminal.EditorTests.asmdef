@@ -1,7 +1,7 @@
 {
     "name": "Codetective.Terminal.EditorTests",
     "rootNamespace": "Codetective.Terminal.Tests",
-    "references": ["Codetective.Terminal.Core"],
+    "references": ["Codetective.Terminal.Core", "Codetective.Operations.Core"],
     "includePlatforms": ["Editor"],
     "optionalUnityReferences": ["TestAssemblies"]
 }

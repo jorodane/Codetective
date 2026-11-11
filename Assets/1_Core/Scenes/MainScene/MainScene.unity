@@ -376,7 +376,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 9d9443ee0b1e1e94c81fb2b7946e1a35, type: 2}
-  terminalRoot: {fileID: 942849806}
+  terminalRoot: {fileID: 0}
 --- !u!65 &17712048
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -1448,7 +1448,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: ed7ab7338718fb54b94e3d081fcfc035, type: 2}
-  terminalRoot: {fileID: 942849806}
+  terminalRoot: {fileID: 0}
 --- !u!65 &387702992
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -2880,7 +2880,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 8f92d3c640bb63749b773fa126e57e59, type: 2}
-  terminalRoot: {fileID: 942849806}
+  terminalRoot: {fileID: 0}
 --- !u!65 &922546358
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -3906,7 +3906,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: bfdd538b02290514cbd952c5208b808e, type: 2}
-  terminalRoot: {fileID: 942849806}
+  terminalRoot: {fileID: 0}
 --- !u!65 &1216147798
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -5914,7 +5914,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 11223ef15c9300b4283e6175cc9acdcf, type: 2}
-  terminalRoot: {fileID: 942849806}
+  terminalRoot: {fileID: 0}
 --- !u!65 &1744334640
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -6667,7 +6667,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 57c29c912a727894080e971113439735, type: 2}
-  terminalRoot: {fileID: 942849806}
+  terminalRoot: {fileID: 0}
 --- !u!65 &1971720973
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -7007,6 +7007,121 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 60b7da614e145ce4bbab9c2eb5da5304, type: 3}
+--- !u!1 &2000000100
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2000000101}
+  - component: {fileID: 2000000102}
+  - component: {fileID: 2000000103}
+  m_Layer: 0
+  m_Name: KernelSystems
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2000000101
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000100}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 2000000111}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2000000102
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9def1e1ebc59744b10a47f9d2d56935, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  scenario: {fileID: 11400000, guid: a8e11aeaca22cbd5f775dd0d625ee529, type: 2}
+  terminalRoot: {fileID: 942849806}
+  inspection: {fileID: 1503248948}
+  curtainCloth: {fileID: 1089501815}
+  guestCoffeeTemplate: {fileID: 385175499}
+  coffeeAnchor: {fileID: 2000000111}
+  deskSurface: {fileID: 84028777}
+  clockHour: {fileID: 2000000121}
+  clockMinute: {fileID: 2000000122}
+  calendar: {fileID: 2000000120}
+  font: {fileID: 12800000, guid: e1d6f57a609574bd982c425e64e02986, type: 3}
+--- !u!114 &2000000103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0600ef2b9011e01c8d186ef44cce89e, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+--- !u!1 &2000000110
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2000000111}
+  m_Layer: 0
+  m_Name: KernelCoffeePlacement
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2000000111
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000110}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.25, y: 0.9, z: -2.55}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2000000101}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &2000000120 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6370601574922731768, guid: 40da42cdd613c8d4ab13bded5bcf41a6, type: 3}
+  m_PrefabInstance: {fileID: 1564495252}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2000000121 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2212652811332990017, guid: 59aabf08a7ae59741ade9f3b5b62d086, type: 3}
+  m_PrefabInstance: {fileID: 2092761958}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2000000122 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7676744218187916995, guid: 59aabf08a7ae59741ade9f3b5b62d086, type: 3}
+  m_PrefabInstance: {fileID: 2092761958}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -7022,3 +7137,4 @@ SceneRoots:
   - {fileID: 201935119}
   - {fileID: 2092761958}
   - {fileID: 1564495252}
+  - {fileID: 2000000101}

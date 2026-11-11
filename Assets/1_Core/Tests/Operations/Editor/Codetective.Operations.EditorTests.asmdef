@@ -1,0 +1,6 @@
+{
+    "name": "Codetective.Operations.EditorTests",
+    "references": ["Codetective.Operations.Core"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"]
+}

@@ -2,20 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Codetective.Operations;
 
 namespace Codetective.Terminal
 {
     /// <summary>A named slot in the game's simulated memory, not an OS memory address.</summary>
     public sealed class MemorySlot
     {
-        public int Id { get; }
-        public string Name { get; }
+        private readonly DataSlot slot;
+        public int Id => slot.id;
+        public string Name => slot.name;
+        public Datum Value => slot.value;
 
-        internal MemorySlot(int id, string name)
+        internal MemorySlot(DataSlot slot)
         {
-            Id = id;
-            Name = name;
+            this.slot = slot;
         }
+        internal bool References(DataSlot value) => ReferenceEquals(slot, value);
     }
 
     public readonly struct CommandResult
@@ -50,47 +53,23 @@ namespace Codetective.Terminal
                                        "free <name>  : 메모리 공간 해제\n" +
                                        "help         : 명령어 목록 보기\n\n" +
                                        "예: save 단서 / free 단서\n이름에는 공백을 넣을 수 없습니다.";
-        private readonly Dictionary<string, MemorySlot> slots =
-            new Dictionary<string, MemorySlot>(StringComparer.Ordinal);
-        private int nextSlotId = 1;
+        private readonly Dictionary<int, MemorySlot> wrappers = new Dictionary<int, MemorySlot>();
+        public KernelRuntime Runtime { get; }
+        public TerminalSession(KernelRuntime runtime = null) { Runtime = runtime ?? new KernelRuntime(); }
 
-        public int Count => slots.Count;
-        public IReadOnlyList<MemorySlot> Memory => slots.Values.OrderBy(slot => slot.Id).ToArray();
+        public int Count => Runtime.Data.Count;
+        public IReadOnlyList<MemorySlot> Memory => Runtime.Data.Values.OrderBy(slot => slot.id).Select(Wrap).ToArray();
+        private MemorySlot Wrap(DataSlot slot)
+        {
+            if (!wrappers.TryGetValue(slot.id, out MemorySlot wrapper) || !wrapper.References(slot))
+                wrappers[slot.id] = wrapper = new MemorySlot(slot);
+            return wrapper;
+        }
 
         public CommandResult Execute(string line)
         {
-            if (string.IsNullOrWhiteSpace(line))
-                return new CommandResult(false, string.Empty);
-
-            if (line.IndexOfAny(new[] { '\r', '\n' }) >= 0)
-                return new CommandResult(false, "한 번에 한 줄만 입력하세요.");
-
-            string[] tokens = Tokenize(line);
-            string command = tokens[0];
-            if (!Commands.Contains(command))
-                return new CommandResult(false, "알 수 없는 명령어입니다. help로 명령어를 확인하세요.");
-
-            if (command == "help")
-                return tokens.Length == 1 ? new CommandResult(true, HelpText) :
-                    new CommandResult(false, "사용법: help");
-
-            if (tokens.Length != 2 || tokens[1].Any(char.IsControl))
-                return new CommandResult(false, $"사용법: {command} 이름 (이름에는 공백을 넣을 수 없습니다.)");
-
-            string name = tokens[1];
-            if (command == "save")
-            {
-                if (slots.ContainsKey(name))
-                    return new CommandResult(false, $"'{name}' 공간은 이미 할당되어 있습니다.");
-
-                slots.Add(name, new MemorySlot(nextSlotId++, name));
-                return new CommandResult(true, $"'{name}' 메모리 공간을 할당했습니다.");
-            }
-
-            if (!slots.Remove(name))
-                return new CommandResult(false, $"'{name}'에 할당된 메모리가 없습니다.");
-
-            return new CommandResult(true, $"'{name}' 메모리 공간을 해제했습니다.");
+            ExecutionResult result = Runtime.Execute(line);
+            return new CommandResult(result.Success, result.Message);
         }
 
         public IReadOnlyList<TerminalCompletion> Complete(string line, bool isComposing = false)
@@ -113,18 +92,19 @@ namespace Codetective.Terminal
             {
                 string commandPrefix = ComparisonForm(line, isComposing);
                 return Commands.Where(command => ComparisonForm(command, isComposing).StartsWith(commandPrefix, StringComparison.Ordinal))
-                    .Select(command => new TerminalCompletion(command, command == "help" ? command : command + " ")).ToArray();
+                    .Select(command => new TerminalCompletion(command, command == "help" ? command : command + " "))
+                    .Concat(Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement))).ToArray();
             }
 
             if (line.Substring(0, separator) != "free")
-                return Array.Empty<TerminalCompletion>();
+                return Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement)).ToArray();
 
             string prefix = line.Substring(separator).TrimStart();
             if (prefix.Any(char.IsWhiteSpace))
                 return Array.Empty<TerminalCompletion>();
 
             prefix = ComparisonForm(prefix, isComposing);
-            return slots.Keys.Where(name => ComparisonForm(name, isComposing).StartsWith(prefix, StringComparison.Ordinal))
+            return Runtime.Data.Keys.Where(name => ComparisonForm(name, isComposing).StartsWith(prefix, StringComparison.Ordinal))
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .Select(name => new TerminalCompletion(name, "free " + name)).ToArray();
         }
