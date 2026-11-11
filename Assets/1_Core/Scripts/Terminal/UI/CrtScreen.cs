@@ -44,6 +44,8 @@ namespace Codetective.Terminal
                 field.ForceLabelUpdate();
         }
 
+        public Matrix4x4 GraphicToPanelMatrix(Transform owner) => Panel.worldToLocalMatrix * owner.localToWorldMatrix;
+
         public Vector3 BendPoint(Transform owner, Vector3 point)
         {
             Vector3 local = Panel.InverseTransformPoint(owner.TransformPoint(point));

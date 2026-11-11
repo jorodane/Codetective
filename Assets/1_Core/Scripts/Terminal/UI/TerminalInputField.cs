@@ -2,6 +2,9 @@ using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Codetective.Terminal
 {
@@ -15,6 +18,7 @@ namespace Codetective.Terminal
         public event Action CompletionDismissed;
 
         private readonly Event keyEvent = new Event();
+        private readonly TerminalSubmission submission = new TerminalSubmission();
         private bool wasComposing;
         private bool moveToEndAfterFocus;
         private CrtScreen crtScreen;
@@ -27,6 +31,7 @@ namespace Codetective.Terminal
 
         public override void OnDeselect(BaseEventData eventData)
         {
+            submission.Cancel();
             IsLosingFocus = true;
             try
             {
@@ -34,6 +39,7 @@ namespace Codetective.Terminal
             }
             finally
             {
+                wasComposing = false;
                 IsLosingFocus = false;
             }
         }
@@ -142,6 +148,7 @@ namespace Codetective.Terminal
 
         public void ReleaseFocus()
         {
+            submission.Cancel();
             moveToEndAfterFocus = false;
             wasComposing = false;
             DeactivateInputField();
@@ -158,6 +165,30 @@ namespace Codetective.Terminal
                 moveToEndAfterFocus = false;
             }
             wasComposing = IsComposing;
+
+#if ENABLE_INPUT_SYSTEM
+            // Some IMEs consume the first Enter without delivering a uGUI key event.
+            Keyboard keyboard = Keyboard.current;
+            if (isFocused && keyboard != null &&
+                (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
+                submission.Request(Time.frameCount, CompletionInput);
+#endif
+            if (isFocused && submission.TryTake(CompletionInput, out string line))
+            {
+                // Finish the native IME session before clearing/reactivating the field.
+                // Its trailing commit must not leak into the next command.
+                if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == gameObject)
+                    EventSystem.current.SetSelectedGameObject(null);
+                DeactivateInputField();
+                wasComposing = false;
+                LineSubmitted?.Invoke(line);
+            }
+        }
+
+        protected override void OnDisable()
+        {
+            submission.Cancel();
+            base.OnDisable();
         }
 
         public override void OnUpdateSelected(BaseEventData eventData)
@@ -165,8 +196,8 @@ namespace Codetective.Terminal
             if (!isFocused)
                 return;
 
-            // IME may clear its composition before delivering the Enter that committed it.
-            // Protect that transition as well as actively composing text.
+            // Keep IME candidate navigation intact; Enter instead submits the visible
+            // text after this frame's composition/commit events have been processed.
             bool protectComposition = IsComposing || wasComposing;
             while (Event.PopEvent(keyEvent))
             {
@@ -193,8 +224,7 @@ namespace Codetective.Terminal
             {
                 case KeyCode.Return:
                 case KeyCode.KeypadEnter:
-                    if (!protectComposition)
-                        LineSubmitted?.Invoke(text);
+                    submission.Request(Time.frameCount, CompletionInput);
                     return true;
                 case KeyCode.Tab:
                     if (!protectComposition)
