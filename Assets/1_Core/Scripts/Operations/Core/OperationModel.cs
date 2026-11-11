@@ -68,6 +68,7 @@ namespace Codetective.Operations
         public string Code;
         public string Label;
         public string[] Aliases = Array.Empty<string>();
+        public LocalizedCommandName[] Names = Array.Empty<LocalizedCommandName>();
         public Parameter[] Parameters = Array.Empty<Parameter>();
         public DataKind ReturnKind;
         public bool Property;
@@ -77,7 +78,12 @@ namespace Codetective.Operations
         public Func<Invocation, Datum> Invoke;
         public string Signature => Property ? Code : Code + "(" +
             string.Join(", ", Parameters.Select(p => p.Kind + " " + p.Name)) + (Variadic ? ", ..." : "") + ")";
-        public bool Matches(string name) => Code == name || Aliases.Contains(name);
+        public string NameFor(CommandLocale language) => CommandVocabulary.Name(Code, Names, language);
+        public string LabelFor(CommandLocale language) => CommandVocabulary.Description(Label, Names, language);
+        public string SignatureFor(CommandLocale language, string name = null) => Property ? name ?? NameFor(language) : (name ?? NameFor(language)) + "(" +
+            string.Join(", ", Parameters.Select(p => CommandVocabulary.KindName(p.Kind, language) + " " + CommandVocabulary.ParameterName(p.Name, language))) + (Variadic ? ", ..." : "") + ")";
+        public IEnumerable<string> AllNames => CommandVocabulary.Names(Code, Aliases, Names);
+        public bool Matches(string name) => AllNames.Contains(name);
     }
 
     public sealed class Entity
@@ -86,12 +92,16 @@ namespace Codetective.Operations
         public string Label;
         public DataKind Kind;
         public string[] Aliases = Array.Empty<string>();
+        public LocalizedCommandName[] Names = Array.Empty<LocalizedCommandName>();
         public AccessRule Access = new AccessRule();
         public readonly Dictionary<string, Entity> Children = new Dictionary<string, Entity>(StringComparer.Ordinal);
         public readonly List<Operation> Operations = new List<Operation>();
         public Entity(string id, string label, DataKind kind) { Id = id; Label = label; Kind = kind; }
+        public string NameFor(CommandLocale language) => CommandVocabulary.Name(Id, Names, language);
+        public string LabelFor(CommandLocale language) => CommandVocabulary.Description(Label, Names, language);
+        public IEnumerable<string> AllNames => CommandVocabulary.Names(Id, Aliases, Names);
         public Entity Child(string name) => Children.TryGetValue(name, out Entity child) ? child :
-            Children.Values.FirstOrDefault(e => e.Aliases.Contains(name));
+            Children.Values.FirstOrDefault(e => e.AllNames.Contains(name));
         public Operation Find(string name) => Operations.FirstOrDefault(o => o.Matches(name));
     }
 

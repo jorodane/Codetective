@@ -154,14 +154,15 @@ namespace Codetective.Terminal.Tests
             Assert.That(session.Execute("help extra").Success, Is.False);
         }
 
-        [TestCase("저장 단서")]
-        [TestCase("삭제 단서")]
-        public void RemovedLocalizedCommandsPointToHelp(string line)
+        [TestCase("저장", "삭제")]
+        [TestCase("저장", "free")]
+        [TestCase("save", "해제")]
+        public void LocalizedCommandsUseTheSameMemoryAsEnglish(string save, string free)
         {
             var session = new TerminalSession();
-            CommandResult result = session.Execute(line);
-            Assert.That(result.Success, Is.False);
-            Assert.That(result.Message, Does.Contain("help"));
+            Assert.That(session.Execute(save + " 단서").Success, Is.True);
+            Assert.That(session.Memory.Single().Name, Is.EqualTo("단서"));
+            Assert.That(session.Execute(free + " 단서").Success, Is.True);
             Assert.That(session.Count, Is.Zero);
         }
     }

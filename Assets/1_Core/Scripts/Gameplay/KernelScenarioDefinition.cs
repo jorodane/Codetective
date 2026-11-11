@@ -9,12 +9,14 @@ namespace Codetective.Gameplay
     {
         [Min(0.1f)] public float secondsPerGameMinute = 2f;
         public bool loadDailySave = true;
+        public CommandLocale commandLanguage = CommandLocale.Korean;
         public ConsultationLine[] consultation = Array.Empty<ConsultationLine>();
         public EntityDefinition[] additionalObjects = Array.Empty<EntityDefinition>();
 
         public KernelRuntime CreateRuntime()
         {
             KernelRuntime runtime = ClinicScenario.Create();
+            runtime.Language = commandLanguage;
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
             foreach (EntityDefinition definition in additionalObjects) runtime.Register(CreateEntity(definition));
             return runtime;
@@ -25,6 +27,7 @@ namespace Codetective.Gameplay
             var entity = new Entity(definition.code, definition.label, definition.kind)
             {
                 Aliases = definition.aliases,
+                Names = definition.names,
                 Access = new AccessRule { Facts = definition.requiredFacts, Authorities = definition.requiredAuthorities,
                     ForbiddenFacts = definition.forbiddenFacts }
             };
@@ -33,7 +36,7 @@ namespace Codetective.Gameplay
                 ActionDefinition captured = action;
                 entity.Operations.Add(new Operation
                 {
-                    Code = action.code, Label = action.label, Aliases = action.aliases, ReturnKind = action.result.kind, Property = action.property,
+                    Code = action.code, Label = action.label, Aliases = action.aliases, Names = action.names, ReturnKind = action.result.kind, Property = action.property,
                     Parameters = Array.ConvertAll(action.parameters, p => new Parameter(p.name, p.kind)), Minutes = action.minutes,
                     Access = new AccessRule { Facts = action.requiredFacts, Authorities = action.requiredAuthorities,
                         ForbiddenFacts = action.forbiddenFacts, RequiredData = action.requiredData, NeedsReadyThread = action.needsReadyThread },
@@ -51,6 +54,7 @@ namespace Codetective.Gameplay
         public string label;
         public DataKind kind = DataKind.Place;
         public string[] aliases = Array.Empty<string>();
+        public LocalizedCommandName[] names = Array.Empty<LocalizedCommandName>();
         public string[] requiredFacts = Array.Empty<string>();
         public string[] requiredAuthorities = Array.Empty<string>();
         public string[] forbiddenFacts = Array.Empty<string>();
@@ -63,6 +67,7 @@ namespace Codetective.Gameplay
         public string code;
         public string label;
         public string[] aliases = Array.Empty<string>();
+        public LocalizedCommandName[] names = Array.Empty<LocalizedCommandName>();
         public bool property;
         public bool needsReadyThread;
         public InputDefinition[] parameters = Array.Empty<InputDefinition>();

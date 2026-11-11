@@ -7,7 +7,7 @@ namespace Codetective.Operations
     public sealed partial class KernelRuntime
     {
         /// <summary>Inspect types and sample inputs without invoking any world actions.</summary>
-        public IReadOnlyList<Completion> CompleteProtocol(string source, int caret, string sampleArguments = "")
+        public IReadOnlyList<Completion> CompleteProtocol(string source, int caret, string sampleArguments = "", bool composing = false)
         {
             source = source ?? "";
             caret = Math.Max(0, Math.Min(caret, source.Length));
@@ -18,7 +18,7 @@ namespace Codetective.Operations
             int skip = fragment.Length - fragment.TrimStart().Length;
             start += skip;
             fragment = fragment.TrimStart();
-            foreach (string keyword in new[] { "var ", "return ", "반환 " })
+            foreach (string keyword in CommandVocabulary.KeywordNames("var").Concat(CommandVocabulary.KeywordNames("return")).Select(k => k + " "))
                 if (fragment.StartsWith(keyword, StringComparison.Ordinal)) { start += keyword.Length; fragment = fragment.Substring(keyword.Length); break; }
 
             var locals = new Dictionary<string, Datum>(StringComparer.Ordinal);
@@ -47,7 +47,7 @@ namespace Codetective.Operations
                 catch (CommandException) { /* An unfinished prior line must not break global suggestions. */ }
             }
             catch (CommandException) { }
-            return Complete(fragment, false, locals).Select(c => new Completion(c.Label,
+            return Complete(fragment, composing, locals).Select(c => new Completion(c.Label,
                 source.Substring(0, start) + c.Replacement + source.Substring(caret))).ToArray();
         }
 

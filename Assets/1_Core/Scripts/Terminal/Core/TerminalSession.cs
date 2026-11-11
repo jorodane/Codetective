@@ -90,13 +90,16 @@ namespace Codetective.Terminal
 
             if (separator < 0)
             {
-                string commandPrefix = ComparisonForm(line, isComposing);
-                return Commands.Where(command => ComparisonForm(command, isComposing).StartsWith(commandPrefix, StringComparison.Ordinal))
-                    .Select(command => new TerminalCompletion(command, command == "help" ? command : command + " "))
+                return Commands.Select(command => new { Code = command, Name = CommandVocabulary.Match(CommandVocabulary.KeywordName(command, Runtime.Language),
+                        CommandVocabulary.KeywordNames(command), line, isComposing) }).Where(c => c.Name != null)
+                    .Select(command => new TerminalCompletion(command.Name, command.Code == "help" ? command.Name : command.Name + " "))
                     .Concat(Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement))).ToArray();
             }
 
-            if (line.Substring(0, separator) != "free")
+            string enteredCommand = line.Substring(0, separator);
+            string canonicalCommand = CommandVocabulary.Keyword(enteredCommand);
+            if (canonicalCommand == "save" || canonicalCommand == "help") return Array.Empty<TerminalCompletion>();
+            if (canonicalCommand != "free")
                 return Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement)).ToArray();
 
             string prefix = line.Substring(separator).TrimStart();
@@ -106,7 +109,7 @@ namespace Codetective.Terminal
             prefix = ComparisonForm(prefix, isComposing);
             return Runtime.Data.Keys.Where(name => ComparisonForm(name, isComposing).StartsWith(prefix, StringComparison.Ordinal))
                 .OrderBy(name => name, StringComparer.Ordinal)
-                .Select(name => new TerminalCompletion(name, "free " + name)).ToArray();
+                .Select(name => new TerminalCompletion(name, enteredCommand + " " + name)).ToArray();
         }
 
         private static string ComparisonForm(string value, bool isComposing)

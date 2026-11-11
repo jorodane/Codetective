@@ -39,6 +39,7 @@ namespace Codetective.Gameplay
         private bool delivering;
         private Light[] sceneLights;
         private bool[] initialLights;
+        private const string CommandLanguagePreference = "Codetective.CommandLanguage";
 
         private void Awake()
         {
@@ -48,6 +49,8 @@ namespace Codetective.Gameplay
                 try { Runtime.Restore(JsonUtility.FromJson<KernelSnapshot>(File.ReadAllText(SavePath))); Feedback = "날짜 기록을 불러왔습니다."; }
                 catch (Exception error) { Runtime = scenario.CreateRuntime(); Feedback = "저장 기록을 읽지 못해 새 작전을 시작합니다: " + error.Message; }
             }
+            int preferredLanguage = PlayerPrefs.GetInt(CommandLanguagePreference, (int)(scenario != null ? scenario.commandLanguage : CommandLocale.Korean));
+            if (Enum.IsDefined(typeof(CommandLocale), preferredLanguage)) Runtime.Language = (CommandLocale)preferredLanguage;
             Runtime.SceneActionRequested += SceneAction;
             Runtime.DayEnded += SaveNow;
             if (terminalRoot != null) terminalRoot.GetComponentInChildren<TerminalController>(true).AttachRuntime(Runtime);
@@ -106,6 +109,13 @@ namespace Codetective.Gameplay
                 Feedback = "DAY " + Runtime.Day + " 기록 저장 완료";
             }
             catch (Exception error) { Feedback = "저장 실패: " + error.Message; Debug.LogWarning(Feedback, this); }
+        }
+
+        public void SetCommandLanguage(CommandLocale language)
+        {
+            Runtime.Language = language;
+            PlayerPrefs.SetInt(CommandLanguagePreference, (int)language);
+            PlayerPrefs.Save();
         }
 
         private void SceneAction(string agent, string action)

@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   secondsPerGameMinute: 2
   loadDailySave: 1
+  commandLanguage: 1
   consultation: []
   additionalObjects: []

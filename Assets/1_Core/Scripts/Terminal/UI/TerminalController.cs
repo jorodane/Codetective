@@ -98,7 +98,7 @@ namespace Codetective.Terminal
                 canvas.worldCamera = Camera.main;
 
             history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
-                           "Kernel 작전망 연결 완료\nhq. 로 권한 목록을 확인하세요.\nhelp로 명령 형식을 확인할 수 있습니다.\n\n" +
+                           "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
                            "Enter 실행 · Tab 자동완성\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
             transcript.text = history.Text;
             RefreshMemory();
@@ -124,6 +124,8 @@ namespace Codetective.Terminal
             {
                 runtimeRevision = session.Runtime.Revision;
                 RefreshMemory();
+                if (input.placeholder is Text placeholder)
+                    placeholder.text = session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 저장 이름" : "Command · help / save name";
                 RefreshCompletions();
             }
             TerminalCompletionInput current = input.CompletionInput;
@@ -201,16 +203,16 @@ namespace Codetective.Terminal
 
         private void RefreshMemory()
         {
-            memoryHeading.text = "데이터 / " + session.Count;
+            memoryHeading.text = (session.Runtime.Language == CommandLocale.Korean ? "데이터 / " : "DATA / ") + session.Count;
             if (session.Count == 0)
             {
-                memoryList.text = "할당된 공간 없음\n\nsave 이름\n명령으로 공간을\n만들어 보세요.";
+                memoryList.text = session.Runtime.Language == CommandLocale.Korean ? "할당된 공간 없음\n\n저장 이름\n명령으로 공간을\n만들어 보세요." : "No allocated data\n\nsave name\nallocates a new slot.";
                 return;
             }
 
             var text = new StringBuilder();
             foreach (var slot in session.Memory)
-                text.Append(slot.Name).Append("\n").Append(slot.Value.kind).Append(" · ").Append(slot.Value.label).Append("\n\n");
+                text.Append(slot.Name).Append("\n").Append(session.Runtime.KindName(slot.Value.kind)).Append(" · ").Append(slot.Value.label).Append("\n\n");
             memoryList.text = text.ToString();
         }
 
@@ -267,7 +269,7 @@ namespace Codetective.Terminal
             int visibleRows = completionButtons.Length;
             firstVisibleCompletion = Mathf.Clamp(selectedCompletion - visibleRows + 1, 0,
                 Mathf.Max(0, completions.Count - visibleRows));
-            completionHeading.text = $"권한 목록  {selectedCompletion + 1}/{completions.Count}";
+            completionHeading.text = (session.Runtime.Language == CommandLocale.Korean ? "권한 목록  " : "COMMANDS  ") + $"{selectedCompletion + 1}/{completions.Count}";
             for (int row = 0; row < visibleRows; row++)
             {
                 int index = firstVisibleCompletion + row;

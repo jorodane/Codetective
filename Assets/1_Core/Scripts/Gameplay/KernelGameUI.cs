@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Codetective.Interaction;
 using Codetective.Operations;
+using Codetective.Terminal;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -24,6 +25,7 @@ namespace Codetective.Gameplay
         private Text body;
         private Text clock;
         private Text feedback;
+        private Text languageLabel;
         private readonly List<GameObject> controls = new List<GameObject>();
         private GraphicRaycaster raycaster;
         private readonly List<RaycastResult> hits = new List<RaycastResult>();
@@ -38,23 +40,27 @@ namespace Codetective.Gameplay
         private readonly List<Button> suggestionButtons = new List<Button>();
         private IReadOnlyList<Completion> suggestions = Array.Empty<Completion>();
         private int completionSuffix;
-        private string draft = "protocol recon(Place target)\n{\n    return target.inspect();\n}";
-        private string draftArguments = "archive";
+        private string draft;
+        private string draftArguments;
 
         public void Initialize(KernelGameController game, InspectionController inspection, Font font)
         {
             this.game = game; this.inspection = inspection; this.font = font;
+            draft = game.Runtime.ExampleProtocol;
+            draftArguments = game.Runtime.ExampleArguments;
             root = new GameObject("KernelInterface", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 100;
             var scale = root.GetComponent<CanvasScaler>(); scale.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scale.referenceResolution = new Vector2(1280, 720); scale.matchWidthOrHeight = 0.5f;
             raycaster = root.GetComponent<GraphicRaycaster>();
-            RectTransform hud = Box("KernelHUD", root.transform, new Vector2(16, -12), new Vector2(790, 42), new Vector2(0, 1));
+            RectTransform hud = Box("KernelHUD", root.transform, new Vector2(16, -12), new Vector2(950, 42), new Vector2(0, 1));
             clock = Label(hud, new Vector2(10, -4), new Vector2(270, 34), "", 18);
             Button(hud, new Vector2(285, -4), new Vector2(110, 34), "터미널", () => { HideContext(); game.ShowMonitor(); });
             Button(hud, new Vector2(403, -4), new Vector2(110, 34), "데이터", () => OpenModal("data"));
             Button(hud, new Vector2(521, -4), new Vector2(110, 34), "Thread", () => OpenModal("threads"));
             Button(hud, new Vector2(639, -4), new Vector2(140, 34), "프로토콜", () => OpenModal("protocol"));
+            languageLabel = Button(hud, new Vector2(787, -4), new Vector2(152, 34), "", ToggleLanguage).GetComponentInChildren<Text>();
+            RefreshLanguageLabel();
             panel = Box("Context", root.transform, new Vector2(-18, -74), new Vector2(570, 620), new Vector2(1, 1));
             heading = Label(panel, new Vector2(20, -16), new Vector2(530, 42), "", 26);
             body = ScrollText(panel, new Vector2(20, -72), new Vector2(530, 330));
@@ -211,7 +217,7 @@ namespace Codetective.Gameplay
             else if (view == "data" || view == "drawer")
             {
                 foreach (DataSlot slot in r.Data.Values)
-                    text.Append(slot.name).Append(" : ").Append(slot.value.kind).Append('\n').Append(slot.value).Append("\n\n");
+                    text.Append(slot.name).Append(" : ").Append(r.KindName(slot.value.kind)).Append('\n').Append(slot.value).Append("\n\n");
                 if (r.Data.Count == 0) text.Append("확보한 데이터가 없습니다. 상담의 붉은 단서를 기록하거나 명령을 실행하세요.");
             }
             else if (view == "counsel")
@@ -239,7 +245,7 @@ namespace Codetective.Gameplay
             }
             else text.Append("코드네임: Kernel\n신분: 개인 심리상담소 상담가\n\nThread와 신원은 상호 비공개입니다.\n\n작전 권한\n")
                 .Append(string.Join("\n", r.Authorities)).Append("\n\n지휘소 권한\n")
-                .Append(string.Join("\n", r.Complete("hq.").Select(c => c.Label)));
+                .Append(string.Join("\n", r.Complete(r.ObjectName("hq") + ".").Select(c => c.Label)));
             body.text = text.ToString();
             if (view == "clock") feedback.text = game.Feedback;
         }
@@ -297,7 +303,7 @@ namespace Codetective.Gameplay
                 suggestionButtons.Add(Button(protocolSuggestions, new Vector2(0, -i * 32), new Vector2(530, 31), "", () => AcceptProtocolCompletion(row)));
             }
             protocolSuggestions.gameObject.SetActive(false);
-            feedback.text = "입력 예: archive / 배정 대상: " + game.Runtime.Threads.ElementAtOrDefault(selectedThread)?.Id +
+            feedback.text = "입력 예: " + game.Runtime.ExampleArguments + " / 배정 대상: " + game.Runtime.Threads.ElementAtOrDefault(selectedThread)?.Id +
                 "\n권한 목록 클릭 또는 Tab 완성 · 테스트는 현재 세계의 복사본에서 수행됩니다.";
         }
 
@@ -308,14 +314,34 @@ namespace Codetective.Gameplay
             libraryIndex = (libraryIndex + direction + library.Length) % library.Length;
             Protocol selected = library[libraryIndex];
             protocolSource.text = draft = selected.Source;
-            feedback.text = selected.Signature + "\n호출 관계: " + string.Join(", ", selected.CalledProtocols);
+            feedback.text = selected.SignatureFor(game.Runtime.Language) + "\n호출 관계: " + string.Join(", ", selected.CalledProtocols);
             protocolSuggestions.gameObject.SetActive(false);
         }
 
+        private void ToggleLanguage()
+        {
+            if (inspection.Mode == InspectionMode.Menu) return;
+            SaveDraft();
+            ClearControls();
+            CommandLocale next = game.Runtime.Language == CommandLocale.Korean ? CommandLocale.English : CommandLocale.Korean;
+            // Translate the untouched sample only; player-authored source and names stay intact.
+            if (draft == game.Runtime.ExampleProtocol) draft = null;
+            if (draftArguments == game.Runtime.ExampleArguments) draftArguments = null;
+            game.SetCommandLanguage(next);
+            if (draft == null) draft = game.Runtime.ExampleProtocol;
+            if (draftArguments == null) draftArguments = game.Runtime.ExampleArguments;
+            RefreshLanguageLabel();
+            if (modal != null) OpenModal(modal);
+            else if (context != null && context != "monitor") BuildContext();
+        }
+
+        private void RefreshLanguageLabel() => languageLabel.text = game.Runtime.Language == CommandLocale.Korean ? "명령: 한국어" : "Code: English";
+
         private void RefreshProtocolCompletions()
         {
-            completionSuffix = protocolSource.text.Length - protocolSource.caretPosition;
-            suggestions = game.Runtime.CompleteProtocol(protocolSource.text, protocolSource.caretPosition, arguments.text);
+            TerminalCompletionInput current = ((ProtocolInputField)protocolSource).CompletionInput;
+            completionSuffix = current.Text.Length - current.Caret;
+            suggestions = current.Anchor == current.Caret ? game.Runtime.CompleteProtocol(current.Text, current.Caret, arguments.text, current.IsComposing) : Array.Empty<Completion>();
             protocolSuggestions.gameObject.SetActive(suggestions.Count > 0);
             for (int i = 0; i < suggestionButtons.Count; i++)
             {
@@ -338,7 +364,7 @@ namespace Codetective.Gameplay
         private void Run(string command) { ExecutionResult result = game.Runtime.Execute(command); feedback.text = result.Message; }
         private void SaveDraft()
         {
-            if (protocolSource != null) draft = protocolSource.text;
+            if (protocolSource != null) draft = ((ProtocolInputField)protocolSource).CompletionInput.Text;
             if (arguments != null) draftArguments = arguments.text;
         }
         private void ClearControls()
@@ -399,7 +425,7 @@ namespace Codetective.Gameplay
         private InputField Input(Transform parent, Vector2 position, Vector2 size, string value, bool multiline)
         {
             RectTransform rect = Box("CommandSource", parent, position, size, new Vector2(0, 1));
-            var field = rect.gameObject.AddComponent<InputField>(); field.targetGraphic = rect.GetComponent<Image>();
+            var field = rect.gameObject.AddComponent<ProtocolInputField>(); field.targetGraphic = rect.GetComponent<Image>();
             Text text = Label(rect, new Vector2(10, -8), size - new Vector2(20, 16), "", 20);
             field.textComponent = text; field.lineType = multiline ? InputField.LineType.MultiLineNewline : InputField.LineType.SingleLine;
             field.characterLimit = multiline ? 16000 : 512; field.text = value;

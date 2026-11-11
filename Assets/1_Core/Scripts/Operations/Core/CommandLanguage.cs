@@ -28,6 +28,8 @@ namespace Codetective.Operations
         public Parameter[] Parameters;
         public List<Statement> Body;
         public string Signature => Name + "(" + string.Join(", ", Parameters.Select(p => p.Kind + " " + p.Name)) + ")";
+        public string SignatureFor(CommandLocale language) => Name + "(" + string.Join(", ",
+            Parameters.Select(p => CommandVocabulary.KindName(p.Kind, language) + " " + p.Name)) + ")";
         public IEnumerable<string> CalledProtocols => Body.Select(s => s.Value).Where(e => e.IsCall && e.Path.Length == 1)
             .Select(e => e.Path[0]).Distinct();
     }
@@ -94,6 +96,7 @@ namespace Codetective.Operations
         private string Peek => tokens[index];
         private string Take() => tokens[index++];
         private bool Match(string token) { if (Peek != token) return false; index++; return true; }
+        private bool MatchKeyword(string canonical) { if (CommandVocabulary.Keyword(Peek) != canonical) return false; index++; return true; }
         private void Require(string token) { if (!Match(token)) throw new CommandException($"'{token}'이 필요합니다."); }
         private string Name()
         {
@@ -107,20 +110,13 @@ namespace Codetective.Operations
 
         public static DataKind ParseKind(string name)
         {
-            switch (name)
-            {
-                case "인물": return DataKind.Person;
-                case "물건": return DataKind.Item;
-                case "장소": return DataKind.Place;
-                case "데이터": return DataKind.Any;
-            }
-            if (Enum.TryParse(name, true, out DataKind kind) && kind != DataKind.Empty) return kind;
+            if (CommandVocabulary.TryKind(name, out DataKind kind)) return kind;
             throw new CommandException($"알 수 없는 데이터 종류: {name}");
         }
 
         public Protocol ReadProtocol(string source)
         {
-            if (!Match("protocol") && !Match("프로토콜")) throw new CommandException("protocol 이름(종류 입력) { ... } 형식으로 작성하세요.");
+            if (!MatchKeyword("protocol")) throw new CommandException("protocol / 프로토콜 이름(종류 입력) { ... } 형식으로 작성하세요.");
             string name = Name();
             Require("(");
             var parameters = new List<Parameter>();
@@ -196,13 +192,13 @@ namespace Codetective.Operations
         private Statement ReadStatement()
         {
             var statement = new Statement();
-            if (Match("return") || Match("반환"))
+            if (MatchKeyword("return"))
             {
                 statement.Return = true;
                 statement.Value = Peek == ";" ? new Expression { Literal = Datum.Empty } : ReadExpression(0);
                 return statement;
             }
-            Match("var");
+            MatchKeyword("var");
             if (index + 1 < tokens.Count && tokens[index + 1] == "=")
             {
                 statement.Assign = Name();

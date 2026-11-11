@@ -30,15 +30,16 @@ namespace Codetective.Operations
         public event Action DayEnded;
 
         public const string Help = "save <name> / free <name> / help\n" +
-            "대상. → 현재 권한 목록\n이름 = 대상.명령(입력);\n" +
-            "예: hq.requestCoffee();\n단서 = archive.inspect();\nthread01.run(recon, archive);\n" +
-            "프로토콜 편집창: protocol recon(Place target) { return target.inspect(); }";
+            "save allocates a data slot; free releases it.\n" +
+            "object. lists currently available commands.\nname = object.command(input);\n" +
+            "Examples: hq.requestCoffee();\ndoc = archive.inspect();\nthread01.run(recon, archive);\n" +
+            "Protocol editor: protocol recon(Place target) { return target.inspect(); }";
 
         public void Register(Entity entity, params string[] rootAliases)
         {
             IndexEntity(entity, new HashSet<Entity>());
             roots[entity.Id] = entity;
-            foreach (string alias in entity.Aliases.Concat(rootAliases))
+            foreach (string alias in entity.AllNames.Concat(rootAliases))
             {
                 if (roots.TryGetValue(alias, out Entity other) && other != entity) throw new CommandException("객체 별칭이 중복됩니다: " + alias);
                 roots[alias] = entity;
@@ -82,7 +83,7 @@ namespace Codetective.Operations
         private void CheckName(string name)
         {
             if (!CommandParser.IsIdentifier(name)) throw new CommandException("이름은 글자 또는 _로 시작하고 글자·숫자·_만 사용하세요.");
-            if (roots.ContainsKey(name) || protocols.ContainsKey(name) || new[] { "save", "free", "help", "protocol", "return", "var" }.Contains(name))
+            if (roots.ContainsKey(name) || protocols.ContainsKey(name) || CommandVocabulary.Keyword(name) != null)
                 throw new CommandException("객체·프로토콜·예약 명령과 다른 데이터 이름을 사용하세요.");
         }
 
@@ -95,11 +96,12 @@ namespace Codetective.Operations
                 source = Normalize(source.Trim()).TrimEnd(';').TrimEnd();
                 if (source.Length == 0) return ExecutionResult.Error("실행할 명령을 입력하세요.");
                 string[] words = source.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
-                if (words[0] == "help") return words.Length == 1 ? ExecutionResult.Ok(Help) : ExecutionResult.Error("사용법: help");
-                if (words[0] == "save" || words[0] == "free")
+                string keyword = CommandVocabulary.Keyword(words[0]);
+                if (keyword == "help") return words.Length == 1 ? ExecutionResult.Ok(HelpForLanguage) : ExecutionResult.Error("사용법: " + words[0]);
+                if (keyword == "save" || keyword == "free")
                 {
                     if (words.Length != 2) return ExecutionResult.Error($"사용법: {words[0]} 이름");
-                    if (words[0] == "save") { Allocate(words[1]); return ExecutionResult.Ok($"'{words[1]}' 데이터 공간을 할당했습니다."); }
+                    if (keyword == "save") { Allocate(words[1]); return ExecutionResult.Ok($"'{words[1]}' 데이터 공간을 할당했습니다."); }
                     return Free(words[1]) ? ExecutionResult.Ok($"'{words[1]}' 데이터 공간을 해제했습니다.") :
                         ExecutionResult.Error($"'{words[1]}'에 할당된 데이터가 없습니다.");
                 }
@@ -109,7 +111,7 @@ namespace Codetective.Operations
                 Revision++;
                 return ExecutionResult.Ok(value.kind == DataKind.Empty ? "명령을 수행했습니다." : value.ToString(), value);
             }
-            catch (CommandException error) { return ExecutionResult.Error(error.Message + " (help로 사용법 확인)"); }
+            catch (CommandException error) { return ExecutionResult.Error(error.Message + " (" + CommandVocabulary.KeywordName("help", Language) + "로 사용법 확인)"); }
         }
 
         public ExecutionResult SaveProtocol(string source)
@@ -117,18 +119,18 @@ namespace Codetective.Operations
             try
             {
                 Protocol protocol = new CommandParser(source).ReadProtocol(source);
-                if (roots.ContainsKey(protocol.Name) || data.ContainsKey(protocol.Name) || new[] { "save", "free", "help", "protocol", "return", "var" }.Contains(protocol.Name))
+                if (roots.ContainsKey(protocol.Name) || data.ContainsKey(protocol.Name) || CommandVocabulary.Keyword(protocol.Name) != null)
                     throw new CommandException("다른 객체·데이터·기본 명령과 다른 프로토콜 이름을 사용하세요.");
                 protocols[protocol.Name] = protocol;
                 Revision++;
-                return ExecutionResult.Ok("프로토콜 저장: " + protocol.Signature);
+                return ExecutionResult.Ok("프로토콜 저장: " + protocol.SignatureFor(Language));
             }
             catch (CommandException error) { return ExecutionResult.Error(error.Message); }
         }
 
         public ExecutionResult TestProtocol(string source, string call)
         {
-            var sandbox = new KernelRuntime { DryRun = true };
+            var sandbox = new KernelRuntime { DryRun = true, Language = Language };
             foreach (var pair in entities) sandbox.entities.Add(pair.Key, pair.Value);
             foreach (var pair in roots) sandbox.roots.Add(pair.Key, pair.Value);
             sandbox.Consultation.AddRange(Consultation);
@@ -232,13 +234,13 @@ namespace Codetective.Operations
             return locals;
         }
 
-        private static void Validate(Parameter[] parameters, Datum[] arguments, bool variadic)
+        private void Validate(Parameter[] parameters, Datum[] arguments, bool variadic)
         {
             if (arguments.Length < parameters.Length || (!variadic && arguments.Length != parameters.Length))
                 throw new CommandException("입력 데이터 개수가 맞지 않습니다.");
             for (int i = 0; i < parameters.Length; i++)
                 if (parameters[i].Kind != DataKind.Any && parameters[i].Kind != arguments[i].kind)
-                    throw new CommandException($"{parameters[i].Name}에는 {parameters[i].Kind} 데이터가 필요합니다. 현재: {arguments[i].kind}");
+                    throw new CommandException($"{parameters[i].Name}에는 {KindName(parameters[i].Kind)} 데이터가 필요합니다. 현재: {KindName(arguments[i].kind)}");
         }
 
         private void CheckAccess(AccessRule rule, Dictionary<string, Datum> locals = null)
@@ -283,8 +285,8 @@ namespace Codetective.Operations
                     if (parameters != null && argumentIndex < parameters.Length) expected = parameters[argumentIndex].Kind;
                 }
                 catch (CommandException) { }
-                return AvailableValues(locals).Where(v => (expected == DataKind.Any || v.Value.kind == expected) && Prefix(v.Key, prefix, composing))
-                    .Select(v => new Completion(v.Key + " : " + v.Value.kind, before + v.Key)).ToArray();
+                return AvailableValues(locals, prefix, composing).Where(v => (expected == DataKind.Any || v.Value.kind == expected) && Prefix(v.Key, prefix, composing))
+                    .Select(v => new Completion(v.Key + " : " + KindName(v.Value.kind), before + v.Key)).ToArray();
             }
             int dot = input.LastIndexOf('.');
             if (dot >= 0)
@@ -296,27 +298,38 @@ namespace Codetective.Operations
                     Entity entity = ResolveEntity(objectPath.Split('.'), locals);
                     var output = new List<Completion>();
                     foreach (var child in entity.Children)
-                        if (child.Value.Access.Denial(this, locals?.Values) == null && Prefix(child.Key, prefix, composing))
-                            output.Add(new Completion(child.Key + " · " + child.Value.Label, leading + objectPath + "." + child.Key + "."));
+                    {
+                        string preferred = CommandVocabulary.Name(child.Key, child.Value.Names, Language);
+                        string name = CommandVocabulary.Match(preferred, child.Value.AllNames.Concat(new[] { child.Key }), prefix, composing);
+                        if (name != null && child.Value.Access.Denial(this, locals?.Values) == null)
+                            output.Add(new Completion(name + " · " + child.Value.LabelFor(Language), leading + objectPath + "." + name + "."));
+                    }
                     foreach (Operation op in entity.Operations)
-                        if ((!IsDayEnded || DryRun || op.Property) && op.Access.Denial(this, locals?.Values) == null && Prefix(op.Code, prefix, composing))
-                            output.Add(new Completion(op.Signature + " · " + op.Label,
-                                leading + objectPath + "." + op.Code + (op.Property ? "" : op.Parameters.Length == 0 && !op.Variadic ? "()" : "(")));
+                    {
+                        string name = CommandVocabulary.Match(op.NameFor(Language), op.AllNames, prefix, composing);
+                        if (name != null && (!IsDayEnded || DryRun || op.Property) && op.Access.Denial(this, locals?.Values) == null)
+                            output.Add(new Completion(op.SignatureFor(Language, name) + " · " + op.LabelFor(Language),
+                                leading + objectPath + "." + name + (op.Property ? "" : op.Parameters.Length == 0 && !op.Variadic ? "()" : "(")));
+                    }
                     return output;
                 }
                 catch (CommandException) { return Array.Empty<Completion>(); }
             }
-            return AvailableValues(locals).Where(v => Prefix(v.Key, input, composing)).Select(v =>
-                new Completion(v.Key + " : " + v.Value.kind, leading + v.Key + (Entity(v.Value.id) != null ? "." : ""))).ToArray();
+            return AvailableValues(locals, input, composing).Where(v => Prefix(v.Key, input, composing)).Select(v =>
+                new Completion(v.Key + " : " + KindName(v.Value.kind), leading + v.Key + (Entity(v.Value.id) != null ? "." : ""))).ToArray();
         }
 
-        private IEnumerable<KeyValuePair<string, Datum>> AvailableValues(Dictionary<string, Datum> locals = null)
+        private IEnumerable<KeyValuePair<string, Datum>> AvailableValues(Dictionary<string, Datum> locals, string prefix, bool composing)
         {
             if (locals != null) foreach (var local in locals) if (!local.Key.StartsWith("\u0001", StringComparison.Ordinal)) yield return local;
             foreach (var slot in data) if (locals == null || !locals.ContainsKey(slot.Key)) yield return new KeyValuePair<string, Datum>(slot.Key, slot.Value.value);
             foreach (var root in roots)
                 if (root.Key == root.Value.Id && root.Value.Access.Denial(this) == null)
-                    yield return new KeyValuePair<string, Datum>(root.Key, Datum.Ref(root.Value.Kind, root.Value.Id, root.Value.Label));
+                {
+                    string name = CommandVocabulary.Match(root.Value.NameFor(Language), root.Value.AllNames.Concat(roots.Where(r => r.Value == root.Value).Select(r => r.Key)), prefix, composing);
+                    if (name != null && (locals == null || !locals.ContainsKey(name)))
+                        yield return new KeyValuePair<string, Datum>(name, Datum.Ref(root.Value.Kind, root.Value.Id, root.Value.LabelFor(Language)));
+                }
             foreach (var protocol in protocols)
                 yield return new KeyValuePair<string, Datum>(protocol.Key, Datum.Ref(DataKind.Protocol, protocol.Key, protocol.Key));
         }

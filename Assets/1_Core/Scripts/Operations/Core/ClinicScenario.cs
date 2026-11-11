@@ -36,6 +36,7 @@ namespace Codetective.Operations
             lights.Operations.Add(new Operation { Code = "turnOff", Label = "조명을 끈다", Aliases = new[] { "끈다" }, ReturnKind = DataKind.Text,
                 Access = new AccessRule { Facts = new[] { "enemy_at_clinic" } }, Invoke = c => c.Runtime.HeadquartersOrder("turnOffLights") });
             hq.Children.Add("lights", lights);
+            ClinicCommandNames.Apply(hq);
             runtime.Register(hq);
 
             var archive = new Entity("archive", "현장 자료실", DataKind.Place) { Aliases = new[] { "자료실" } };
@@ -46,6 +47,7 @@ namespace Codetective.Operations
                 Parameters = new[] { new Parameter("document", DataKind.Document) }, ReturnKind = DataKind.Analysis,
                 Access = new AccessRule { Facts = new[] { "archive_inspected" }, RequiredData = DataKind.Document },
                 Invoke = c => { c.Runtime.Facts.Add("record_analyzed"); return Datum.Ref(DataKind.Analysis, "record_analysis", "출입 기록 분석", c.Arguments[0].label + " 분석 완료"); } });
+            ClinicCommandNames.Apply(archive);
             runtime.Register(archive);
             var client = new Entity("client", "상담 손님", DataKind.Person) { Aliases = new[] { "상담손님" } };
             client.Operations.Add(new Operation { Code = "identity", Label = "기본 프로필", Property = true, ReturnKind = DataKind.Text,
@@ -54,10 +56,12 @@ namespace Codetective.Operations
                 Parameters = new[] { new Parameter("evidence", DataKind.Analysis) }, ReturnKind = DataKind.Statement,
                 Access = new AccessRule { Facts = new[] { "record_analyzed" } },
                 Invoke = c => { c.Runtime.Facts.Add("testimony_crosschecked"); return Datum.Ref(DataKind.Statement, "revised_statement", "추가 진술", "분석 결과를 제시하여 새로운 진술을 확보했습니다."); } });
+            ClinicCommandNames.Apply(client);
             runtime.Register(client);
             var coffee = new Entity("coffee", "Kernel의 커피", DataKind.Item) { Access = new AccessRule { Facts = new[] { "coffee_received" } } };
             coffee.Operations.Add(new Operation { Code = "inspect", Label = "커피 확인", ReturnKind = DataKind.Text,
                 Invoke = c => Datum.Text("손님용 컵과 동일한 컵으로 전달받은 Kernel의 커피입니다.") });
+            ClinicCommandNames.Apply(coffee);
             runtime.Register(coffee);
 
             for (int i = 1; i <= 3; i++) AddThread(runtime, "thread" + i.ToString("D2"));
@@ -87,6 +91,7 @@ namespace Codetective.Operations
             entity.Operations.Add(new Operation { Code = "recall", Label = "복귀 지시", Aliases = new[] { "복귀" }, ReturnKind = DataKind.Text,
                 Access = new AccessRule { Condition = r => r.Agent(id).State != AgentState.Ready && r.Agent(id).State != AgentState.Disconnected && r.Agent(id).SceneAction == null },
                 Invoke = c => { c.Runtime.Recall(id); return Datum.Text("복귀 지시 접수"); } });
+            ClinicCommandNames.Apply(entity);
             runtime.Register(entity, "Thread" + id.Substring(6));
         }
     }
