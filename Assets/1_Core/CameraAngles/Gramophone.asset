@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   angleId: monitor
   position: {x: -0.3000003, y: 1.2627724, z: -3.6}
-  eulerAngles: {x: 13, y: 47, z: 0}
+  eulerAngles: {x: 13, y: 34, z: 0}
   fieldOfView: 30
-  transitionDuration: 0.4
+  transitionDuration: 0.2
   blendCurve:
     serializedVersion: 2
     m_Curve:

@@ -11,8 +11,11 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5c04c6cd76708e4c1b1e3693fc1ac2c6, type: 3}
   m_Name: MainSceneAngles
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   angles:
   - {fileID: 11400000, guid: b801419ae57fd5deb49cf292eec4a0c7, type: 2}
   - {fileID: 11400000, guid: b8fa13df50f0ba4f1d36ebce213051b7, type: 2}
+  - {fileID: 11400000, guid: ed7ab7338718fb54b94e3d081fcfc035, type: 2}
+  - {fileID: 11400000, guid: 8f92d3c640bb63749b773fa126e57e59, type: 2}
+  - {fileID: 11400000, guid: 57c29c912a727894080e971113439735, type: 2}
   initialIndex: 0

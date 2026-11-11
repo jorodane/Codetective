@@ -16,7 +16,7 @@ MonoBehaviour:
   position: {x: -0.3000003, y: 1.2627724, z: -3.6}
   eulerAngles: {x: 7, y: 15, z: 0}
   fieldOfView: 16
-  transitionDuration: 0.4
+  transitionDuration: 0.2
   blendCurve:
     serializedVersion: 2
     m_Curve:

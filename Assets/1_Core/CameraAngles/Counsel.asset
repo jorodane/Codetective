@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: Counsel
   m_EditorClassIdentifier: 
   angleId: overview
-  position: {x: -0.3000003, y: 1.2627724, z: -3.6}
-  eulerAngles: {x: 7, y: 0, z: 0}
+  position: {x: -0.3000002, y: 1.2527725, z: -2.7890687}
+  eulerAngles: {x: 5, y: 20.5, z: 0}
   fieldOfView: 60
-  transitionDuration: 0.4
+  transitionDuration: 0.2
   blendCurve:
     serializedVersion: 2
     m_Curve:
