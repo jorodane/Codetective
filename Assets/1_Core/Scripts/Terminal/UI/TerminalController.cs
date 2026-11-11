@@ -105,11 +105,18 @@ namespace Codetective.Terminal
 
         private void LateUpdate()
         {
-            if (input.text != lastText || input.caretPosition != lastCaret ||
-                input.selectionAnchorPosition != lastAnchor || input.isFocused != lastFocus ||
-                input.IsComposing != lastComposing)
+            TerminalCompletionInput current = input.CompletionInput;
+            bool textChanged = current.Text != lastText || current.IsComposing != lastComposing;
+            if (textChanged || current.Caret != lastCaret || current.Anchor != lastAnchor ||
+                input.isFocused != lastFocus)
             {
-                RefreshCompletions();
+                // IME changes do not raise onValueChanged until the syllable is committed.
+                if (textChanged)
+                {
+                    dismissed = false;
+                    selectedCompletion = 0;
+                }
+                RefreshCompletions(current);
             }
 
             if (scrollTranscript)
@@ -156,6 +163,10 @@ namespace Codetective.Terminal
 
         private void InputChanged(string value)
         {
+            // Deselect commits the composition before selecting a completion button.
+            // Preserve the visible choices until that button's click can be delivered.
+            if (input.IsLosingFocus)
+                return;
             dismissed = false;
             selectedCompletion = 0;
             RefreshCompletions();
@@ -163,11 +174,16 @@ namespace Codetective.Terminal
 
         private void RefreshCompletions(bool showEmpty = false)
         {
-            lastText = input.text;
-            lastCaret = input.caretPosition;
-            lastAnchor = input.selectionAnchorPosition;
+            RefreshCompletions(input.CompletionInput, showEmpty);
+        }
+
+        private void RefreshCompletions(TerminalCompletionInput current, bool showEmpty = false)
+        {
+            lastText = current.Text;
+            lastCaret = current.Caret;
+            lastAnchor = current.Anchor;
             lastFocus = input.isFocused;
-            lastComposing = input.IsComposing;
+            lastComposing = current.IsComposing;
 
             // Pointer-down selects the candidate button before its click is delivered.
             // Keep the candidates alive until pointer-up can apply that choice.
@@ -181,10 +197,9 @@ namespace Codetective.Terminal
                 }
             }
 
-            bool atEnd = lastCaret == lastText.Length && lastAnchor == lastText.Length;
-            completions = !dismissed && lastFocus && !lastComposing && atEnd &&
+            completions = interactionEnabled && !dismissed && lastFocus && current.IsAtEnd &&
                           (showEmpty || !string.IsNullOrWhiteSpace(lastText))
-                ? session.Complete(lastText)
+                ? session.Complete(lastText, current.IsComposing)
                 : Array.Empty<TerminalCompletion>();
             selectedCompletion = Mathf.Clamp(selectedCompletion, 0, Mathf.Max(0, completions.Count - 1));
             DrawCompletions();

@@ -21,6 +21,22 @@ namespace Codetective.Terminal
         private CanvasRenderer caretRenderer;
         private PointerEventData projectedDrag;
         public bool IsCompositionProtected => IsComposing || wasComposing;
+        public bool IsLosingFocus { get; private set; }
+        public TerminalCompletionInput CompletionInput =>
+            new TerminalCompletionInput(text, CompositionText, m_CaretPosition, m_CaretSelectPosition);
+
+        public override void OnDeselect(BaseEventData eventData)
+        {
+            IsLosingFocus = true;
+            try
+            {
+                base.OnDeselect(eventData);
+            }
+            finally
+            {
+                IsLosingFocus = false;
+            }
+        }
 
         private CrtScreen CurvedScreen => crtScreen != null ? crtScreen :
             crtScreen = GetComponentInParent<CrtScreen>();
@@ -96,12 +112,17 @@ namespace Codetective.Terminal
             }
         }
 
-        public bool IsComposing
+        public bool IsComposing => CompositionText.Length > 0;
+
+        private string CompositionText
         {
             get
             {
-                var module = EventSystem.current != null ? EventSystem.current.currentInputModule : null;
-                return module != null && !string.IsNullOrEmpty(module.input.compositionString);
+                var system = EventSystem.current;
+                if (!isFocused || system == null || system.currentSelectedGameObject != gameObject ||
+                    system.currentInputModule == null)
+                    return string.Empty;
+                return system.currentInputModule.input.compositionString ?? string.Empty;
             }
         }
 

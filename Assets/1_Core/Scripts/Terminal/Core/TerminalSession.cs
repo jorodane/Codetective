@@ -85,7 +85,7 @@ namespace Codetective.Terminal
             return new CommandResult(true, $"'{name}' 메모리 공간을 해제했습니다.");
         }
 
-        public IReadOnlyList<TerminalCompletion> Complete(string line)
+        public IReadOnlyList<TerminalCompletion> Complete(string line, bool isComposing = false)
         {
             line = (line ?? string.Empty).Normalize(NormalizationForm.FormC).TrimStart();
             if (line.IndexOfAny(new[] { '\r', '\n' }) >= 0)
@@ -103,7 +103,8 @@ namespace Codetective.Terminal
 
             if (separator < 0)
             {
-                return Commands.Where(command => command.StartsWith(line, StringComparison.Ordinal))
+                string commandPrefix = ComparisonForm(line, isComposing);
+                return Commands.Where(command => ComparisonForm(command, isComposing).StartsWith(commandPrefix, StringComparison.Ordinal))
                     .Select(command => new TerminalCompletion(command, command + " ")).ToArray();
             }
 
@@ -114,9 +115,17 @@ namespace Codetective.Terminal
             if (prefix.Any(char.IsWhiteSpace))
                 return Array.Empty<TerminalCompletion>();
 
-            return slots.Keys.Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
+            prefix = ComparisonForm(prefix, isComposing);
+            return slots.Keys.Where(name => ComparisonForm(name, isComposing).StartsWith(prefix, StringComparison.Ordinal))
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .Select(name => new TerminalCompletion(name, "삭제 " + name)).ToArray();
+        }
+
+        private static string ComparisonForm(string value, bool isComposing)
+        {
+            // A composing syllable is a prefix of its jamo sequence: ㅅ / 사 / 삭 → 삭제.
+            // Keep committed text matching exact, including case and complete syllables.
+            return isComposing ? value.Normalize(NormalizationForm.FormKD) : value;
         }
 
         private static string[] Tokenize(string line)
