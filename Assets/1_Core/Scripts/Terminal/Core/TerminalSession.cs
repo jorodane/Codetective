@@ -45,7 +45,11 @@ namespace Codetective.Terminal
     /// <summary>One play session. Allocations and completion candidates share the same source of truth.</summary>
     public sealed class TerminalSession
     {
-        private static readonly string[] Commands = { "저장", "삭제" };
+        private static readonly string[] Commands = { "save", "free", "help" };
+        public const string HelpText = "save <name>  : 메모리 공간 할당\n" +
+                                       "free <name>  : 메모리 공간 해제\n" +
+                                       "help         : 명령어 목록 보기\n\n" +
+                                       "예: save 단서 / free 단서\n이름에는 공백을 넣을 수 없습니다.";
         private readonly Dictionary<string, MemorySlot> slots =
             new Dictionary<string, MemorySlot>(StringComparer.Ordinal);
         private int nextSlotId = 1;
@@ -64,13 +68,17 @@ namespace Codetective.Terminal
             string[] tokens = Tokenize(line);
             string command = tokens[0];
             if (!Commands.Contains(command))
-                return new CommandResult(false, "알 수 없는 명령어입니다. 저장 이름 / 삭제 이름");
+                return new CommandResult(false, "알 수 없는 명령어입니다. help로 명령어를 확인하세요.");
+
+            if (command == "help")
+                return tokens.Length == 1 ? new CommandResult(true, HelpText) :
+                    new CommandResult(false, "사용법: help");
 
             if (tokens.Length != 2 || tokens[1].Any(char.IsControl))
                 return new CommandResult(false, $"사용법: {command} 이름 (이름에는 공백을 넣을 수 없습니다.)");
 
             string name = tokens[1];
-            if (command == "저장")
+            if (command == "save")
             {
                 if (slots.ContainsKey(name))
                     return new CommandResult(false, $"'{name}' 공간은 이미 할당되어 있습니다.");
@@ -105,10 +113,10 @@ namespace Codetective.Terminal
             {
                 string commandPrefix = ComparisonForm(line, isComposing);
                 return Commands.Where(command => ComparisonForm(command, isComposing).StartsWith(commandPrefix, StringComparison.Ordinal))
-                    .Select(command => new TerminalCompletion(command, command + " ")).ToArray();
+                    .Select(command => new TerminalCompletion(command, command == "help" ? command : command + " ")).ToArray();
             }
 
-            if (line.Substring(0, separator) != "삭제")
+            if (line.Substring(0, separator) != "free")
                 return Array.Empty<TerminalCompletion>();
 
             string prefix = line.Substring(separator).TrimStart();
@@ -118,12 +126,12 @@ namespace Codetective.Terminal
             prefix = ComparisonForm(prefix, isComposing);
             return slots.Keys.Where(name => ComparisonForm(name, isComposing).StartsWith(prefix, StringComparison.Ordinal))
                 .OrderBy(name => name, StringComparer.Ordinal)
-                .Select(name => new TerminalCompletion(name, "삭제 " + name)).ToArray();
+                .Select(name => new TerminalCompletion(name, "free " + name)).ToArray();
         }
 
         private static string ComparisonForm(string value, bool isComposing)
         {
-            // A composing syllable is a prefix of its jamo sequence: ㅅ / 사 / 삭 → 삭제.
+            // Compare composing Korean names as jamo: ㄷ / 다 / 단 can suggest 단서.
             // Keep committed text matching exact, including case and complete syllables.
             return isComposing ? value.Normalize(NormalizationForm.FormKD) : value;
         }

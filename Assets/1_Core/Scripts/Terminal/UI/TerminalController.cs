@@ -48,16 +48,17 @@ namespace Codetective.Terminal
                 input.FocusAtEnd();
         }
 
-        private const int HistoryLimit = 100;
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);
         private static readonly Color NormalColor = new Color(0.055f, 0.10f, 0.09f, 1f);
         private readonly TerminalSession session = new TerminalSession();
-        private readonly Queue<string> history = new Queue<string>();
+        private readonly TerminalHistory history = new TerminalHistory();
         private IReadOnlyList<TerminalCompletion> completions = Array.Empty<TerminalCompletion>();
         private int selectedCompletion;
         private int firstVisibleCompletion;
         private bool dismissed;
         private bool scrollTranscript;
+        private bool followTranscript;
+        private Vector2 preservedTranscriptPosition;
         private string lastText;
         private int lastCaret = -1;
         private int lastAnchor = -1;
@@ -84,9 +85,10 @@ namespace Codetective.Terminal
             if (canvas != null && canvas.worldCamera == null)
                 canvas.worldCamera = Camera.main;
 
-            transcript.text = "CODETECTIVE 메모리 터미널 준비 완료\n\n" +
-                              "저장 이름   : 변수 공간 할당\n삭제 이름   : 변수 공간 해제\n\n" +
-                              "명령을 입력하고 Enter를 누르세요.\n자동완성은 Tab으로 적용합니다.";
+            history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
+                           "save 이름 / free 이름\nhelp로 명령어 목록을 확인하세요.\n\n" +
+                           "Enter 실행 · Tab 자동완성\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
+            transcript.text = history.Text;
             RefreshMemory();
             completionPanel.SetActive(false);
             SetInteractionEnabled(interactionEnabled);
@@ -122,7 +124,15 @@ namespace Codetective.Terminal
             if (scrollTranscript)
             {
                 Canvas.ForceUpdateCanvases();
-                transcriptScroll.verticalNormalizedPosition = 0f;
+                if (followTranscript)
+                    transcriptScroll.verticalNormalizedPosition = 0f;
+                else
+                {
+                    float maximum = Mathf.Max(0f, transcriptScroll.content.rect.height - TranscriptViewport.rect.height);
+                    preservedTranscriptPosition.y = Mathf.Clamp(preservedTranscriptPosition.y, 0f, maximum);
+                    transcriptScroll.content.anchoredPosition = preservedTranscriptPosition;
+                }
+                transcriptScroll.Rebuild(CanvasUpdate.PostLayout);
                 scrollTranscript = false;
             }
         }
@@ -133,10 +143,18 @@ namespace Codetective.Terminal
                 return;
 
             CommandResult result = session.Execute(line);
-            history.Enqueue("> " + line + "\n" + (result.Success ? "OK   " : "오류 ") + result.Message);
-            while (history.Count > HistoryLimit)
-                history.Dequeue();
-            transcript.text = string.Join("\n\n", history);
+            RectTransform content = transcriptScroll.content;
+            followTranscript = TerminalHistory.ShouldFollowLatest(content.rect.height,
+                TranscriptViewport.rect.height, content.anchoredPosition.y);
+            preservedTranscriptPosition = content.anchoredPosition;
+            string before = history.Text;
+            string removed = history.Append("> " + line + "\n" + (result.Success ? "OK   " : "오류 ") + result.Message);
+            if (!followTranscript && removed.Length > 0)
+            {
+                string remaining = before.Substring(Math.Min(removed.Length, before.Length));
+                preservedTranscriptPosition.y -= MeasureHistory(before) - MeasureHistory(remaining);
+            }
+            transcript.text = history.Text;
             scrollTranscript = true;
             RefreshMemory();
 
@@ -146,12 +164,23 @@ namespace Codetective.Terminal
             RefreshCompletions();
         }
 
+        private RectTransform TranscriptViewport => transcriptScroll.viewport != null ?
+            transcriptScroll.viewport : (RectTransform)transcriptScroll.transform;
+
+        private float MeasureHistory(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return 0f;
+            var settings = transcript.GetGenerationSettings(new Vector2(transcript.rectTransform.rect.width, 0f));
+            return transcript.cachedTextGeneratorForLayout.GetPreferredHeight(value, settings) / transcript.pixelsPerUnit;
+        }
+
         private void RefreshMemory()
         {
             memoryHeading.text = "MEMORY / " + session.Count;
             if (session.Count == 0)
             {
-                memoryList.text = "할당된 공간 없음\n\n저장 이름\n명령으로 공간을\n만들어 보세요.";
+                memoryList.text = "할당된 공간 없음\n\nsave 이름\n명령으로 공간을\n만들어 보세요.";
                 return;
             }
 
