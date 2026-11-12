@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 575fde60b1403303a672c554f621dbc4
+    type: 3
+  m_Name: ClinicAppointment
+  m_EditorClassIdentifier: ''
+  message:
+    id: clinic-appointment
+    mailbox: 0
+    sender: 상담소 예약 담당
+    subject: 오늘의 상담 예약
+    body: '오늘 오전 상담 손님 한 분이 방문합니다. 회사에서 겪은 일에 대해 이야기하고 싶다고 합니다.
+
+
+      프로필에 단서를 정리하고, 기억해 둘 내용은 상담 기록에 직접 적어 주세요.'
+    day: 1
+    requiredFacts:
+    - kernel_assignment_accepted
+    readFacts: []
+    requiresAcceptance: 0
+    acceptLabel: 확인
+    acceptFacts: []
+    grantAuthorities: []

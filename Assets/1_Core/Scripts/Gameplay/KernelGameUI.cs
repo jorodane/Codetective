@@ -39,6 +39,9 @@ namespace Codetective.Gameplay
         private int completionSuffix;
         private string draft;
         private string draftArguments;
+        private RectTransform drawerBar;
+        private Button[] drawerButtons;
+        private Text mailBadge;
 
         public void Initialize(KernelGameController game, InspectionController inspection, Font font)
         {
@@ -63,16 +66,25 @@ namespace Codetective.Gameplay
             body = ScrollText(panel, new Vector2(20, -72), new Vector2(530, 330));
             feedback = Label(panel, new Vector2(20, -552), new Vector2(530, 54), "", 17);
             panel.gameObject.SetActive(false);
+            RectTransform mailNotice = Box("MailNotice", root.transform, new Vector2(-16, -12), new Vector2(220, 42), new Vector2(1, 1));
+            mailBadge = Button(mailNotice, new Vector2(6, -4), new Vector2(208, 34), "메일함", () => game.ShowMonitorPage("mail")).GetComponentInChildren<Text>();
+            var dialogue = GetComponent<ConsultationOverlay>() ?? gameObject.AddComponent<ConsultationOverlay>();
+            dialogue.Initialize(game, inspection, root.transform, font, game.DialoguePresentation);
+            BuildDrawerControls();
         }
 
         private void Update()
         {
             if (game == null || root == null) return;
+            drawerBar.gameObject.SetActive(game.CanOperateDrawers && modal == null);
             if (modal == "protocol" && protocolSource != null && protocolSource.isFocused) RefreshProtocolCompletions();
             if (Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + 0.2f;
             KernelRuntime r = game.Runtime;
             clock.text = r.ClockText + "  의심 " + r.Suspicion.ToString("0");
+            int unread = r.UnreadMailCount(Mailbox.Kernel) + r.UnreadMailCount(Mailbox.Clinic);
+            mailBadge.text = unread > 0 ? "메일함 / 새 메일 " + unread : "메일함";
+            for (int i = 0; i < drawerButtons.Length; i++) drawerButtons[i].GetComponentInChildren<Text>().text = (i + 1) + (game.Drawers[i].IsOpen ? " 닫기" : " 열기");
             if (panel.gameObject.activeSelf && modal != "protocol") RefreshBody();
         }
 
@@ -87,7 +99,7 @@ namespace Codetective.Gameplay
         public void ShowContext(string id)
         {
             context = id;
-            if (id == "monitor") { HidePanel(); return; }
+            if (id == "monitor" || id == "counsel" || id == "drawer") { HidePanel(); return; }
             BuildContext();
         }
 
@@ -145,18 +157,10 @@ namespace Codetective.Gameplay
             switch (context)
             {
                 case "counsel":
-                    heading.text = "상담 / 응답과 단서 기록";
-                    BuildConsultationButtons();
-                    break;
+                    HidePanel(); return;
                 case "profile":
                     heading.text = "프로필 / 상담 기록";
-                    AddButton(new Vector2(20, -428), new Vector2(510, 44), "지난 진술의 미기록 단서 수집", () =>
-                    {
-                        for (int i = 0; i <= game.Runtime.ConsultationIndex && i < game.Runtime.Consultation.Count; i++)
-                            game.Runtime.RecordClue(i);
-                        feedback.text = "들은 진술의 단서를 기록했습니다.";
-                        RefreshBody();
-                    });
+                    AddButton(new Vector2(20, -428), new Vector2(510, 44), "모니터에서 상담 기록 작성", () => game.ShowMonitorPage("clinic-records"));
                     break;
                 case "clock":
                     heading.text = "업무 시간 / 날짜 기록";
@@ -166,7 +170,7 @@ namespace Codetective.Gameplay
                         try { game.Runtime.NextDay(); game.SaveNow(); } catch (CommandException e) { feedback.text = e.Message; }
                     });
                     break;
-                case "drawer": heading.text = "데이터 보관 / 작업 도구"; break;
+                case "drawer": HidePanel(); return;
                 case "gramophone": heading.text = "통신 / Thread 보고"; break;
                 case "portrait": heading.text = "Kernel / 현재 작전 정보"; break;
                 default: heading.text = "정보 기록"; break;
@@ -174,25 +178,17 @@ namespace Codetective.Gameplay
             RefreshBody();
         }
 
-        private void BuildConsultationButtons()
+        private void BuildDrawerControls()
         {
-            ConsultationLine line = game.Runtime.CurrentConsultation;
-            if (line == null) return;
-            int index = game.Runtime.ConsultationIndex;
-            var clue = AddButton(new Vector2(20, -420), new Vector2(510, 48), "● " + line.keyword, () =>
+            drawerBar = Box("DrawerControls", root.transform, new Vector2(0, 16), new Vector2(1120, 76), new Vector2(0.5f, 0));
+            Label(drawerBar, new Vector2(12, -5), new Vector2(1096, 24), "서랍을 클릭하거나 아래 버튼으로 열고 닫으세요.", 18);
+            drawerButtons = new Button[game.Drawers.Count];
+            for (int i = 0; i < drawerButtons.Length; i++)
             {
-                try { game.Runtime.RecordClue(index); feedback.text = "프로필과 데이터 목록에 기록했습니다."; RefreshBody(); }
-                catch (CommandException e) { feedback.text = e.Message; }
-            });
-            clue.GetComponentInChildren<Text>().color = new Color(1f, 0.35f, 0.35f);
-            AddButton(new Vector2(20, -480), new Vector2(245, 44), "음, 계속 말씀해 주세요.", Reply);
-            AddButton(new Vector2(285, -480), new Vector2(245, 44), "아아, 그럴 수 있겠네요.", Reply);
-        }
-
-        private void Reply()
-        {
-            try { game.Runtime.Reply(); BuildContext(); }
-            catch (CommandException e) { feedback.text = e.Message; }
+                int index = i;
+                drawerButtons[i] = Button(drawerBar, new Vector2(12 + i * 122, -34), new Vector2(114, 34), "", () => game.ToggleDrawer(index));
+            }
+            drawerBar.gameObject.SetActive(false);
         }
 
         private void RefreshBody()
@@ -214,22 +210,7 @@ namespace Codetective.Gameplay
                     text.Append(slot.name).Append(" : ").Append(r.TypeName(slot.value)).Append('\n').Append(slot.value).Append("\n\n");
                 if (r.Data.Count == 0) text.Append("확보한 데이터가 없습니다. 상담의 붉은 단서를 기록하거나 명령을 실행하세요.");
             }
-            else if (view == "counsel")
-            {
-                ConsultationLine line = r.CurrentConsultation;
-                text.Append(line == null ? "오늘의 상담이 끝났습니다." : line.speaker + "\n\n" + line.sentence + "\n\n붉은 단어를 누르면 프로필과 데이터에 기록됩니다.");
-                text.Append("\n\n응답 대기: ").Append(r.ResponseMinutes.ToString("0.0")).Append("분\n응답이 늦어지면 Kernel 의심도가 상승합니다.");
-            }
-            else if (view == "profile")
-            {
-                for (int i = 0; i <= r.ConsultationIndex && i < r.Consultation.Count; i++)
-                {
-                    ConsultationLine line = r.Consultation[i];
-                    text.Append(line.speaker).Append('\n').Append(line.sentence).Append('\n')
-                        .Append(r.RecordedClues.Contains(line.fact) ? "[기록됨] " : "[미기록] ").Append(line.keyword).Append("\n\n");
-                }
-                text.Append("확보 정보\n").Append(string.Join("\n", r.Facts));
-            }
+            else if (view == "profile") text.Append(r.ProfileSummary(KernelRuntime.ProfileOf(r.CurrentConsultation)));
             else if (view == "clock")
             {
                 text.Append(r.ClockText).Append("\n\n업무 시간: 09:00 ~ 18:00\n18시에 날짜 기록이 자동 저장됩니다.\n진행 중인 Thread 작업도 이어집니다.\n\n")

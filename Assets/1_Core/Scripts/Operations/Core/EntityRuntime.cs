@@ -130,7 +130,8 @@ namespace Codetective.Operations
         {
             var registry = new SchemaRegistry();
             foreach (EntitySchema schema in Schemas.All) registry.Register(schema);
-            var copy = new KernelRuntime(registry) { DryRun = true, Language = Language };
+            var copy = new KernelRuntime(registry) { DryRun = true, Language = Language, StoryStartFact = StoryStartFact };
+            foreach (StoryMail message in mail.Values) copy.RegisterMail(message);
             foreach (Entity original in entities.Values)
             {
                 var clone = new Entity(original.Id, original.Label, original.Schema)

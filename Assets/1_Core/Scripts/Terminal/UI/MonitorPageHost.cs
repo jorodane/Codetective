@@ -24,8 +24,19 @@ namespace Codetective.Terminal
         private KernelRuntime runtime;
         private bool initialized;
         public MonitorPage CurrentPage { get; private set; }
+        public string SelectedProfileId { get; set; } = "client";
         public bool CanGoBack => navigation.CanGoBack;
         public bool CanGoForward => navigation.CanGoForward;
+        public bool IsCompositionProtected
+        {
+            get
+            {
+                if (CurrentPage == null) return false;
+                foreach (CompletingInputField input in CurrentPage.GetComponentsInChildren<CompletingInputField>(true))
+                    if (input.isFocused && input.IsCompositionProtected) return true;
+                return false;
+            }
+        }
         public event Action<MonitorPage> PageChanged;
         private Font Font => heading != null && heading.font != null ? heading.font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
@@ -70,7 +81,8 @@ namespace Codetective.Terminal
         private void InitializeContent(MonitorPage page)
         {
             if (runtime == null) return;
-            foreach (ClinicMonitorPage content in page.GetComponentsInChildren<ClinicMonitorPage>(true)) content.Initialize(runtime, Font);
+            foreach (MonoBehaviour component in page.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component is IMonitorPageContent content) content.Initialize(runtime, Font);
         }
         public bool TryNavigate(string id) => initialized && navigation.Navigate(id);
         public void ShowPage(string id) => TryNavigate(id);

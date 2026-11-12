@@ -23,3 +23,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 388e213be3823da040e33922be25f145, type: 2}
   - {fileID: 11400000, guid: 811778796e1091895ded67bc789d1a6a, type: 2}
   additionalObjects: []
+  mail:
+  - {fileID: 11400000, guid: 657437bbd3ff730a5f0e3b9666c1f08e, type: 2}
+  - {fileID: 11400000, guid: e4ec938a9d6953cf9424ca64b1d1e1f8, type: 2}
+  - {fileID: 11400000, guid: 5ba67d938f6ed226b4ee1db5aad41495, type: 2}
+  storyStartFact: kernel_assignment_accepted

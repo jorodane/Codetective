@@ -14,6 +14,8 @@ namespace Codetective.Gameplay
         public EntitySchemaAsset[] schemas = Array.Empty<EntitySchemaAsset>();
         public EntityInstanceAsset[] instances = Array.Empty<EntityInstanceAsset>();
         public EntityDefinition[] additionalObjects = Array.Empty<EntityDefinition>();
+        public StoryMailAsset[] mail = Array.Empty<StoryMailAsset>();
+        public string storyStartFact = "";
 
         public KernelRuntime CreateRuntime()
         {
@@ -21,6 +23,8 @@ namespace Codetective.Gameplay
             runtime.Language = commandLanguage;
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
             EntityAssetCompiler.Install(runtime, schemas, instances, additionalObjects);
+            foreach (StoryMailAsset item in mail) if (item != null) runtime.RegisterMail(item.message);
+            runtime.StoryStartFact = storyStartFact;
             return runtime;
         }
     }

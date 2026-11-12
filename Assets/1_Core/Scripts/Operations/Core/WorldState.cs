@@ -14,12 +14,12 @@ namespace Codetective.Operations
         public bool CoffeeReceived { get; private set; }
         public int ConsultationIndex { get; private set; }
         public double ResponseMinutes { get; private set; }
-        public ConsultationLine CurrentConsultation => ConsultationIndex < Consultation.Count ? Consultation[ConsultationIndex] : null;
+        public ConsultationLine CurrentConsultation => !AwaitingAssignment && ConsultationIndex < Consultation.Count ? Consultation[ConsultationIndex] : null;
         public string ClockText => $"DAY {Day:00}  {(int)Minute / 60:00}:{(int)Minute % 60:00}";
 
         public void Tick(double minutes)
         {
-            if (IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
+            if (AwaitingAssignment || IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
             double used = Math.Min(minutes, 1080 - Minute);
             budget = 1024; depth = 0;
             foreach (ThreadAgent agent in Threads.ToArray()) TickAgent(agent, used);
@@ -73,6 +73,7 @@ namespace Codetective.Operations
                 RecordedClues.Add(line.fact);
                 Facts.Add(line.fact);
                 Report("새 데이터: " + line.dataName + " / " + line.keyword + " — 관련 권한을 확인하세요.");
+                NarrativeUpdated();
             }
             return NormalizeReference(value);
         }
@@ -84,6 +85,7 @@ namespace Codetective.Operations
             ResponseMinutes = 0;
             ConsultationIndex++;
             Report(CurrentConsultation == null ? "상담이 끝났습니다. 프로필에서 진술을 다시 확인할 수 있습니다." : "상담 응답: 음, 계속 말씀해 주세요.");
+            NarrativeUpdated();
         }
 
         public KernelSnapshot Capture()
@@ -94,6 +96,10 @@ namespace Codetective.Operations
                 responseMinutes = ResponseMinutes, consultationIndex = ConsultationIndex,
                 dayEnded = IsDayEnded, coffeeReceived = CoffeeReceived,
                 facts = Facts.ToArray(), authorities = Authorities.ToArray(), recordedClues = RecordedClues.ToArray(),
+                consultationNotes = notes.Select(n => n.Copy()).ToArray(),
+                nextConsultationNoteId = nextNoteId,
+                mailProgress = mailProgress.Values.Select(m => new MailProgress { id = m.id, read = m.read, accepted = m.accepted }).ToArray(),
+                drawers = drawers.Select(d => new DrawerState { id = d.Key, open = d.Value }).ToArray(),
                 data = data.Values.Select(CloneSlot).ToArray(), protocols = protocols.Values.Select(p => p.Source).ToArray(),
                 entities = entities.Values.Select(e => new EntitySnapshot
                 {
@@ -146,6 +152,7 @@ namespace Codetective.Operations
             Facts.Clear(); Facts.UnionWith(snapshot.facts ?? Array.Empty<string>());
             Authorities.Clear(); Authorities.UnionWith(snapshot.authorities ?? Array.Empty<string>());
             RecordedClues.Clear(); RecordedClues.UnionWith(snapshot.recordedClues ?? Array.Empty<string>());
+            RestoreNarrative(snapshot);
             data.Clear();
             foreach (DataSlot slot in snapshot.data ?? Array.Empty<DataSlot>())
             {

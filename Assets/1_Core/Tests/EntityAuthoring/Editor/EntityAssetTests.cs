@@ -159,6 +159,22 @@ namespace Codetective.Tests.Operations
             afterTalk.Entity("person").SetFunctionEnabled("talk", true);
             Assert.That(afterTalk.Execute("person.talk()").Value.text, Is.EqualTo("개인 메모"));
         }
+
+        [Test]
+        public void ShippedGovernmentMailStartsTheCaseAndNarrativeStateRoundTripsThroughUnityJson()
+        {
+            var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
+            KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.AwaitingAssignment, Is.True);
+            Assert.That(runtime.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
+            runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro");
+            runtime.AddConsultationNote("client", "직접 작성한 내용"); runtime.SetDrawerOpen("desk.Drawer_1", true);
+            KernelRuntime restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
+            Assert.That(restored.AwaitingAssignment, Is.False);
+            Assert.That(restored.NotesFor("client").Single().text, Is.EqualTo("직접 작성한 내용"));
+            Assert.That(restored.IsDrawerOpen("desk.Drawer_1"), Is.True);
+            Assert.That(restored.Inbox(Mailbox.Clinic).Count(), Is.EqualTo(1));
+        }
 #endif
     }
 }

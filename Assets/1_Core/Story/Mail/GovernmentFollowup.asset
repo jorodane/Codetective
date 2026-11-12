@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 575fde60b1403303a672c554f621dbc4
+    type: 3
+  m_Name: GovernmentFollowup
+  m_EditorClassIdentifier: ''
+  message:
+    id: kernel-followup
+    mailbox: 1
+    sender: 국가기록보안국 / 현장지원과
+    subject: 첫 조사 결과 검토
+    body: '분석 결과와 상담 손님의 추가 진술을 확인했습니다. 첫 임무의 기록을 검토할 준비가 되었습니다.
+
+
+      이 업무를 확인하면 첫 임무의 종료가 기록됩니다. 새로운 임무와 연락은 계속 Kernel 메일함으로 전달됩니다.'
+    day: 1
+    requiredFacts:
+    - testimony_crosschecked
+    readFacts:
+    - mission01_report_received
+    requiresAcceptance: 1
+    acceptLabel: 조사 결과 보고 완료
+    acceptFacts:
+    - mission01_completed
+    grantAuthorities: []

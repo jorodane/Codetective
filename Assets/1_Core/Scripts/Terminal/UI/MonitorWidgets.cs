@@ -38,6 +38,16 @@ namespace Codetective.Terminal
             label.alignment = TextAnchor.MiddleCenter;
             return button;
         }
+        public static MonitorNoteInput Input(Transform parent, Font font, Vector2 position, Vector2 size)
+        {
+            RectTransform rect = Rect("PersonalNote", parent, position, size);
+            Image image = rect.gameObject.AddComponent<Image>(); image.color = new Color(0.04f, 0.085f, 0.06f);
+            rect.gameObject.AddComponent<CrtMeshEffect>(); rect.gameObject.AddComponent<RectMask2D>();
+            var input = rect.gameObject.AddComponent<MonitorNoteInput>(); input.targetGraphic = image;
+            Text text = Label(rect, font, new Vector2(12, -8), size - new Vector2(24, 16), "", 24);
+            input.textComponent = text; input.lineType = InputField.LineType.MultiLineNewline; input.characterLimit = 8000;
+            return input;
+        }
         public static Text ScrollText(Transform parent, Font font, Vector2 position, Vector2 size)
         {
             RectTransform viewport = Rect("Records", parent, position, size);

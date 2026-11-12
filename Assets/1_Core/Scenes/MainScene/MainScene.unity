@@ -7064,6 +7064,7 @@ MonoBehaviour:
   clockMinute: {fileID: 2000000122}
   calendar: {fileID: 2000000120}
   font: {fileID: 12800000, guid: e1d6f57a609574bd982c425e64e02986, type: 3}
+  dialoguePresentation: {fileID: 11400000, guid: 294f87ed3f348b61b63714caa50069e6, type: 2}
 --- !u!114 &2000000103
 MonoBehaviour:
   m_ObjectHideFlags: 0

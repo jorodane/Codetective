@@ -26,7 +26,8 @@ namespace Codetective.Terminal
         public bool InteractionEnabled => interactionEnabled;
         public bool PageVisible => pageVisible;
         public KernelRuntime Runtime => session.Runtime;
-        public bool IsCompositionProtected => input != null && input.IsCompositionProtected;
+        public bool IsCompositionProtected => (AcceptsInput && input != null && input.IsCompositionProtected) ||
+            (GetComponent<MonitorPageHost>()?.IsCompositionProtected ?? false);
         private bool pageVisible = true;
         private bool AcceptsInput => interactionEnabled && pageVisible;
 

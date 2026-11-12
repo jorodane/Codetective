@@ -151,6 +151,7 @@ namespace Codetective.Operations
     [Serializable]
     public sealed class ConsultationLine
     {
+        public string profileId = "client";
         public string speaker = "상담 손님";
         public string sentence;
         public string keyword;
@@ -178,6 +179,10 @@ namespace Codetective.Operations
         public string[] recordedClues;
         public AgentSnapshot[] agents;
         public EntitySnapshot[] entities;
+        public ConsultationNote[] consultationNotes;
+        public int nextConsultationNoteId;
+        public MailProgress[] mailProgress;
+        public DrawerState[] drawers;
     }
 
     [Serializable]

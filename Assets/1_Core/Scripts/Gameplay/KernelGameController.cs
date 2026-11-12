@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Codetective.CameraViews;
 using Codetective.Interaction;
 using Codetective.Operations;
@@ -24,8 +26,16 @@ namespace Codetective.Gameplay
         [SerializeField] private Transform clockMinute;
         [SerializeField] private Transform calendar;
         [SerializeField] private Font font;
+        [SerializeField] private DialoguePresentationDefinition dialoguePresentation;
 
         public KernelRuntime Runtime { get; private set; }
+        public string CurrentView { get; private set; } = "overview";
+        public bool IsViewTransitioning => views != null && views.IsTransitioning;
+        public DialoguePresentationDefinition DialoguePresentation => dialoguePresentation;
+        private readonly List<SlidingDrawer> drawers = new List<SlidingDrawer>();
+        public IReadOnlyList<SlidingDrawer> Drawers => drawers;
+        public bool CanOperateDrawers => inspection != null && inspection.Mode == InspectionMode.Inspecting && CurrentView == "drawer" &&
+            !IsViewTransitioning && !inspection.ModalInputBlocked;
         public string SavePath => Path.Combine(Application.persistentDataPath, "Codetective", "daily-autosave.json");
         public string Feedback { get; private set; } = "Kernel 작전망 연결";
         private KernelGameUI ui;
@@ -40,6 +50,8 @@ namespace Codetective.Gameplay
         private Light[] sceneLights;
         private bool[] initialLights;
         private const string CommandLanguagePreference = "Codetective.CommandLanguage";
+        private bool narrativeDirty;
+        private float narrativeSaveAt;
 
         private void Awake()
         {
@@ -53,6 +65,7 @@ namespace Codetective.Gameplay
             if (Enum.IsDefined(typeof(CommandLocale), preferredLanguage)) Runtime.Language = (CommandLocale)preferredLanguage;
             Runtime.SceneActionRequested += SceneAction;
             Runtime.DayEnded += SaveNow;
+            Runtime.NarrativeChanged += QueueNarrativeSave;
             if (terminalRoot != null) terminalRoot.GetComponentInChildren<TerminalController>(true).AttachRuntime(Runtime);
             foldedScale = curtainCloth != null ? curtainCloth.localScale : Vector3.one;
             hourBasis = ClockBasis(clockHour);
@@ -67,6 +80,7 @@ namespace Codetective.Gameplay
         {
             CreateCoffeeCopy();
             CreateCalendarText();
+            InitializeDrawers();
             ui.Initialize(this, inspection, font);
             sceneLights = FindObjectsOfType<Light>();
             initialLights = Array.ConvertAll(sceneLights, light => light.enabled);
@@ -79,6 +93,8 @@ namespace Codetective.Gameplay
         private void Update()
         {
             Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
+            if (narrativeDirty && Time.unscaledTime >= narrativeSaveAt) { narrativeDirty = false; SaveNow(); }
+            foreach (SlidingDrawer drawer in drawers) drawer.SetInteractionEnabled(CanOperateDrawers);
             if (pendingView != null && !views.IsTransitioning)
             {
                 ui.ShowContext(pendingView);
@@ -99,16 +115,36 @@ namespace Codetective.Gameplay
             return Quaternion.Euler(tilt);
         }
 
-        private void EnterView(CameraAnglePreset angle) { pendingView = angle.Id; ui.HideContext(); }
-        private void LeaveView() { pendingView = null; ui.HideContext(); }
+        private void EnterView(CameraAnglePreset angle) { CurrentView = angle.Id; pendingView = angle.Id; ui.HideContext(); }
+        private void LeaveView() { CurrentView = "overview"; pendingView = null; ui.HideContext(); }
         public void ShowMonitor()
         {
             int index = views.AngleSet.FindId("monitor");
             if (index >= 0) inspection.InspectAngle(views.AngleSet.Get(index));
         }
+        public void ShowMonitorPage(string pageId)
+        {
+            if (inspection.Mode == InspectionMode.Menu) return;
+            terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.ShowPage(pageId);
+            ShowMonitor();
+        }
+        private void InitializeDrawers()
+        {
+            if (deskSurface == null) return;
+            foreach (Transform child in deskSurface.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("Desk_big_Drawer_", StringComparison.Ordinal)).OrderBy(t => t.name, StringComparer.Ordinal))
+            {
+                SlidingDrawer drawer = child.GetComponent<SlidingDrawer>() ?? child.gameObject.AddComponent<SlidingDrawer>();
+                drawer.Initialize(Runtime, "desk." + child.name); drawers.Add(drawer);
+            }
+        }
+        public void ToggleDrawer(int index)
+        {
+            if (CanOperateDrawers && index >= 0 && index < drawers.Count) drawers[index].Interact();
+        }
 
         public void SaveNow()
         {
+            narrativeDirty = false;
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(SavePath));
@@ -120,6 +156,9 @@ namespace Codetective.Gameplay
             }
             catch (Exception error) { Feedback = "저장 실패: " + error.Message; Debug.LogWarning(Feedback, this); }
         }
+        private void QueueNarrativeSave() { narrativeDirty = true; narrativeSaveAt = Time.unscaledTime + 0.3f; }
+        private void OnApplicationPause(bool paused) { if (paused && narrativeDirty) { narrativeDirty = false; SaveNow(); } }
+        private void OnApplicationQuit() { if (narrativeDirty) { narrativeDirty = false; SaveNow(); } }
 
         public void SetCommandLanguage(CommandLocale language)
         {
@@ -223,12 +262,14 @@ namespace Codetective.Gameplay
 
         private void OnDestroy()
         {
+            if (narrativeDirty) SaveNow();
             StopAllCoroutines();
             if (sceneLights != null) for (int i = 0; i < sceneLights.Length; i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (curtainCloth != null) curtainCloth.localScale = foldedScale;
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.PointerBlocked = null; }
             Runtime.SceneActionRequested -= SceneAction;
             Runtime.DayEnded -= SaveNow;
+            Runtime.NarrativeChanged -= QueueNarrativeSave;
         }
     }
 }

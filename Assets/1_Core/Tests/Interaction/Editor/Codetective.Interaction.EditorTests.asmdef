@@ -1,6 +1,14 @@
 {
     "name": "Codetective.Interaction.EditorTests",
-    "references": ["Codetective.Interaction.Core"],
-    "includePlatforms": ["Editor"],
-    "optionalUnityReferences": ["TestAssemblies"]
+    "references": [
+        "Codetective.Interaction.Core",
+        "Codetective.Interaction.World",
+        "Codetective.Operations.Core"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
 }

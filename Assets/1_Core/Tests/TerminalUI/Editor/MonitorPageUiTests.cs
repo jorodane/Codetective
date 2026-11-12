@@ -39,7 +39,7 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void SwitchingPagesReusesTheirViewsAndKeepsTheCommandDraft()
         {
-            Assert.That(host.CurrentPage.Id, Is.EqualTo("clinic"));
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
             Assert.That(terminal.PageVisible, Is.False);
             input.SetTextWithoutNotify("save 작성중인단서");
             host.ShowPage("kernel");
@@ -86,14 +86,19 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void ClinicPagesUseTheSameKnowledgeAndMemoryAsTheKernelConsole()
         {
+            host.ShowPage("clinic");
             ClinicMonitorPage clinic = host.CurrentPage.GetComponent<ClinicMonitorPage>();
-            Button clue = Field<Button>(clinic, "clue"); clue.onClick.Invoke();
+            Assert.That(Field<Text>(clinic, "body").text, Does.Not.Contain(runtime.Consultation[0].sentence));
+            runtime.RecordClue(0);
             Assert.That(runtime.Facts, Does.Contain("basement_noise"));
             host.ShowPage("kernel");
             Assert.That(terminal.Runtime, Is.SameAs(runtime));
             Assert.That(runtime.Execute("record = archive.inspect()").Success, Is.True);
             host.ShowPage("clinic-records");
-            Assert.That(Field<Text>(host.CurrentPage.GetComponent<ClinicMonitorPage>(), "body").text, Does.Contain("[기록됨]"));
+            ClinicMonitorPage records = host.CurrentPage.GetComponent<ClinicMonitorPage>();
+            Field<MonitorNoteInput>(records, "noteInput").text = "내가 직접 작성한 상담 기록";
+            Invoke(records, "SaveNote");
+            Assert.That(Field<Text>(records, "body").text, Does.Contain("내가 직접 작성한 상담 기록"));
         }
         [Test]
         public void AdditionalPageRootsAndLinksExtendTheMonitorWithoutReplacingItsCanvas()
@@ -105,7 +110,7 @@ namespace Codetective.Terminal.Tests.UI
             MonitorPageLink link = linkObject.AddComponent<MonitorPageLink>(); SetField(link, "pageId", "custom");
             link.OpenPage();
             Assert.That(host.CurrentPage, Is.SameAs(page));
-            host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("clinic"));
+            host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
             Assert.That(canvas.GetComponentsInChildren<Canvas>(true).Length, Is.EqualTo(1));
         }
         private static T Field<T>(object owner, string name) => (T)owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(owner);

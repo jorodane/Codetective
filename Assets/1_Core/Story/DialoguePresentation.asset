@@ -1,0 +1,79 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: f1b365c244ea5a9642a502d07acf6c55
+    type: 3
+  m_Name: DialoguePresentation
+  m_EditorClassIdentifier: ''
+  acknowledgements:
+  - fileID: 8300000
+    guid: a2f63d3135644b96db6c277b992458fd
+    type: 3
+  - fileID: 8300000
+    guid: 77c2a1ebaf457a1832141053593f8f60
+    type: 3
+  placements:
+  - angleId: overview
+    anchor:
+      x: 0.5
+      y: 0
+    offset:
+      x: 0
+      y: 18
+    size:
+      x: 680
+      y: 248
+  - angleId: counsel
+    anchor:
+      x: 0
+      y: 0
+    offset:
+      x: 18
+      y: 18
+    size:
+      x: 680
+      y: 248
+  - angleId: monitor
+    anchor:
+      x: 1
+      y: 0
+    offset:
+      x: -18
+      y: 18
+    size:
+      x: 420
+      y: 260
+  - angleId: drawer
+    anchor:
+      x: 1
+      y: 1
+    offset:
+      x: -18
+      y: -74
+    size:
+      x: 460
+      y: 250
+  - angleId: profile
+    anchor:
+      x: 0
+      y: 0
+    offset:
+      x: 18
+      y: 18
+    size:
+      x: 600
+      y: 248

@@ -105,6 +105,8 @@ namespace Codetective.Interaction
             Mouse mouse = Mouse.current;
             if (flow.Mode == InspectionMode.Overview && mouse != null && mouse.leftButton.wasPressedThisFrame)
                 InspectAtScreenPoint(mouse.position.ReadValue());
+            else if (flow.Mode == InspectionMode.Inspecting && mouse != null && mouse.leftButton.wasPressedThisFrame)
+                InteractAtScreenPoint(mouse.position.ReadValue());
 #endif
         }
 
@@ -133,6 +135,22 @@ namespace Codetective.Interaction
         {
             if (target != null && target.isActiveAndEnabled)
                 InspectAngle(target.Angle, target.Terminal);
+        }
+
+        public bool InteractAtScreenPoint(Vector2 point)
+        {
+            if (flow.Mode != InspectionMode.Inspecting || views.IsTransitioning || ModalInputBlocked ||
+                (PointerBlocked != null && PointerBlocked(point))) return false;
+            RaycastHit[] hits = Physics.RaycastAll(views.ControlledCamera.ScreenPointToRay(point), clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            foreach (RaycastHit hit in hits)
+            {
+                InspectionActionTarget action = hit.collider.GetComponentInParent<InspectionActionTarget>();
+                if (action != null && action.CanInteract(views.ActiveAngle?.Id)) { action.Interact(); return true; }
+                // Coarse inspection volumes select an angle; they must not obstruct its detailed controls.
+                if (hit.collider.GetComponentInParent<InspectionTarget>() == null && !hit.collider.isTrigger) return false;
+            }
+            return false;
         }
 
         public void InspectAngle(CameraAnglePreset angle)

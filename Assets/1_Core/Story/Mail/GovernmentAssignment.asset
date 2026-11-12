@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 575fde60b1403303a672c554f621dbc4
+    type: 3
+  m_Name: GovernmentAssignment
+  m_EditorClassIdentifier: ''
+  message:
+    id: government-intro
+    mailbox: 1
+    sender: 국가기록보안국 / 현장지원과
+    subject: Kernel 임명 및 첫 임무
+    body: 'Kernel 귀하.
+
+
+      귀하를 비공개 현장 작전의 커맨더로 임명합니다. 공식 신분은 개인 심리상담소 상담가입니다.
+
+
+      상담소 건너편의 손님은 실제로 귀하에게 말합니다. 말풍선을 누르면 “음”, “아아” 같은 추임새로 응답할 수 있습니다. 붉은 단서는 직접
+      눌러 프로필에 남기고, 상담 기록은 모니터에서 직접 작성하십시오. 적절한 추임새만 넣어도 상담은 생각보다 오래 이어집니다.
+
+
+      첫 임무: 상담 손님이 언급하는 회사 지하실의 야간 소음을 조사하십시오. 진술에서 단서를 확보하면 자료실 조사 권한이 열립니다. Thread에게
+      정찰을 맡기고 상담을 계속할 수 있습니다.
+
+
+      상담소 메일은 위장 업무에, Kernel 메일은 임무 연락에 사용합니다. 후속 지시는 이 메일함으로 전달됩니다.'
+    day: 1
+    requiredFacts: []
+    readFacts:
+    - kernel_contact_received
+    requiresAcceptance: 1
+    acceptLabel: 임무 수락
+    acceptFacts:
+    - kernel_assignment_accepted
+    - mission01_started
+    grantAuthorities:
+    - clinic.basic
