@@ -52,7 +52,7 @@ namespace Codetective.Gameplay
             raycaster = root.GetComponent<GraphicRaycaster>();
             RectTransform hud = Box("KernelHUD", root.transform, new Vector2(16, -12), new Vector2(950, 42), new Vector2(0, 1));
             clock = Label(hud, new Vector2(10, -4), new Vector2(270, 34), "", 18);
-            Button(hud, new Vector2(285, -4), new Vector2(110, 34), "터미널", () => { HideContext(); game.ShowMonitor(); });
+            Button(hud, new Vector2(285, -4), new Vector2(110, 34), "모니터", () => { HideContext(); game.ShowMonitor(); });
             Button(hud, new Vector2(403, -4), new Vector2(110, 34), "데이터", () => OpenModal("data"));
             Button(hud, new Vector2(521, -4), new Vector2(110, 34), "Thread", () => OpenModal("threads"));
             Button(hud, new Vector2(639, -4), new Vector2(140, 34), "프로토콜", () => OpenModal("protocol"));

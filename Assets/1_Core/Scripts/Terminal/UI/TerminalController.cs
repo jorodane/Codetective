@@ -24,7 +24,18 @@ namespace Codetective.Terminal
         [SerializeField] private bool interactionEnabled = true;
 
         public bool InteractionEnabled => interactionEnabled;
+        public bool PageVisible => pageVisible;
+        public KernelRuntime Runtime => session.Runtime;
         public bool IsCompositionProtected => input != null && input.IsCompositionProtected;
+        private bool pageVisible = true;
+        private bool AcceptsInput => interactionEnabled && pageVisible;
+
+        public void SetPageVisible(bool visible)
+        {
+            if (pageVisible == visible) return;
+            pageVisible = visible;
+            ApplyInputInteraction();
+        }
 
         public void SetInteractionEnabled(bool enabled)
         {
@@ -34,19 +45,28 @@ namespace Codetective.Terminal
                 var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
                 if (selected != null && selected.transform.IsChildOf(transform))
                     EventSystem.current.SetSelectedGameObject(null);
-                input.ReleaseFocus();
-                DismissCompletions();
             }
-            input.interactable = enabled;
-            input.readOnly = !enabled;
             var group = GetComponent<CanvasGroup>();
             if (group != null)
             {
                 group.interactable = enabled;
                 group.blocksRaycasts = enabled;
             }
-            if (enabled)
-                input.FocusAtEnd();
+            ApplyInputInteraction();
+        }
+
+        private void ApplyInputInteraction()
+        {
+            if (!AcceptsInput)
+            {
+                var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+                if (selected == input.gameObject) EventSystem.current.SetSelectedGameObject(null);
+                input.ReleaseFocus();
+                DismissCompletions();
+            }
+            input.interactable = AcceptsInput;
+            input.readOnly = !AcceptsInput;
+            if (AcceptsInput && input.gameObject.activeInHierarchy) input.FocusAtEnd();
         }
 
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);
@@ -60,6 +80,7 @@ namespace Codetective.Terminal
             session = new TerminalSession(runtime);
             session.Runtime.Message += QueueReport;
             runtimeRevision = -1;
+            GetComponent<MonitorPageHost>()?.AttachRuntime(runtime);
         }
         private void QueueReport(string message) => reports.Enqueue(message);
         private void OnDestroy() => session.Runtime.Message -= QueueReport;
@@ -146,7 +167,7 @@ namespace Codetective.Terminal
                 RefreshCompletions(current);
             }
 
-            if (scrollTranscript)
+            if (scrollTranscript && pageVisible)
             {
                 Canvas.ForceUpdateCanvases();
                 if (followTranscript)
@@ -164,7 +185,7 @@ namespace Codetective.Terminal
 
         private void Submit(string line)
         {
-            if (!interactionEnabled || string.IsNullOrWhiteSpace(line))
+            if (!AcceptsInput || string.IsNullOrWhiteSpace(line))
                 return;
 
             CommandResult result = session.Execute(line);
@@ -180,9 +201,12 @@ namespace Codetective.Terminal
         private void AppendHistory(string entry)
         {
             RectTransform content = transcriptScroll.content;
-            followTranscript = TerminalHistory.ShouldFollowLatest(content.rect.height,
-                TranscriptViewport.rect.height, content.anchoredPosition.y);
-            preservedTranscriptPosition = content.anchoredPosition;
+            if (!scrollTranscript)
+            {
+                followTranscript = TerminalHistory.ShouldFollowLatest(content.rect.height,
+                    TranscriptViewport.rect.height, content.anchoredPosition.y);
+                preservedTranscriptPosition = content.anchoredPosition;
+            }
             string before = history.Text;
             string removed = history.Append(entry);
             if (!followTranscript && removed.Length > 0)
@@ -258,7 +282,7 @@ namespace Codetective.Terminal
                 }
             }
 
-            completions = visibility.ShouldShow(current, lastFocus, interactionEnabled)
+            completions = visibility.ShouldShow(current, lastFocus, AcceptsInput)
                 ? session.Complete(lastText, current.IsComposing)
                 : Array.Empty<TerminalCompletion>();
             // A fully typed word is already committed; keep longer names from taking it over.

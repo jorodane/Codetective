@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 110001}
   - component: {fileID: 110000}
   - component: {fileID: 112000}
+  - component: {fileID: 130000}
   m_Layer: 5
   m_Name: TerminalPanel
   m_TagString: Untagged
@@ -34,17 +35,12 @@ RectTransform:
   m_LocalScale: {x: 0.03125, y: 0.03125, z: 0.03125}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 100006}
-  - {fileID: 100010}
   - {fileID: 100014}
-  - {fileID: 100018}
-  - {fileID: 100022}
-  - {fileID: 100026}
-  - {fileID: 120002}
-  - {fileID: 100037}
-  - {fileID: 100048}
-  - {fileID: 100065}
-  - {fileID: 100069}
+  - {fileID: 131001}
+  - {fileID: 132001}
+  - {fileID: 133001}
+  - {fileID: 100006}
+  - {fileID: 134001}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -155,7 +151,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 28, y: -20}
-  m_SizeDelta: {x: 730, y: 40}
+  m_SizeDelta: {x: 340, y: 40}
   m_Pivot: {x: 0, y: 1}
 --- !u!222 &100007
 CanvasRenderer:
@@ -187,7 +183,7 @@ MonoBehaviour:
       m_Calls: []
   m_FontData:
     m_Font: {fileID: 12800000, guid: e1d6f57a609574bd982c425e64e02986, type: 3}
-    m_FontSize: 30
+    m_FontSize: 28
     m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 10
@@ -198,7 +194,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "CODETECTIVE / TERMINAL"
+  m_Text: "CODETECTIVE / KERNEL"
 --- !u!1 &100009
 GameObject:
   m_ObjectHideFlags: 0
@@ -226,16 +222,16 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 100009}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 250.0, y: 332.0, z: 0}
+  m_LocalPosition: {x: 250.0, y: 260, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 810, y: -20}
-  m_SizeDelta: {x: 282, y: 40}
+  m_AnchoredPosition: {x: 810, y: -92}
+  m_SizeDelta: {x: 282, y: 32}
   m_Pivot: {x: 0, y: 1}
 --- !u!222 &100011
 CanvasRenderer:
@@ -386,7 +382,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
@@ -466,7 +462,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
@@ -545,7 +541,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 100031}
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
@@ -758,17 +754,17 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 100036}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 250.0, y: 252.0, z: 0}
+  m_LocalPosition: {x: 250.0, y: 216, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 100042}
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 810, y: -100}
-  m_SizeDelta: {x: 282, y: 518}
+  m_AnchoredPosition: {x: 810, y: -136}
+  m_SizeDelta: {x: 282, y: 482}
   m_Pivot: {x: 0, y: 1}
 --- !u!222 &100038
 CanvasRenderer:
@@ -982,7 +978,7 @@ RectTransform:
   - {fileID: 100052}
   - {fileID: 100056}
   - {fileID: 100060}
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
@@ -1347,7 +1343,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
@@ -1432,7 +1428,7 @@ RectTransform:
   - {fileID: 100086}
   - {fileID: 100095}
   - {fileID: 100104}
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
@@ -2648,7 +2644,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 120006}
-  m_Father: {fileID: 100002}
+  m_Father: {fileID: 131001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
@@ -2859,3 +2855,269 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4ee107da10355aa81aa64d43249288ce, type: 3}
   m_Name:
   m_EditorClassIdentifier:
+--- !u!114 &130000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f2692f780fb95e6b619dfe2b6027f13, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  terminal: {fileID: 100112}
+  heading: {fileID: 100008}
+  navigationRoot: {fileID: 134001}
+  initialPage: clinic
+--- !u!1 &131000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 131001}
+  - component: {fileID: 131002}
+  m_Layer: 5
+  m_Name: KernelPage
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &131001
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 131000}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 100010}
+  - {fileID: 100018}
+  - {fileID: 100022}
+  - {fileID: 100026}
+  - {fileID: 100037}
+  - {fileID: 100048}
+  - {fileID: 100065}
+  - {fileID: 100069}
+  - {fileID: 120002}
+  m_Father: {fileID: 100002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &131002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 131000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f19c6426f915a6b339bc2f97da774e0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  pageId: kernel
+  title: Kernel
+  showInNavigation: 1
+  terminalPage: 1
+  shown:
+    m_PersistentCalls:
+      m_Calls: []
+  hidden:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!1 &132000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 132001}
+  - component: {fileID: 132002}
+  - component: {fileID: 132003}
+  m_Layer: 5
+  m_Name: ClinicPage
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!224 &132001
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132000}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 100002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &132002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f19c6426f915a6b339bc2f97da774e0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  pageId: clinic
+  title: 상담소
+  showInNavigation: 1
+  terminalPage: 0
+  shown:
+    m_PersistentCalls:
+      m_Calls: []
+  hidden:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &132003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de31a6282d0bf163b1770b16ac40d4ef, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  recordsPage: 0
+  consultationPageId: clinic
+  recordsPageId: clinic-records
+--- !u!1 &133000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 133001}
+  - component: {fileID: 133002}
+  - component: {fileID: 133003}
+  m_Layer: 5
+  m_Name: ClinicRecordsPage
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!224 &133001
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 133000}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 100002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &133002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 133000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f19c6426f915a6b339bc2f97da774e0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  pageId: clinic-records
+  title: 상담 기록
+  showInNavigation: 1
+  terminalPage: 0
+  shown:
+    m_PersistentCalls:
+      m_Calls: []
+  hidden:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &133003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 133000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de31a6282d0bf163b1770b16ac40d4ef, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  recordsPage: 1
+  consultationPageId: clinic
+  recordsPageId: clinic-records
+--- !u!1 &134000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 134001}
+  m_Layer: 5
+  m_Name: MonitorNavigation
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &134001
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 134000}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -160, y: 334, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 100002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 400, y: -18}
+  m_SizeDelta: {x: 692, y: 44}
+  m_Pivot: {x: 0, y: 1}
