@@ -35,8 +35,8 @@ namespace Codetective.Operations
                 {
                     Parameter parameter = signature.Parameters[i];
                     Datum value = i < call.Arguments.Count ? Preview(call.Arguments[i], locals) : null;
-                    locals[parameter.Name] = value != null && (parameter.Kind == DataKind.Any || value.kind == parameter.Kind) ?
-                        value : new Datum { kind = parameter.Kind, label = parameter.Name };
+                    locals[parameter.Name] = value != null && Accepts(parameter, value) ?
+                        value : new Datum { kind = parameter.Kind, schemaId = parameter.SchemaId, label = parameter.Name };
                 }
                 int end = Math.Max(brace + 1, statementStart);
                 string prior = source.Substring(0, end) + "}";
@@ -67,14 +67,25 @@ namespace Codetective.Operations
             {
                 if (!expression.IsCall)
                 {
-                    Entity entity = ResolveEntity(path, locals);
-                    return Datum.Ref(entity.Kind, entity.Id, entity.Label);
+                    try { return Reference(ResolveEntity(path, locals)); }
+                    catch (CommandException)
+                    {
+                        if (path.Length < 2) return Datum.Empty;
+                        Entity owner = ResolveCompletionEntity(path.Take(path.Length - 1).ToArray(), locals);
+                        VariableDefinition field = owner.FindVariable(path.Last());
+                        if (field != null && VariableDenial(owner, field, locals) == null)
+                            return new Datum { kind = field.Kind, schemaId = field.SchemaId, label = field.Label };
+                        Operation property = owner.Find(path.Last());
+                        if (property != null && property.Property && OperationDenial(owner, property, locals) == null)
+                            return new Datum { kind = property.ReturnKind, schemaId = property.ReturnSchemaId, label = property.Label };
+                    }
                 }
                 if (path.Length > 1)
                 {
-                    Entity target = ResolveEntity(path.Take(path.Length - 1).ToArray(), locals);
+                    Entity target = ResolveCompletionEntity(path.Take(path.Length - 1).ToArray(), locals);
                     Operation operation = target.Find(path.Last());
-                    if (operation != null) return new Datum { kind = operation.ReturnKind, label = operation.Label };
+                    if (operation != null && OperationDenial(target, operation, locals) == null)
+                        return new Datum { kind = operation.ReturnKind, schemaId = operation.ReturnSchemaId, label = operation.Label };
                 }
             }
             catch (CommandException) { }

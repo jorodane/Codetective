@@ -16,4 +16,10 @@ MonoBehaviour:
   loadDailySave: 1
   commandLanguage: 1
   consultation: []
+  schemas:
+  - {fileID: 11400000, guid: 7a7b5acfa9f224e0eef60045fb0d7a1f, type: 2}
+  - {fileID: 11400000, guid: 5094bec0175f424f83f9d91b371bcb5a, type: 2}
+  instances:
+  - {fileID: 11400000, guid: 388e213be3823da040e33922be25f145, type: 2}
+  - {fileID: 11400000, guid: 811778796e1091895ded67bc789d1a6a, type: 2}
   additionalObjects: []

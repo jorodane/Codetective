@@ -17,6 +17,8 @@ namespace Codetective.Operations
     public sealed class Statement
     {
         public string Assign;
+        public string[] AssignPath;
+        public bool ValidateOnly;
         public bool Return;
         public Expression Value;
     }
@@ -27,9 +29,9 @@ namespace Codetective.Operations
         public string Source;
         public Parameter[] Parameters;
         public List<Statement> Body;
-        public string Signature => Name + "(" + string.Join(", ", Parameters.Select(p => p.Kind + " " + p.Name)) + ")";
+        public string Signature => Name + "(" + string.Join(", ", Parameters.Select(p => p.TypeName(CommandLocale.English) + " " + p.Name)) + ")";
         public string SignatureFor(CommandLocale language) => Name + "(" + string.Join(", ",
-            Parameters.Select(p => CommandVocabulary.KindName(p.Kind, language) + " " + p.Name)) + ")";
+            Parameters.Select(p => p.TypeName(language) + " " + p.Name)) + ")";
         public IEnumerable<string> CalledProtocols => Body.Select(s => s.Value).Where(e => e.IsCall && e.Path.Length == 1)
             .Select(e => e.Path[0]).Distinct();
     }
@@ -101,7 +103,7 @@ namespace Codetective.Operations
         private string Name()
         {
             string name = Take();
-            if (!IsIdentifier(name)) throw new CommandException("유효한 이름이 필요합니다.");
+            if (!IsIdentifier(name) || IsAllocationKeyword(name)) throw new CommandException("유효한 이름이 필요합니다. new/malloc은 사용할 수 없습니다.");
             return name;
         }
 
@@ -124,10 +126,10 @@ namespace Codetective.Operations
             {
                 do
                 {
-                    DataKind kind = ParseKind(Name());
+                    string type = Name();
                     string parameter = Name();
                     if (parameters.Any(p => p.Name == parameter)) throw new CommandException("입력 이름이 중복됩니다.");
-                    parameters.Add(new Parameter(parameter, kind));
+                    parameters.Add(CommandVocabulary.TryKind(type, out DataKind kind) ? new Parameter(parameter, kind) : new Parameter(parameter, DataKind.Any, type));
                 } while (Match(","));
                 Require(")");
             }
@@ -152,8 +154,10 @@ namespace Codetective.Operations
             int temporary = 0;
             foreach (Statement statement in source)
             {
+                if (statement.AssignPath != null && statement.Value.IsCall)
+                    result.Add(new Statement { AssignPath = statement.AssignPath, ValidateOnly = true, Value = new Expression { Literal = Datum.Empty } });
                 LowerArguments(statement.Value, result, ref temporary);
-                if (statement.Return && statement.Value.IsCall)
+                if ((statement.Return || statement.AssignPath != null) && statement.Value.IsCall)
                 {
                     string name = "\u0001" + temporary++;
                     result.Add(new Statement { Assign = name, Value = statement.Value });
@@ -199,10 +203,17 @@ namespace Codetective.Operations
                 return statement;
             }
             MatchKeyword("var");
-            if (index + 1 < tokens.Count && tokens[index + 1] == "=")
+            int start = index;
+            if (IsIdentifier(Peek))
             {
-                statement.Assign = Name();
-                Require("=");
+                var path = new List<string> { Name() };
+                while (Match(".")) path.Add(Name());
+                if (Match("="))
+                {
+                    if (path.Count == 1) statement.Assign = path[0];
+                    else statement.AssignPath = path.ToArray();
+                }
+                else index = start;
             }
             statement.Value = ReadExpression(0);
             return statement;
@@ -211,6 +222,9 @@ namespace Codetective.Operations
         private Expression ReadExpression(int depth)
         {
             if (depth > 32) throw new CommandException("호출 중첩이 너무 깊습니다.");
+            if (IsAllocationKeyword(Peek)) throw new CommandException("유저 코드는 기존 개체의 참조만 사용할 수 있습니다. 생성/메모리 할당은 지원하지 않습니다.");
+            if (CommandVocabulary.Keyword(Peek) == "true" || CommandVocabulary.Keyword(Peek) == "false")
+                return new Expression { Literal = Datum.Boolean(CommandVocabulary.Keyword(Take()) == "true") };
             if (Peek.StartsWith("\"", StringComparison.Ordinal)) return new Expression { Literal = Datum.Text(Take().Substring(1)) };
             if (double.TryParse(Peek, NumberStyles.Float, CultureInfo.InvariantCulture, out double number))
             {
@@ -231,5 +245,7 @@ namespace Codetective.Operations
             }
             return expression;
         }
+
+        public static bool IsAllocationKeyword(string name) => name == "new" || name == "malloc" || name == "생성" || name == "메모리할당";
     }
 }

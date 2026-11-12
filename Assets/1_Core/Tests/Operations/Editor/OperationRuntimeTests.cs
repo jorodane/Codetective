@@ -248,12 +248,12 @@ namespace Codetective.Tests.Operations
             target.Operations.Add(new Operation { Code = "enter", Access = new AccessRule { Authorities = new[] { "access" }, ForbiddenFacts = new[] { "sealed" } },
                 Invoke = c => { calls++; return Datum.Empty; } });
             r.Register(target);
-            Assert.That(r.Complete("safe."), Is.Empty);
+            Assert.That(r.Complete("safe.en"), Is.Empty);
             Assert.That(r.Execute("safe.enter();").Success, Is.False);
             r.Authorities.Add("access");
-            Assert.That(r.Complete("safe.").Count, Is.EqualTo(1));
+            Assert.That(r.Complete("safe.en").Single().Replacement, Is.EqualTo("safe.enter()"));
             r.Facts.Add("sealed");
-            Assert.That(r.Complete("safe."), Is.Empty);
+            Assert.That(r.Complete("safe.en"), Is.Empty);
             Assert.That(r.Execute("safe.enter();").Success, Is.False);
             Assert.That(calls, Is.Zero);
         }
@@ -300,10 +300,10 @@ namespace Codetective.Tests.Operations
         public void ChildObjectPermissionsAndAliasesUseTheSameExecutionPath()
         {
             var r = ClinicScenario.Create();
-            Assert.That(r.Complete("hq.door."), Is.Empty);
+            Assert.That(r.Complete("hq.door.").Any(c => c.Replacement == "hq.door.lock()"), Is.False);
             Assert.That(r.Execute("hq.door.lock();").Success, Is.False);
             r.Facts.Add("enemy_at_clinic");
-            Assert.That(r.Complete("hq.door.").Single().Replacement, Is.EqualTo("hq.door.lock()"));
+            Assert.That(r.Complete("hq.door.").Any(c => c.Replacement == "hq.door.lock()"), Is.True);
             Assert.That(r.Execute("지휘소.문.잠근다();").Success, Is.True);
             Assert.That(r.Facts, Does.Contain("lockDoor"));
         }

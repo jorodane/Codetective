@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 853e59987727c5f7b5bcfca9f67b7954
+    type: 3
+  m_Name: SpareArchive
+  m_EditorClassIdentifier: ''
+  instanceId: spareArchive
+  displayName: 예비자료실
+  schema:
+    fileID: 11400000
+    guid: 5094bec0175f424f83f9d91b371bcb5a
+    type: 2
+  exposeRoot: 1
+  aliases: []
+  names:
+  - language: 1
+    name: 예비자료실
+    description: ''
+  access:
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  initialValues:
+  - field: description
+    value:
+      kind: 3
+      id: ''
+      label: 스키마 상속과 참조를 실험하는 연습용 자료실입니다.
+      text: 스키마 상속과 참조를 실험하는 연습용 자료실입니다.
+      number: 0
+      schemaId: ''
+    reference:
+      fileID: 0
+  - field: zone
+    value:
+      kind: 3
+      id: ''
+      label: B-01
+      text: B-01
+      number: 0
+      schemaId: ''
+    reference:
+      fileID: 0
+  - field: peer
+    value:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+    reference:
+      fileID: 11400000
+      guid: 388e213be3823da040e33922be25f145
+      type: 2
+  children: []

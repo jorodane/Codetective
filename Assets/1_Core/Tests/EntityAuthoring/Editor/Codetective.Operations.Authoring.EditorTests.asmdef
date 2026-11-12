@@ -1,0 +1,7 @@
+{
+    "name": "Codetective.Operations.Authoring.EditorTests",
+    "references": ["Codetective.Operations.Core", "Codetective.Operations.Authoring"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

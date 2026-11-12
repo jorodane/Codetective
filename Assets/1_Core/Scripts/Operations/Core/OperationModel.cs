@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Codetective.Operations
 {
-    public enum DataKind { Empty, Any, Number, Text, Person, Item, Statement, Photo, Document, Log, Place, Time, Analysis, Rule, Relationship, Clue, Protocol, Thread, Task }
+    public enum DataKind { Empty, Any, Number, Text, Person, Item, Statement, Photo, Document, Log, Place, Time, Analysis, Rule, Relationship, Clue, Protocol, Thread, Task, Entity, Boolean }
     public enum AgentState { Ready, Executing, Waiting, Disconnected }
 
     [Serializable]
@@ -15,11 +15,15 @@ namespace Codetective.Operations
         public string label = "";
         public string text = "";
         public double number;
+        public string schemaId = "";
+        public bool CanReferenceEntity => kind != DataKind.Empty && kind != DataKind.Number && kind != DataKind.Text &&
+            kind != DataKind.Boolean && kind != DataKind.Protocol && kind != DataKind.Task;
         public static Datum Empty => new Datum();
         public static Datum Ref(DataKind kind, string id, string label, string text = "") =>
             new Datum { kind = kind, id = id, label = label, text = text };
         public static Datum Text(string text) => new Datum { kind = DataKind.Text, text = text, label = text };
         public static Datum Number(double value) => new Datum { kind = DataKind.Number, number = value, label = value.ToString(System.Globalization.CultureInfo.InvariantCulture) };
+        public static Datum Boolean(bool value) => new Datum { kind = DataKind.Boolean, number = value ? 1 : 0, label = value ? "true" : "false" };
         public Datum Copy() => (Datum)MemberwiseClone();
         public override string ToString() => kind == DataKind.Empty ? "비어 있음" :
             string.IsNullOrEmpty(text) || text == label ? label : label + " — " + text;
@@ -37,7 +41,9 @@ namespace Codetective.Operations
     {
         public string Name { get; }
         public DataKind Kind { get; }
-        public Parameter(string name, DataKind kind) { Name = name; Kind = kind; }
+        public string SchemaId { get; }
+        public Parameter(string name, DataKind kind, string schemaId = "") { Name = name; Kind = kind; SchemaId = schemaId ?? ""; }
+        public string TypeName(CommandLocale language) => string.IsNullOrEmpty(SchemaId) ? CommandVocabulary.KindName(Kind, language) : SchemaId;
     }
 
     public sealed class AccessRule
@@ -48,8 +54,9 @@ namespace Codetective.Operations
         public DataKind RequiredData = DataKind.Empty;
         public bool NeedsReadyThread;
         public Func<KernelRuntime, bool> Condition;
+        public Func<KernelRuntime, Entity, bool> TargetCondition;
 
-        public string Denial(KernelRuntime runtime, IEnumerable<Datum> locals = null)
+        public string Denial(KernelRuntime runtime, IEnumerable<Datum> locals = null, Entity target = null)
         {
             if (Facts.Any(f => !runtime.Facts.Contains(f))) return "아직 필요한 정보를 알지 못합니다.";
             if (Authorities.Any(a => !runtime.Authorities.Contains(a))) return "작전 권한이 없습니다.";
@@ -59,6 +66,7 @@ namespace Codetective.Operations
                 return "필요한 데이터를 보유하고 있지 않습니다.";
             if (NeedsReadyThread && !runtime.Threads.Any(t => t.State == AgentState.Ready)) return "활동 가능한 Thread가 없습니다.";
             if (Condition != null && !Condition(runtime)) return "현재 상태에서는 수행할 수 없습니다.";
+            if (TargetCondition != null && (target == null || !TargetCondition(runtime, target))) return "현재 대상 상태에서는 수행할 수 없습니다.";
             return null;
         }
     }
@@ -71,22 +79,24 @@ namespace Codetective.Operations
         public LocalizedCommandName[] Names = Array.Empty<LocalizedCommandName>();
         public Parameter[] Parameters = Array.Empty<Parameter>();
         public DataKind ReturnKind;
+        public string ReturnSchemaId = "";
+        public bool Overrides;
         public bool Property;
         public bool Variadic;
         public double Minutes;
         public AccessRule Access = new AccessRule();
         public Func<Invocation, Datum> Invoke;
         public string Signature => Property ? Code : Code + "(" +
-            string.Join(", ", Parameters.Select(p => p.Kind + " " + p.Name)) + (Variadic ? ", ..." : "") + ")";
+            string.Join(", ", Parameters.Select(p => p.TypeName(CommandLocale.English) + " " + p.Name)) + (Variadic ? ", ..." : "") + ")";
         public string NameFor(CommandLocale language) => CommandVocabulary.Name(Code, Names, language);
         public string LabelFor(CommandLocale language) => CommandVocabulary.Description(Label, Names, language);
         public string SignatureFor(CommandLocale language, string name = null) => Property ? name ?? NameFor(language) : (name ?? NameFor(language)) + "(" +
-            string.Join(", ", Parameters.Select(p => CommandVocabulary.KindName(p.Kind, language) + " " + CommandVocabulary.ParameterName(p.Name, language))) + (Variadic ? ", ..." : "") + ")";
+            string.Join(", ", Parameters.Select(p => p.TypeName(language) + " " + CommandVocabulary.ParameterName(p.Name, language))) + (Variadic ? ", ..." : "") + ")";
         public IEnumerable<string> AllNames => CommandVocabulary.Names(Code, Aliases, Names);
         public bool Matches(string name) => AllNames.Contains(name);
     }
 
-    public sealed class Entity
+    public sealed partial class Entity
     {
         public string Id;
         public string Label;
@@ -102,7 +112,7 @@ namespace Codetective.Operations
         public IEnumerable<string> AllNames => CommandVocabulary.Names(Id, Aliases, Names);
         public Entity Child(string name) => Children.TryGetValue(name, out Entity child) ? child :
             Children.Values.FirstOrDefault(e => e.AllNames.Contains(name));
-        public Operation Find(string name) => Operations.FirstOrDefault(o => o.Matches(name));
+        public Operation Find(string name) => EffectiveOperations.FirstOrDefault(o => o.Matches(name));
     }
 
     public sealed class Invocation
@@ -163,7 +173,22 @@ namespace Codetective.Operations
         public string[] protocols;
         public string[] recordedClues;
         public AgentSnapshot[] agents;
+        public EntitySnapshot[] entities;
     }
+
+    [Serializable]
+    public sealed class EntitySnapshot
+    {
+        public string id;
+        public string label;
+        public string schemaId;
+        public string[] rootNames;
+        public string[] aliases;
+        public LocalizedCommandName[] names;
+        public DataSlot[] values;
+        public EntityChildSnapshot[] children;
+    }
+    [Serializable] public sealed class EntityChildSnapshot { public string name; public string id; }
 
     [Serializable]
     public sealed class AgentSnapshot

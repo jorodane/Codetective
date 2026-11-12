@@ -216,7 +216,7 @@ namespace Codetective.Terminal
 
             var text = new StringBuilder();
             foreach (var slot in session.Memory)
-                text.Append(slot.Name).Append("\n").Append(session.Runtime.KindName(slot.Value.kind)).Append(" · ").Append(slot.Value.label).Append("\n\n");
+                text.Append(slot.Name).Append("\n").Append(session.Runtime.TypeName(slot.Value)).Append(" · ").Append(slot.Value.label).Append("\n\n");
             memoryList.text = text.ToString();
         }
 

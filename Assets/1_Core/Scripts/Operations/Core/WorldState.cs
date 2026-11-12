@@ -55,6 +55,8 @@ namespace Codetective.Operations
         public Datum HeadquartersOrder(string action)
         {
             Facts.Add(action);
+            if (action == "lockDoor") Entity("hq_door")?.SetValue("locked", Datum.Boolean(true));
+            if (action == "turnOffLights") Entity("hq_lights")?.SetValue("enabled", Datum.Boolean(false));
             if (!DryRun) SceneActionRequested?.Invoke("", action);
             return Datum.Text("지휘소 지시 접수: " + action);
         }
@@ -72,7 +74,7 @@ namespace Codetective.Operations
                 Facts.Add(line.fact);
                 Report("새 데이터: " + line.dataName + " / " + line.keyword + " — 관련 권한을 확인하세요.");
             }
-            return value;
+            return NormalizeReference(value);
         }
 
         public void Reply()
@@ -93,6 +95,12 @@ namespace Codetective.Operations
                 dayEnded = IsDayEnded, coffeeReceived = CoffeeReceived,
                 facts = Facts.ToArray(), authorities = Authorities.ToArray(), recordedClues = RecordedClues.ToArray(),
                 data = data.Values.Select(CloneSlot).ToArray(), protocols = protocols.Values.Select(p => p.Source).ToArray(),
+                entities = entities.Values.Select(e => new EntitySnapshot
+                {
+                    id = e.Id, label = e.Label, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
+                    rootNames = roots.Where(r => r.Value == e).Select(r => r.Key).ToArray(), values = e.CaptureValues(),
+                    children = e.Children.Select(c => new EntityChildSnapshot { name = c.Key, id = c.Value.Id }).ToArray()
+                }).ToArray(),
                 agents = Threads.Select(a => new AgentSnapshot
                 {
                     id = a.Id, state = a.State, message = a.Message, location = a.Location, report = a.Report.Copy(), delay = a.Delay, sceneAction = a.SceneAction,
@@ -110,6 +118,7 @@ namespace Codetective.Operations
             foreach (string source in snapshot.protocols ?? Array.Empty<string>())
             {
                 Protocol protocol = new CommandParser(source).ReadProtocol(source);
+                ValidateProtocolTypes(protocol);
                 restoredProtocols.Add(protocol.Name, protocol);
             }
             var restoredAgents = new List<ThreadAgent>();
@@ -120,6 +129,7 @@ namespace Codetective.Operations
                 foreach (FrameSnapshot frame in saved.frames ?? Array.Empty<FrameSnapshot>())
                 {
                     Protocol protocol = new CommandParser(frame.source).ReadProtocol(frame.source);
+                    ValidateProtocolTypes(protocol);
                     if (frame.cursor < 0 || frame.cursor > protocol.Body.Count) throw new CommandException("진행 중 프로토콜의 저장 위치가 잘못되었습니다.");
                     agent.Frames.Add(new ProtocolFrame { Protocol = protocol, Cursor = frame.cursor, ReturnTarget = frame.returnTarget,
                         Locals = (frame.locals ?? Array.Empty<DataSlot>()).ToDictionary(s => s.name, s => s.value.Copy(), StringComparer.Ordinal) });
@@ -127,6 +137,7 @@ namespace Codetective.Operations
                 restoredAgents.Add(agent);
             }
             Day = snapshot.day; Minute = snapshot.minute; IsDayEnded = snapshot.dayEnded;
+            RestoreEntities(snapshot.entities);
             Suspicion = snapshot.suspicion; Exposure = snapshot.exposure; ResponseMinutes = snapshot.responseMinutes;
             ConsultationIndex = Math.Max(0, Math.Min(snapshot.consultationIndex, Consultation.Count));
             CoffeeReceived = snapshot.coffeeReceived;
@@ -134,7 +145,11 @@ namespace Codetective.Operations
             Authorities.Clear(); Authorities.UnionWith(snapshot.authorities ?? Array.Empty<string>());
             RecordedClues.Clear(); RecordedClues.UnionWith(snapshot.recordedClues ?? Array.Empty<string>());
             data.Clear();
-            foreach (DataSlot slot in snapshot.data ?? Array.Empty<DataSlot>()) data.Add(slot.name, CloneSlot(slot));
+            foreach (DataSlot slot in snapshot.data ?? Array.Empty<DataSlot>())
+            {
+                DataSlot restored = CloneSlot(slot); restored.value = NormalizeReference(restored.value);
+                data.Add(restored.name, restored);
+            }
             nextDataId = data.Count == 0 ? 1 : data.Values.Max(s => s.id) + 1;
             protocols.Clear(); foreach (var pair in restoredProtocols) protocols.Add(pair.Key, pair.Value);
             Threads.Clear(); Threads.AddRange(restoredAgents);

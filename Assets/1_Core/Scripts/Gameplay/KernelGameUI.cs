@@ -211,7 +211,7 @@ namespace Codetective.Gameplay
             else if (view == "data" || view == "drawer")
             {
                 foreach (DataSlot slot in r.Data.Values)
-                    text.Append(slot.name).Append(" : ").Append(r.KindName(slot.value.kind)).Append('\n').Append(slot.value).Append("\n\n");
+                    text.Append(slot.name).Append(" : ").Append(r.TypeName(slot.value)).Append('\n').Append(slot.value).Append("\n\n");
                 if (r.Data.Count == 0) text.Append("확보한 데이터가 없습니다. 상담의 붉은 단서를 기록하거나 명령을 실행하세요.");
             }
             else if (view == "counsel")

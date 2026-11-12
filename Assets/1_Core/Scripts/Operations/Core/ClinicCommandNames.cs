@@ -40,7 +40,7 @@ namespace Codetective.Operations
                 entity.Names = Names("스레드" + entity.Id.Substring(6), entity.Label, entity.Id, "Anonymous operative");
             else if (Translations.TryGetValue(entity.Id, out string[] root))
                 entity.Names = Names(root[0], entity.Label, root.Length > 2 ? root[2] : entity.Id, root[1]);
-            foreach (Operation action in entity.Operations)
+            foreach (Operation action in entity.EffectiveOperations)
             {
                 string key = (entity.Kind == DataKind.Thread ? "thread" : entity.Id) + "." + action.Code;
                 if (Translations.TryGetValue(key, out string[] name))

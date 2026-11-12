@@ -157,7 +157,7 @@ namespace Codetective.Tests.Operations
             warehouse.Operations.Add(new Operation { Code = "inspect", Names = new[] { new LocalizedCommandName(CommandLocale.Korean, "살펴본다") },
                 Invoke = c => Datum.Text("found") });
             r.Register(warehouse);
-            Assert.That(r.Complete("창고.").Single().Replacement, Is.EqualTo("창고.살펴본다()"));
+            Assert.That(r.Complete("창고.살").Single().Replacement, Is.EqualTo("창고.살펴본다()"));
             Assert.That(r.Execute("창고.살펴본다();").Value.text, Is.EqualTo("found"));
             r.Language = CommandLocale.English;
             Assert.That(r.Execute("warehouse.inspect();").Value.text, Is.EqualTo("found"));

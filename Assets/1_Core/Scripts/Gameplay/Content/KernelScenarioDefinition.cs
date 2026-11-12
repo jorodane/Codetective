@@ -11,6 +11,8 @@ namespace Codetective.Gameplay
         public bool loadDailySave = true;
         public CommandLocale commandLanguage = CommandLocale.Korean;
         public ConsultationLine[] consultation = Array.Empty<ConsultationLine>();
+        public EntitySchemaAsset[] schemas = Array.Empty<EntitySchemaAsset>();
+        public EntityInstanceAsset[] instances = Array.Empty<EntityInstanceAsset>();
         public EntityDefinition[] additionalObjects = Array.Empty<EntityDefinition>();
 
         public KernelRuntime CreateRuntime()
@@ -18,33 +20,8 @@ namespace Codetective.Gameplay
             KernelRuntime runtime = ClinicScenario.Create();
             runtime.Language = commandLanguage;
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
-            foreach (EntityDefinition definition in additionalObjects) runtime.Register(CreateEntity(definition));
+            EntityAssetCompiler.Install(runtime, schemas, instances, additionalObjects);
             return runtime;
-        }
-
-        private static Entity CreateEntity(EntityDefinition definition)
-        {
-            var entity = new Entity(definition.code, definition.label, definition.kind)
-            {
-                Aliases = definition.aliases,
-                Names = definition.names,
-                Access = new AccessRule { Facts = definition.requiredFacts, Authorities = definition.requiredAuthorities,
-                    ForbiddenFacts = definition.forbiddenFacts }
-            };
-            foreach (ActionDefinition action in definition.actions)
-            {
-                ActionDefinition captured = action;
-                entity.Operations.Add(new Operation
-                {
-                    Code = action.code, Label = action.label, Aliases = action.aliases, Names = action.names, ReturnKind = action.result.kind, Property = action.property,
-                    Parameters = Array.ConvertAll(action.parameters, p => new Parameter(p.name, p.kind)), Minutes = action.minutes,
-                    Access = new AccessRule { Facts = action.requiredFacts, Authorities = action.requiredAuthorities,
-                        ForbiddenFacts = action.forbiddenFacts, RequiredData = action.requiredData, NeedsReadyThread = action.needsReadyThread },
-                    Invoke = c => { c.Runtime.Facts.UnionWith(captured.unlockFacts); c.Runtime.Authorities.UnionWith(captured.grantAuthorities); return captured.result.Copy(); }
-                });
-            }
-            foreach (EntityDefinition child in definition.children) entity.Children.Add(child.code, CreateEntity(child));
-            return entity;
         }
     }
 
@@ -61,7 +38,12 @@ namespace Codetective.Gameplay
         public ActionDefinition[] actions = Array.Empty<ActionDefinition>();
         public EntityDefinition[] children = Array.Empty<EntityDefinition>();
     }
-    [Serializable] public sealed class InputDefinition { public string name; public DataKind kind = DataKind.Any; }
+    [Serializable] public sealed class InputDefinition
+    {
+        public string name;
+        public DataKind kind = DataKind.Any;
+        public EntitySchemaAsset referenceType;
+    }
     [Serializable] public sealed class ActionDefinition
     {
         public string code;
@@ -69,6 +51,7 @@ namespace Codetective.Gameplay
         public string[] aliases = Array.Empty<string>();
         public LocalizedCommandName[] names = Array.Empty<LocalizedCommandName>();
         public bool property;
+        public bool overrides;
         public bool needsReadyThread;
         public InputDefinition[] parameters = Array.Empty<InputDefinition>();
         public float minutes;
@@ -79,5 +62,9 @@ namespace Codetective.Gameplay
         public string[] unlockFacts = Array.Empty<string>();
         public string[] grantAuthorities = Array.Empty<string>();
         public Datum result = new Datum();
+        [Tooltip("Return the target instance's field instead of a constant result.")]
+        public string returnField;
+        public EntityInstanceAsset returnInstance;
+        public FieldWriteDefinition[] fieldWrites = Array.Empty<FieldWriteDefinition>();
     }
 }

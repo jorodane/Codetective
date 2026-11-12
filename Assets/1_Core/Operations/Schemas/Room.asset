@@ -1,0 +1,160 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 483ba75fd8f2e0b64ee7951272ae8f90
+    type: 3
+  m_Name: Room
+  m_EditorClassIdentifier: ''
+  schemaId: Room
+  displayName: 방
+  parent:
+    fileID: 0
+  builtinParent: Place
+  inheritKind: 1
+  kind: 10
+  aliases: []
+  names:
+  - language: 1
+    name: 방형
+    description: ''
+  access:
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields:
+  - code: note
+    label: 방에 남긴 메모
+    kind: 3
+    referenceType:
+      fileID: 0
+    defaultValue:
+      kind: 3
+      id: ''
+      label: 기본 메모
+      text: 기본 메모
+      number: 0
+      schemaId: ''
+    writable: 1
+    overrides: 0
+    aliases: []
+    names:
+    - language: 1
+      name: 메모
+      description: ''
+    access:
+      requiredFacts: []
+      requiredAuthorities: []
+      forbiddenFacts: []
+  - code: peer
+    label: 연결된 방
+    kind: 19
+    referenceType:
+      fileID: 11400000
+      guid: 7a7b5acfa9f224e0eef60045fb0d7a1f
+      type: 2
+    defaultValue:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+    writable: 1
+    overrides: 0
+    aliases: []
+    names:
+    - language: 1
+      name: 연결된방
+      description: ''
+    access:
+      requiredFacts: []
+      requiredAuthorities: []
+      forbiddenFacts: []
+  functions:
+  - code: readNote
+    label: 메모읽기
+    aliases: []
+    names:
+    - language: 1
+      name: 메모읽기
+      description: ''
+    property: 0
+    overrides: 0
+    needsReadyThread: 0
+    parameters: []
+    minutes: 0
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+    requiredData: 0
+    unlockFacts: []
+    grantAuthorities: []
+    result:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+    returnField: note
+    returnInstance:
+      fileID: 0
+    fieldWrites: []
+  - code: writeNote
+    label: 메모수정
+    aliases: []
+    names:
+    - language: 1
+      name: 메모수정
+      description: ''
+    property: 0
+    overrides: 0
+    needsReadyThread: 0
+    parameters:
+    - name: value
+      kind: 3
+      referenceType:
+        fileID: 0
+    minutes: 0
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+    requiredData: 0
+    unlockFacts: []
+    grantAuthorities: []
+    result:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+    returnField: note
+    returnInstance:
+      fileID: 0
+    fieldWrites:
+    - field: note
+      argumentIndex: 0
+      value:
+        kind: 0
+        id: ''
+        label: ''
+        text: ''
+        number: 0
+        schemaId: ''
+      reference:
+        fileID: 0
