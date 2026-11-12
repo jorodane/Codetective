@@ -31,8 +31,8 @@ namespace Codetective.Gameplay
         private KernelGameUI ui;
         private CameraAngleController views;
         private Vector3 foldedScale;
-        private Quaternion hourZero;
-        private Quaternion minuteZero;
+        private Quaternion hourBasis;
+        private Quaternion minuteBasis;
         private GameObject ownCoffee;
         private TextMesh dayText;
         private string pendingView;
@@ -55,8 +55,8 @@ namespace Codetective.Gameplay
             Runtime.DayEnded += SaveNow;
             if (terminalRoot != null) terminalRoot.GetComponentInChildren<TerminalController>(true).AttachRuntime(Runtime);
             foldedScale = curtainCloth != null ? curtainCloth.localScale : Vector3.one;
-            hourZero = clockHour != null ? clockHour.localRotation : Quaternion.identity;
-            minuteZero = clockMinute != null ? clockMinute.localRotation : Quaternion.identity;
+            hourBasis = ClockBasis(clockHour);
+            minuteBasis = ClockBasis(clockMinute);
             ui = GetComponent<KernelGameUI>();
             views = inspection.GetComponent<CameraAngleController>();
             inspection.AngleEntered += EnterView;
@@ -84,9 +84,19 @@ namespace Codetective.Gameplay
                 ui.ShowContext(pendingView);
                 pendingView = null;
             }
-            if (clockHour != null) clockHour.localRotation = hourZero * Quaternion.AngleAxis(-(float)(Runtime.Minute / 60 % 12) * 30f, Vector3.forward);
-            if (clockMinute != null) clockMinute.localRotation = minuteZero * Quaternion.AngleAxis(-(float)(Runtime.Minute % 60) * 6f, Vector3.forward);
+            // Both meshes turn clockwise around local +Z. The hour mesh's zero is 09:00;
+            // the minute mesh's zero is :00. Fractional minutes also advance the hour hand.
+            if (clockHour != null) clockHour.localRotation = hourBasis * Quaternion.AngleAxis((float)((Runtime.Minute * 0.5 + 90) % 360), Vector3.forward);
+            if (clockMinute != null) clockMinute.localRotation = minuteBasis * Quaternion.AngleAxis((float)(Runtime.Minute % 60 * 6), Vector3.forward);
             if (dayText != null) dayText.text = "DAY " + Runtime.Day.ToString("D2");
+        }
+
+        private static Quaternion ClockBasis(Transform hand)
+        {
+            if (hand == null) return Quaternion.identity;
+            Vector3 tilt = hand.localEulerAngles;
+            tilt.z = 0f;
+            return Quaternion.Euler(tilt);
         }
 
         private void EnterView(CameraAnglePreset angle) { pendingView = angle.Id; ui.HideContext(); }
