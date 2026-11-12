@@ -4,6 +4,7 @@ using System.Linq;
 
 namespace Codetective.Operations
 {
+    [Serializable]
     public sealed class VariableDefinition
     {
         public string Code;
@@ -16,11 +17,14 @@ namespace Codetective.Operations
         public string[] Aliases = Array.Empty<string>();
         public LocalizedCommandName[] Names = Array.Empty<LocalizedCommandName>();
         public AccessRule Access = new AccessRule();
-        public Func<Entity, Datum> Getter;
+        [NonSerialized] public Func<Entity, Datum> Getter;
         public IEnumerable<string> AllNames => CommandVocabulary.Names(Code, Aliases, Names);
         public bool Matches(string name) => AllNames.Contains(name);
         public string NameFor(CommandLocale language) => CommandVocabulary.Name(Code, Names, language);
         public string LabelFor(CommandLocale language) => CommandVocabulary.Description(Label, Names, language);
+        public VariableDefinition Copy() => new VariableDefinition { Code = Code, Label = Label, Kind = Kind, SchemaId = SchemaId,
+            DefaultValue = DefaultValue.Copy(), Writable = Writable, Overrides = Overrides, Getter = Getter,
+            Aliases = Aliases.ToArray(), Names = Names.Select(n => new LocalizedCommandName(n.language, n.name, n.description)).ToArray(), Access = Access.Copy() };
     }
 
     /// <summary>A data type, separate from its instances and from containment between world objects.</summary>
@@ -112,7 +116,7 @@ namespace Codetective.Operations
             }
         }
 
-        private static void ValidateMembers(EntitySchema schema)
+        internal static void ValidateMembers(EntitySchema schema)
         {
             var own = new HashSet<string>(StringComparer.Ordinal);
             foreach (VariableDefinition field in schema.Variables)
@@ -164,32 +168,35 @@ namespace Codetective.Operations
     {
         public EntitySchema Schema { get; internal set; }
         internal Func<VariableDefinition, Datum, bool> ValueValidator;
+        internal Func<Datum, Datum> ValueNormalizer;
         internal Action ValueChanged;
         private readonly Dictionary<string, Datum> values = new Dictionary<string, Datum>(StringComparer.Ordinal);
-        public IEnumerable<VariableDefinition> Variables => Schema?.EffectiveVariables ?? Enumerable.Empty<VariableDefinition>();
-        public IEnumerable<Operation> EffectiveOperations => EntitySchema.Merge((Schema?.EffectiveOperations ?? Enumerable.Empty<Operation>()).Concat(Operations), o => o.Code);
+        public IEnumerable<VariableDefinition> Variables => AllVariables.Where(v => !disabledVariables.Contains(v.Code));
+        public IEnumerable<Operation> EffectiveOperations => AllOperations.Where(o => !disabledFunctions.Contains(o.Code));
         public IEnumerable<AccessRule> AccessRules => (Schema?.Lineage().Select(s => s.Access) ?? Enumerable.Empty<AccessRule>()).Concat(new[] { Access });
         public Entity(string id, string label, EntitySchema schema) : this(id, label, schema.Kind) { Schema = schema; }
         public VariableDefinition FindVariable(string name) => Variables.FirstOrDefault(v => v.Matches(name));
         public Datum GetValue(string name)
         {
-            VariableDefinition field = FindVariable(name) ?? throw new CommandException("존재하지 않는 변수입니다: " + name);
-            if (field.Getter != null) return field.Getter(this).Copy();
-            return (values.TryGetValue(field.Code, out Datum value) ? value : field.DefaultValue).Copy();
+            VariableDefinition field = GetVariableDefinition(name) ?? throw new CommandException("존재하지 않는 변수입니다: " + name);
+            Datum value = field.Getter != null ? field.Getter(this) : values.TryGetValue(field.Code, out Datum stored) ? stored : field.DefaultValue;
+            Datum copy = value.Copy();
+            return ValueNormalizer != null ? ValueNormalizer(copy) : copy;
         }
         public void SetValue(string name, Datum value)
         {
-            VariableDefinition field = FindVariable(name) ?? throw new CommandException("존재하지 않는 변수입니다: " + name);
+            VariableDefinition field = GetVariableDefinition(name) ?? throw new CommandException("존재하지 않는 변수입니다: " + name);
             if (field.Getter != null) throw new CommandException("시스템 식별 변수는 변경할 수 없습니다: " + name);
             if (value != null && value.kind != DataKind.Empty && ValueValidator != null && !ValueValidator(field, value))
                 throw new CommandException("변수에 저장할 자료형이 맞지 않습니다: " + field.Code);
-            values[field.Code] = (value ?? Datum.Empty).Copy();
+            Datum stored = (value ?? Datum.Empty).Copy();
+            values[field.Code] = ValueNormalizer != null ? ValueNormalizer(stored) : stored;
             ValueChanged?.Invoke();
         }
-        internal IEnumerable<AccessRule> VariableRules(VariableDefinition field) => Schema.Lineage().SelectMany(s => s.Variables)
+        internal IEnumerable<AccessRule> VariableRules(VariableDefinition field) => (Schema?.Lineage().SelectMany(s => s.Variables) ?? Enumerable.Empty<VariableDefinition>()).Concat(localVariables.Values)
             .Where(v => v.Code == field.Code).Select(v => v.Access);
         internal IEnumerable<AccessRule> OperationRules(Operation operation) => (Schema?.Lineage().SelectMany(s => s.Operations) ?? Enumerable.Empty<Operation>())
-            .Where(o => o.Code == operation.Code).Concat(Operations.Where(o => o.Code == operation.Code)).Select(o => o.Access);
+            .Concat(Operations).Concat(localFunctions.Values).Where(o => o.Code == operation.Code).Select(o => o.Access);
         internal DataSlot[] CaptureValues() => values.Select(p => new DataSlot { name = p.Key, value = p.Value.Copy() }).ToArray();
         internal void ClearValues() => values.Clear();
     }

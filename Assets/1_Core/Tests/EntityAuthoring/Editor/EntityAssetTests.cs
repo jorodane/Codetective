@@ -82,6 +82,46 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.Entity("legacy").Schema.Parent.Id, Is.EqualTo("Item"));
         }
 
+        [Test]
+        public void InstanceAssetsDeclarePersonalFieldsAndConversationFunctionsIndependently()
+        {
+            var type = Asset<EntitySchemaAsset>(); type.schemaId = "Visitor"; type.builtinParent = "Person";
+            var a = Asset<EntityInstanceAsset>(); a.instanceId = "a"; a.schema = type;
+            var b = Asset<EntityInstanceAsset>(); b.instanceId = "b"; b.schema = type;
+            a.fields = new[] { new FieldDefinition { code = "appointment", kind = DataKind.Text, defaultValue = Datum.Text("09:00") } };
+            a.functions = new[] { new ActionDefinition { code = "intro", returnField = "appointment", memberChanges = new[] {
+                    new MemberToggle { Name = "intro", Enabled = false }, new MemberToggle { Name = "followup", Enabled = true } } },
+                new ActionDefinition { code = "followup", result = Datum.Text("more") } };
+            a.disabledFunctions = new[] { "followup" };
+            var runtime = new KernelRuntime(); EntityAssetCompiler.Install(runtime, null, new[] { a, b });
+            Assert.That(runtime.Execute("a.followup()").Success, Is.False);
+            Assert.That(runtime.Execute("a.intro()").Value.text, Is.EqualTo("09:00"));
+            Assert.That(runtime.Execute("a.intro()").Success, Is.False);
+            Assert.That(runtime.Execute("a.followup()").Value.text, Is.EqualTo("more"));
+            Assert.That(runtime.Execute("b.appointment").Success, Is.False);
+            Assert.That(runtime.Entity("b").Schema.FindVariable("appointment"), Is.Null);
+            var restored = new KernelRuntime(runtime.Schemas); restored.Restore(runtime.Capture());
+            Assert.That(restored.Execute("a.followup()").Value.text, Is.EqualTo("more"));
+        }
+
+        [Test]
+        public void InstanceOnlyMembersCollectTheirReferencedSchemasAndHiddenInstances()
+        {
+            var visitor = Asset<EntitySchemaAsset>(); visitor.schemaId = "Visitor"; visitor.builtinParent = "Person";
+            var itemType = Asset<EntitySchemaAsset>(); itemType.schemaId = "Key"; itemType.builtinParent = "Item";
+            var key = Asset<EntityInstanceAsset>(); key.instanceId = "key"; key.schema = itemType; key.exposeRoot = false;
+            var person = Asset<EntityInstanceAsset>(); person.instanceId = "visitor"; person.schema = visitor;
+            person.fields = new[] { new FieldDefinition { code = "holding", kind = DataKind.Entity, referenceType = itemType } };
+            person.initialValues = new[] { new InitialFieldDefinition { field = "holding", reference = key } };
+            person.functions = new[] { new ActionDefinition { code = "getKey", returnInstance = key },
+                new ActionDefinition { code = "holdKey", returnField = "holding", fieldWrites = new[] { new FieldWriteDefinition { field = "holding", reference = key } } } };
+            var runtime = new KernelRuntime(); EntityAssetCompiler.Install(runtime, null, new[] { person });
+            Assert.That(runtime.Execute("visitor.holding.id").Value.text, Is.EqualTo("key"));
+            Assert.That(runtime.Execute("visitor.getKey()").Value.schemaId, Is.EqualTo("Key"));
+            Assert.That(runtime.Execute("visitor.holdKey()").Value.kind, Is.EqualTo(DataKind.Item));
+            Assert.That(runtime.Complete("key"), Is.Empty);
+        }
+
 #if UNITY_EDITOR
         [Test]
         public void ShippedScenarioAssetsLoadInheritedMembersAndRoundTripThroughUnityJson()
@@ -95,9 +135,29 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.Execute("대상.메모수정(\"확인 완료\")").Value.text, Is.EqualTo("확인 완료"));
             Assert.That(runtime.Execute("예비자료실.메모읽기()").Value.text, Is.EqualTo("기본 메모"));
             Assert.That(runtime.Execute("대상.연결된방.구역").Value.text, Is.EqualTo("B-01"));
+            Assert.That(runtime.Execute("연습자료실.검토완료()").Success, Is.False);
+            Assert.That(runtime.Execute("연습자료실.검토시작()").Value.text, Is.EqualTo("검토 중"));
+            Assert.That(runtime.Execute("예비자료실.확인상태").Success, Is.False);
             string json = JsonUtility.ToJson(runtime.Capture());
             KernelRuntime restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(json));
             Assert.That(restored.Execute("대상.메모읽기()").Value.text, Is.EqualTo("확인 완료"));
+            Assert.That(restored.Execute("연습자료실.검토시작()").Success, Is.False);
+            Assert.That(restored.Execute("연습자료실.검토완료()").Value.text, Is.EqualTo("검토 완료"));
+        }
+
+        [Test]
+        public void UnityJsonPreservesInstanceDefinitionsAndConversationTransitions()
+        {
+            var runtime = new KernelRuntime(); Entity person = runtime.CreateInstance("Person", "person", "인물");
+            person.AddVariable(new VariableDefinition { Code = "personalNote", Kind = DataKind.Text, DefaultValue = Datum.Text("개인 메모") });
+            person.AddFunction(new OperationDefinition { Code = "talk", ReturnKind = DataKind.Text, ReturnField = "personalNote",
+                MemberChanges = new[] { new MemberToggle { Name = "talk", Enabled = false } } });
+            var restored = new KernelRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
+            Assert.That(restored.Execute("person.talk()").Value.text, Is.EqualTo("개인 메모"));
+            var afterTalk = new KernelRuntime(); afterTalk.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(restored.Capture())));
+            Assert.That(afterTalk.Execute("person.talk()").Success, Is.False);
+            afterTalk.Entity("person").SetFunctionEnabled("talk", true);
+            Assert.That(afterTalk.Execute("person.talk()").Value.text, Is.EqualTo("개인 메모"));
         }
 #endif
     }

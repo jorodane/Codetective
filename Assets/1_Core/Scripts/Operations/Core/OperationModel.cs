@@ -46,6 +46,7 @@ namespace Codetective.Operations
         public string TypeName(CommandLocale language) => string.IsNullOrEmpty(SchemaId) ? CommandVocabulary.KindName(Kind, language) : SchemaId;
     }
 
+    [Serializable]
     public sealed class AccessRule
     {
         public string[] Facts = Array.Empty<string>();
@@ -53,8 +54,10 @@ namespace Codetective.Operations
         public string[] ForbiddenFacts = Array.Empty<string>();
         public DataKind RequiredData = DataKind.Empty;
         public bool NeedsReadyThread;
-        public Func<KernelRuntime, bool> Condition;
-        public Func<KernelRuntime, Entity, bool> TargetCondition;
+        [NonSerialized] public Func<KernelRuntime, bool> Condition;
+        [NonSerialized] public Func<KernelRuntime, Entity, bool> TargetCondition;
+        public AccessRule Copy() => new AccessRule { Facts = Facts.ToArray(), Authorities = Authorities.ToArray(), ForbiddenFacts = ForbiddenFacts.ToArray(),
+            RequiredData = RequiredData, NeedsReadyThread = NeedsReadyThread, Condition = Condition, TargetCondition = TargetCondition };
 
         public string Denial(KernelRuntime runtime, IEnumerable<Datum> locals = null, Entity target = null)
         {
@@ -105,6 +108,7 @@ namespace Codetective.Operations
         public LocalizedCommandName[] Names = Array.Empty<LocalizedCommandName>();
         public AccessRule Access = new AccessRule();
         public readonly Dictionary<string, Entity> Children = new Dictionary<string, Entity>(StringComparer.Ordinal);
+        // Legacy C# hooks, configured when constructing a world. Mutable, persistent functions use AddFunction.
         public readonly List<Operation> Operations = new List<Operation>();
         public Entity(string id, string label, DataKind kind) { Id = id; Label = label; Kind = kind; }
         public string NameFor(CommandLocale language) => CommandVocabulary.Name(Id, Names, language);
@@ -187,6 +191,10 @@ namespace Codetective.Operations
         public LocalizedCommandName[] names;
         public DataSlot[] values;
         public EntityChildSnapshot[] children;
+        public VariableDefinition[] localVariables;
+        public OperationDefinition[] localFunctions;
+        public string[] disabledVariables;
+        public string[] disabledFunctions;
     }
     [Serializable] public sealed class EntityChildSnapshot { public string name; public string id; }
 

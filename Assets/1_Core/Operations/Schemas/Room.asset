@@ -114,6 +114,7 @@ MonoBehaviour:
     returnInstance:
       fileID: 0
     fieldWrites: []
+    memberChanges: []
   - code: writeNote
     label: 메모수정
     aliases: []
@@ -158,3 +159,4 @@ MonoBehaviour:
         schemaId: ''
       reference:
         fileID: 0
+    memberChanges: []

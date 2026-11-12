@@ -99,7 +99,9 @@ namespace Codetective.Operations
                 {
                     id = e.Id, label = e.Label, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
                     rootNames = roots.Where(r => r.Value == e).Select(r => r.Key).ToArray(), values = e.CaptureValues(),
-                    children = e.Children.Select(c => new EntityChildSnapshot { name = c.Key, id = c.Value.Id }).ToArray()
+                    children = e.Children.Select(c => new EntityChildSnapshot { name = c.Key, id = c.Value.Id }).ToArray(),
+                    localVariables = e.CaptureLocalVariables(), localFunctions = e.CaptureLocalFunctions(),
+                    disabledVariables = e.CaptureDisabledVariables(), disabledFunctions = e.CaptureDisabledFunctions()
                 }).ToArray(),
                 agents = Threads.Select(a => new AgentSnapshot
                 {

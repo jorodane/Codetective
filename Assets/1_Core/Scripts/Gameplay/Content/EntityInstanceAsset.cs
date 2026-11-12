@@ -15,6 +15,11 @@ namespace Codetective.Gameplay
         public string[] aliases = Array.Empty<string>();
         public LocalizedCommandName[] names = Array.Empty<LocalizedCommandName>();
         public AccessDefinition access = new AccessDefinition();
+        [Tooltip("Members owned only by this instance, in addition to its inherited schema members.")]
+        public FieldDefinition[] fields = Array.Empty<FieldDefinition>();
+        public ActionDefinition[] functions = Array.Empty<ActionDefinition>();
+        public string[] disabledVariables = Array.Empty<string>();
+        public string[] disabledFunctions = Array.Empty<string>();
         public InitialFieldDefinition[] initialValues = Array.Empty<InitialFieldDefinition>();
         [Tooltip("Containment links, independent of schema inheritance.")]
         public ChildInstanceDefinition[] children = Array.Empty<ChildInstanceDefinition>();

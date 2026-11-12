@@ -69,3 +69,125 @@ MonoBehaviour:
       guid: 811778796e1091895ded67bc789d1a6a
       type: 2
   children: []
+  fields:
+  - code: reviewStatus
+    label: 이 자료실만의 검토 진행 상태
+    kind: 3
+    referenceType:
+      fileID: 0
+    defaultValue:
+      kind: 3
+      id: ''
+      label: 미확인
+      text: 미확인
+      number: 0
+      schemaId: ''
+    writable: 0
+    overrides: 0
+    aliases: []
+    names:
+    - language: 1
+      name: 확인상태
+      description: ''
+    access:
+      requiredFacts: []
+      requiredAuthorities: []
+      forbiddenFacts: []
+  functions:
+  - code: beginReview
+    label: 검토시작
+    aliases: []
+    names:
+    - language: 1
+      name: 검토시작
+      description: ''
+    property: 0
+    overrides: 0
+    needsReadyThread: 0
+    parameters: []
+    minutes: 0
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+    requiredData: 0
+    unlockFacts: []
+    grantAuthorities: []
+    result:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+    returnField: reviewStatus
+    returnInstance:
+      fileID: 0
+    fieldWrites:
+    - field: reviewStatus
+      argumentIndex: -1
+      value:
+        kind: 3
+        id: ''
+        label: 검토 중
+        text: 검토 중
+        number: 0
+        schemaId: ''
+      reference:
+        fileID: 0
+    memberChanges:
+    - Name: beginReview
+      Function: 1
+      Enabled: 0
+    - Name: finishReview
+      Function: 1
+      Enabled: 1
+  - code: finishReview
+    label: 검토완료
+    aliases: []
+    names:
+    - language: 1
+      name: 검토완료
+      description: ''
+    property: 0
+    overrides: 0
+    needsReadyThread: 0
+    parameters: []
+    minutes: 0
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+    requiredData: 0
+    unlockFacts: []
+    grantAuthorities: []
+    result:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+    returnField: reviewStatus
+    returnInstance:
+      fileID: 0
+    fieldWrites:
+    - field: reviewStatus
+      argumentIndex: -1
+      value:
+        kind: 3
+        id: ''
+        label: 검토 완료
+        text: 검토 완료
+        number: 0
+        schemaId: ''
+      reference:
+        fileID: 0
+    memberChanges:
+    - Name: finishReview
+      Function: 1
+      Enabled: 0
+    - Name: beginReview
+      Function: 1
+      Enabled: 1
+  disabledVariables: []
+  disabledFunctions:
+  - finishReview

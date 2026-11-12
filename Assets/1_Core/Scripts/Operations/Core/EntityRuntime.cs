@@ -39,16 +39,51 @@ namespace Codetective.Operations
         private void ConfigureInstance(Entity entity)
         {
             entity.ValueValidator = (field, value) => Schemas.Accepts(field.Kind, field.SchemaId, value, Entity);
+            entity.ValueNormalizer = TagReference;
             entity.ValueChanged = () => Revision++;
+            entity.MemberValidator = ValidateInstanceMembers;
         }
-        public void NotifySchemaChanged() { Schemas.Validate(); Revision++; }
+        public void NotifySchemaChanged()
+        {
+            Schemas.Validate();
+            foreach (Entity entity in entities.Values) entity.ValidateMembers();
+            Revision++;
+        }
+        private void ValidateInstanceMembers(Entity entity) => ValidateInstanceMembers(entity, Entity);
+        private void ValidateInstanceMembers(Entity entity, Func<string, Entity> resolve)
+        {
+            foreach (VariableDefinition field in entity.LocalVariables)
+            {
+                if (!string.IsNullOrEmpty(field.SchemaId)) Schemas.Require(field.SchemaId);
+                if (!CommandParser.IsIdentifier(field.Code) || CommandParser.IsAllocationKeyword(field.Code) ||
+                    (field.DefaultValue.kind != DataKind.Empty && !Schemas.Accepts(field.Kind, field.SchemaId, field.DefaultValue, resolve)))
+                    throw new CommandException("인스턴스 변수 선언/기본값이 유효하지 않습니다: " + field.Code);
+            }
+            foreach (Operation operation in entity.LocalFunctions)
+            {
+                if (!string.IsNullOrEmpty(operation.ReturnSchemaId)) Schemas.Require(operation.ReturnSchemaId);
+                foreach (Parameter parameter in operation.Parameters) if (!string.IsNullOrEmpty(parameter.SchemaId)) Schemas.Require(parameter.SchemaId);
+            }
+            foreach (DataSlot stored in entity.CaptureValues())
+            {
+                VariableDefinition field = entity.GetVariableDefinition(stored.name);
+                if (field != null && stored.value.kind != DataKind.Empty && !Schemas.Accepts(field.Kind, field.SchemaId, stored.value, resolve))
+                    throw new CommandException("변경된 선언과 기존 변수의 자료형이 다릅니다: " + stored.name);
+            }
+        }
 
         private bool Accepts(Parameter parameter, Datum value) => Schemas.Accepts(parameter.Kind, parameter.SchemaId, value, Entity);
         private Entity ReferenceTarget(Datum value) => value.CanReferenceEntity ? Entity(value.id) : null;
+        private Datum TagReference(Datum value)
+        {
+            Entity target = ReferenceTarget(value);
+            if (target != null) { value.kind = target.Kind; value.schemaId = target.Schema.Id; }
+            return value;
+        }
         private Datum Invoke(Entity target, Operation operation, Datum[] arguments, string agent)
         {
             Datum result = NormalizeReference(operation.Invoke(new Invocation { Runtime = this, Target = target, Arguments = arguments, AgentId = agent }));
-            if (!string.IsNullOrEmpty(operation.ReturnSchemaId) && !Schemas.Accepts(operation.ReturnKind, operation.ReturnSchemaId, result, Entity))
+            if (result.kind != DataKind.Empty && !string.IsNullOrEmpty(operation.ReturnSchemaId) && !Schemas.Accepts(operation.ReturnKind, operation.ReturnSchemaId, result, Entity))
                 throw new CommandException("함수의 반환 자료형이 맞지 않습니다: " + operation.Code);
             return result;
         }
@@ -85,8 +120,7 @@ namespace Codetective.Operations
                 target.SetValue("description", Datum.Text(value.text));
                 IndexEntity(target, new HashSet<Entity>());
             }
-            if (target != null) value.schemaId = target.Schema.Id;
-            return value;
+            return TagReference(value);
         }
 
         private static bool IsRecord(DataKind kind) => kind == DataKind.Statement || kind == DataKind.Document || kind == DataKind.Photo ||
@@ -135,13 +169,21 @@ namespace Codetective.Operations
                 }
                 restored.Add(entity.Id, entity);
             }
+            // Definitions must exist on every instance before restoring values and cross-instance references.
+            foreach (EntitySnapshot saved in savedEntities)
+            {
+                Entity original = Entity(saved.id);
+                restored[saved.id].RestoreMembers(saved.localVariables ?? original?.CaptureLocalVariables(),
+                    saved.localFunctions ?? original?.CaptureLocalFunctions(), saved.disabledVariables ?? original?.CaptureDisabledVariables(),
+                    saved.disabledFunctions ?? original?.CaptureDisabledFunctions());
+            }
             var restoredRoots = new Dictionary<string, Entity>(StringComparer.Ordinal);
             foreach (EntitySnapshot saved in savedEntities)
             {
                 Entity entity = restored[saved.id];
                 foreach (DataSlot value in saved.values ?? Array.Empty<DataSlot>())
                 {
-                    VariableDefinition field = entity.FindVariable(value.name) ?? throw new CommandException("저장된 변수의 스키마가 없습니다: " + value.name);
+                    VariableDefinition field = entity.GetVariableDefinition(value.name) ?? throw new CommandException("저장된 변수의 스키마가 없습니다: " + value.name);
                     if (value.value.kind != DataKind.Empty && !Schemas.Accepts(field.Kind, field.SchemaId, value.value,
                         id => restored.TryGetValue(id, out Entity target) ? target : null)) throw new CommandException("저장된 변수의 자료형이 다릅니다: " + value.name);
                     entity.SetValue(field.Code, value.value);
@@ -149,6 +191,11 @@ namespace Codetective.Operations
                 foreach (EntityChildSnapshot child in saved.children ?? Array.Empty<EntityChildSnapshot>())
                     entity.Children.Add(child.name, restored.TryGetValue(child.id, out Entity target) ? target : throw new CommandException("저장된 개체 참조를 찾을 수 없습니다: " + child.id));
                 foreach (string root in saved.rootNames ?? Array.Empty<string>()) restoredRoots.Add(root, entity);
+            }
+            foreach (Entity entity in restored.Values)
+            {
+                entity.ValidateMembers();
+                ValidateInstanceMembers(entity, id => restored.TryGetValue(id, out Entity referenced) ? referenced : null);
             }
             entities.Clear(); foreach (var pair in restored) entities.Add(pair.Key, pair.Value);
             roots.Clear(); foreach (var pair in restoredRoots) roots.Add(pair.Key, pair.Value);

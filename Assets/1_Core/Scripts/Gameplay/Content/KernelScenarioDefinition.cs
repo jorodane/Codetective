@@ -66,5 +66,7 @@ namespace Codetective.Gameplay
         public string returnField;
         public EntityInstanceAsset returnInstance;
         public FieldWriteDefinition[] fieldWrites = Array.Empty<FieldWriteDefinition>();
+        [Tooltip("Change available fields or conversation functions on the target instance after this action.")]
+        public MemberToggle[] memberChanges = Array.Empty<MemberToggle>();
     }
 }

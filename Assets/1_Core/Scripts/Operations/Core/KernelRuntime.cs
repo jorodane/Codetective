@@ -64,6 +64,7 @@ namespace Codetective.Operations
                     if (entity.FindVariable(name) != null || entity.Find(name) != null) throw new CommandException("하위 개체 이름이 멤버와 충돌합니다: " + name);
                 IndexEntity(child.Value, visited);
             }
+            entity.ValidateMembers();
         }
 
         public Entity Entity(string id) => !string.IsNullOrEmpty(id) && entities.TryGetValue(id, out Entity entity) ? entity : null;
