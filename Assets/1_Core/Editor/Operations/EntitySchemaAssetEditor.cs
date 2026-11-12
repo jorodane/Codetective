@@ -5,10 +5,10 @@ using Codetective.Operations;
 using UnityEditor;
 using UnityEngine;
 
-namespace Codetective.Editor
+namespace Codetective.EditorTools
 {
     [CustomEditor(typeof(EntitySchemaAsset))]
-    public sealed class EntitySchemaAssetEditor : UnityEditor.Editor
+    public sealed class EntitySchemaAssetEditor : global::UnityEditor.Editor
     {
         private string preview;
         private bool failed;
@@ -42,7 +42,7 @@ namespace Codetective.Editor
     }
 
     [CustomEditor(typeof(EntityInstanceAsset))]
-    public sealed class EntityInstanceAssetEditor : UnityEditor.Editor
+    public sealed class EntityInstanceAssetEditor : global::UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {

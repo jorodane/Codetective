@@ -8,7 +8,7 @@ using UnityEngine;
 namespace Codetective.EditorTools
 {
     [CustomEditor(typeof(CameraAngleController))]
-    public sealed class CameraAngleControllerEditor : Editor
+    public sealed class CameraAngleControllerEditor : global::UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {
