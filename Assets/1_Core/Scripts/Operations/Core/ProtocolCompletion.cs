@@ -15,6 +15,8 @@ namespace Codetective.Operations
             int start = Math.Max(Math.Max(before.LastIndexOf('\n'), before.LastIndexOf(';')), before.LastIndexOf('{')) + 1;
             int statementStart = start;
             string fragment = before.Substring(start);
+            // An empty line is for indentation, not an implicit choice of the first object.
+            if (string.IsNullOrWhiteSpace(fragment)) return Array.Empty<Completion>();
             int skip = fragment.Length - fragment.TrimStart().Length;
             start += skip;
             fragment = fragment.TrimStart();

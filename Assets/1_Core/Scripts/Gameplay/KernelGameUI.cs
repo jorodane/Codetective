@@ -8,9 +8,6 @@ using Codetective.Terminal;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-#if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-#endif
 
 namespace Codetective.Gameplay
 {
@@ -70,17 +67,13 @@ namespace Codetective.Gameplay
 
         private void Update()
         {
-#if ENABLE_INPUT_SYSTEM
-            if (modal == "protocol" && protocolSource != null && protocolSource.isFocused &&
-                Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame)
-            { RefreshProtocolCompletions(); AcceptProtocolCompletion(0); }
-#endif
-            if (game == null || root == null || Time.unscaledTime < nextRefresh) return;
+            if (game == null || root == null) return;
+            if (modal == "protocol" && protocolSource != null && protocolSource.isFocused) RefreshProtocolCompletions();
+            if (Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + 0.2f;
             KernelRuntime r = game.Runtime;
             clock.text = r.ClockText + "  의심 " + r.Suspicion.ToString("0");
             if (panel.gameObject.activeSelf && modal != "protocol") RefreshBody();
-            if (modal == "protocol" && protocolSource != null && protocolSource.isFocused) RefreshProtocolCompletions();
         }
 
         public bool BlocksPointer(Vector2 point)
@@ -103,6 +96,7 @@ namespace Codetective.Gameplay
         public bool Back()
         {
             if (modal == null) return false;
+            if (modal == "protocol" && protocolSource != null && ((ProtocolInputField)protocolSource).IsCompositionProtected) return true;
             CloseModal();
             if (context != null && context != "monitor") BuildContext();
             else HidePanel();
@@ -303,8 +297,12 @@ namespace Codetective.Gameplay
                 suggestionButtons.Add(Button(protocolSuggestions, new Vector2(0, -i * 32), new Vector2(530, 31), "", () => AcceptProtocolCompletion(row)));
             }
             protocolSuggestions.gameObject.SetActive(false);
+            var completing = (ProtocolInputField)protocolSource;
+            completing.CompletionQuery = QueryProtocolCompletion;
+            completing.CompletionApplied += RefreshProtocolCompletions;
+            completing.CompletionListRequested += RefreshProtocolCompletions;
             feedback.text = "입력 예: " + game.Runtime.ExampleArguments + " / 배정 대상: " + game.Runtime.Threads.ElementAtOrDefault(selectedThread)?.Id +
-                "\n권한 목록 클릭 또는 Tab 완성 · 테스트는 현재 세계의 복사본에서 수행됩니다.";
+                "\nTab / Enter / Space 완성 · 다음 Enter 줄바꿈 · 테스트는 세계 복사본에서 수행됩니다.";
         }
 
         private void LoadProtocol(int direction)
@@ -339,10 +337,19 @@ namespace Codetective.Gameplay
 
         private void RefreshProtocolCompletions()
         {
+            if (protocolSource == null || protocolSuggestions == null) return;
             TerminalCompletionInput current = ((ProtocolInputField)protocolSource).CompletionInput;
+            RefreshProtocolCompletions(current);
+        }
+
+        private void RefreshProtocolCompletions(TerminalCompletionInput current)
+        {
             completionSuffix = current.Text.Length - current.Caret;
             suggestions = current.Anchor == current.Caret ? game.Runtime.CompleteProtocol(current.Text, current.Caret, arguments.text, current.IsComposing) : Array.Empty<Completion>();
+            if (suggestions.Any(c => c.Replacement == current.Text)) suggestions = Array.Empty<Completion>();
             protocolSuggestions.gameObject.SetActive(suggestions.Count > 0);
+            ((ProtocolInputField)protocolSource).SetInlinePreview(suggestions.Count > 0 ?
+                new InlineCompletion(suggestions[0].Replacement, suggestions[0].Replacement.Length - completionSuffix) : (InlineCompletion?)null);
             for (int i = 0; i < suggestionButtons.Count; i++)
             {
                 suggestionButtons[i].gameObject.SetActive(i < suggestions.Count);
@@ -350,15 +357,19 @@ namespace Codetective.Gameplay
             }
         }
 
+        private InlineCompletion? QueryProtocolCompletion(TerminalCompletionInput current)
+        {
+            RefreshProtocolCompletions(current);
+            if (suggestions.Count == 0) return null;
+            string value = suggestions[0].Replacement;
+            return new InlineCompletion(value, value.Length - completionSuffix);
+        }
+
         private void AcceptProtocolCompletion(int index)
         {
             if (protocolSource == null || index >= suggestions.Count) return;
-            protocolSource.text = suggestions[index].Replacement;
-            int caret = Mathf.Max(0, protocolSource.text.Length - completionSuffix);
-            protocolSource.ActivateInputField();
-            protocolSource.caretPosition = caret;
-            protocolSuggestions.gameObject.SetActive(false);
-            suggestions = Array.Empty<Completion>();
+            string value = suggestions[index].Replacement;
+            ((ProtocolInputField)protocolSource).AcceptCompletion(new InlineCompletion(value, value.Length - completionSuffix));
         }
 
         private void Run(string command) { ExecutionResult result = game.Runtime.Execute(command); feedback.text = result.Message; }

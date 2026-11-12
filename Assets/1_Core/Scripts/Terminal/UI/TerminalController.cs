@@ -80,7 +80,9 @@ namespace Codetective.Terminal
         private void OnEnable()
         {
             input.LineSubmitted += Submit;
-            input.CompletionRequested += AcceptCompletion;
+            input.CompletionQuery = QueryCompletion;
+            input.CompletionApplied += CompletionApplied;
+            input.CompletionListRequested += RequestCompletions;
             input.CompletionSelectionMoved += MoveCompletion;
             input.CompletionDismissed += DismissCompletions;
             input.onValueChanged.AddListener(InputChanged);
@@ -99,7 +101,7 @@ namespace Codetective.Terminal
 
             history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
                            "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
-                           "Enter 실행 · Tab 자동완성\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
+                           "Tab / Enter / Space 자동완성 확정 · 다음 Enter 실행\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
             transcript.text = history.Text;
             RefreshMemory();
             completionPanel.SetActive(false);
@@ -109,7 +111,9 @@ namespace Codetective.Terminal
         private void OnDisable()
         {
             input.LineSubmitted -= Submit;
-            input.CompletionRequested -= AcceptCompletion;
+            input.CompletionQuery = null;
+            input.CompletionApplied -= CompletionApplied;
+            input.CompletionListRequested -= RequestCompletions;
             input.CompletionSelectionMoved -= MoveCompletion;
             input.CompletionDismissed -= DismissCompletions;
             input.onValueChanged.RemoveListener(InputChanged);
@@ -234,6 +238,7 @@ namespace Codetective.Terminal
 
         private void RefreshCompletions(TerminalCompletionInput current, bool showEmpty = false)
         {
+            string previousSelection = selectedCompletion >= 0 && selectedCompletion < completions.Count ? completions[selectedCompletion].ReplacementText : null;
             lastText = current.Text;
             lastCaret = current.Caret;
             lastAnchor = current.Anchor;
@@ -256,6 +261,12 @@ namespace Codetective.Terminal
                           (showEmpty || !string.IsNullOrWhiteSpace(lastText))
                 ? session.Complete(lastText, current.IsComposing)
                 : Array.Empty<TerminalCompletion>();
+            // A fully typed word is already committed; keep longer names from taking it over.
+            foreach (TerminalCompletion candidate in completions)
+                if (candidate.ReplacementText == current.Text) { completions = Array.Empty<TerminalCompletion>(); break; }
+            if (previousSelection != null)
+                for (int i = 0; i < completions.Count; i++)
+                    if (completions[i].ReplacementText == previousSelection) { selectedCompletion = i; break; }
             selectedCompletion = Mathf.Clamp(selectedCompletion, 0, Mathf.Max(0, completions.Count - 1));
             DrawCompletions();
         }
@@ -263,6 +274,8 @@ namespace Codetective.Terminal
         private void DrawCompletions()
         {
             completionPanel.SetActive(completions.Count > 0);
+            input.SetInlinePreview(completions.Count > 0 ? new InlineCompletion(completions[selectedCompletion].ReplacementText,
+                completions[selectedCompletion].ReplacementText.Length) : (InlineCompletion?)null);
             if (completions.Count == 0)
                 return;
 
@@ -293,22 +306,24 @@ namespace Codetective.Terminal
             DrawCompletions();
         }
 
-        private void AcceptCompletion()
+        private InlineCompletion? QueryCompletion(TerminalCompletionInput current)
         {
-            if (!interactionEnabled)
-                return;
-            if (completions.Count == 0)
+            if (current.Text != lastText || current.IsComposing != lastComposing)
             {
                 dismissed = false;
-                RefreshCompletions(true);
+                selectedCompletion = 0;
             }
-            if (completions.Count == 0)
-                return;
+            RefreshCompletions(current);
+            if (completions.Count == 0) return null;
+            string value = completions[selectedCompletion].ReplacementText;
+            return new InlineCompletion(value, value.Length);
+        }
 
-            input.SetTextWithoutNotify(completions[selectedCompletion].ReplacementText);
-            input.FocusAtEnd();
-            dismissed = !(input.text.EndsWith(" ", StringComparison.Ordinal) || input.text.EndsWith(".", StringComparison.Ordinal) ||
-                input.text.EndsWith("(", StringComparison.Ordinal));
+        private void RequestCompletions() { dismissed = false; RefreshCompletions(true); }
+
+        private void CompletionApplied()
+        {
+            dismissed = false;
             selectedCompletion = 0;
             RefreshCompletions();
         }
@@ -319,7 +334,8 @@ namespace Codetective.Terminal
             if (index >= completions.Count)
                 return;
             selectedCompletion = index;
-            AcceptCompletion();
+            string value = completions[index].ReplacementText;
+            input.AcceptCompletion(new InlineCompletion(value, value.Length));
         }
 
         private void DismissCompletions()

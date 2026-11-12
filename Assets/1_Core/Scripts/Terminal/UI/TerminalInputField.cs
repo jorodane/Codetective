@@ -2,47 +2,20 @@ using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-#if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-#endif
 
 namespace Codetective.Terminal
 {
     /// <summary>Handles terminal keys in the same event queue as text input, avoiding duplicate submits.</summary>
     [AddComponentMenu("Codetective/Terminal Input Field")]
-    public sealed class TerminalInputField : InputField
+    [DefaultExecutionOrder(-100)]
+    public sealed class TerminalInputField : CompletingInputField
     {
-        public event Action<string> LineSubmitted;
-        public event Action CompletionRequested;
         public event Action<int> CompletionSelectionMoved;
         public event Action CompletionDismissed;
 
-        private readonly Event keyEvent = new Event();
-        private readonly TerminalSubmission submission = new TerminalSubmission();
-        private bool wasComposing;
-        private bool moveToEndAfterFocus;
         private CrtScreen crtScreen;
         private CanvasRenderer caretRenderer;
         private PointerEventData projectedDrag;
-        public bool IsCompositionProtected => IsComposing || wasComposing;
-        public bool IsLosingFocus { get; private set; }
-        public TerminalCompletionInput CompletionInput =>
-            new TerminalCompletionInput(text, CompositionText, m_CaretPosition, m_CaretSelectPosition);
-
-        public override void OnDeselect(BaseEventData eventData)
-        {
-            submission.Cancel();
-            IsLosingFocus = true;
-            try
-            {
-                base.OnDeselect(eventData);
-            }
-            finally
-            {
-                wasComposing = false;
-                IsLosingFocus = false;
-            }
-        }
 
         private CrtScreen CurvedScreen => crtScreen != null ? crtScreen :
             crtScreen = GetComponentInParent<CrtScreen>();
@@ -118,118 +91,10 @@ namespace Codetective.Terminal
             }
         }
 
-        public bool IsComposing => CompositionText.Length > 0;
-
-        private string CompositionText
-        {
-            get
-            {
-                var system = EventSystem.current;
-                if (!isFocused || system == null || system.currentSelectedGameObject != gameObject ||
-                    system.currentInputModule == null)
-                    return string.Empty;
-                return system.currentInputModule.input.compositionString ?? string.Empty;
-            }
-        }
-
-        public void FocusAtEnd()
-        {
-            Select();
-            if (!isFocused)
-            {
-                ActivateInputField();
-                moveToEndAfterFocus = true;
-            }
-            else
-            {
-                MoveTextEnd(false);
-            }
-        }
-
-        public void ReleaseFocus()
-        {
-            submission.Cancel();
-            moveToEndAfterFocus = false;
-            wasComposing = false;
-            DeactivateInputField();
-        }
-
-        protected override void LateUpdate()
-        {
-            if (!IsInteractable())
-                return;
-            base.LateUpdate();
-            if (moveToEndAfterFocus && isFocused)
-            {
-                MoveTextEnd(false);
-                moveToEndAfterFocus = false;
-            }
-            wasComposing = IsComposing;
-
-#if ENABLE_INPUT_SYSTEM
-            // Some IMEs consume the first Enter without delivering a uGUI key event.
-            Keyboard keyboard = Keyboard.current;
-            if (isFocused && keyboard != null &&
-                (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
-                submission.Request(Time.frameCount, CompletionInput);
-#endif
-            if (isFocused && submission.TryTake(CompletionInput, out string line))
-            {
-                // Finish the native IME session before clearing/reactivating the field.
-                // Its trailing commit must not leak into the next command.
-                if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == gameObject)
-                    EventSystem.current.SetSelectedGameObject(null);
-                DeactivateInputField();
-                wasComposing = false;
-                LineSubmitted?.Invoke(line);
-            }
-        }
-
-        protected override void OnDisable()
-        {
-            submission.Cancel();
-            base.OnDisable();
-        }
-
-        public override void OnUpdateSelected(BaseEventData eventData)
-        {
-            if (!isFocused)
-                return;
-
-            // Keep IME candidate navigation intact; Enter instead submits the visible
-            // text after this frame's composition/commit events have been processed.
-            bool protectComposition = IsComposing || wasComposing;
-            while (Event.PopEvent(keyEvent))
-            {
-                if (keyEvent.rawType == EventType.KeyDown)
-                {
-                    if (!HandleTerminalKey(keyEvent.keyCode, protectComposition))
-                        KeyPressed(keyEvent);
-                    UpdateLabel();
-                }
-                else if ((keyEvent.type == EventType.ValidateCommand ||
-                          keyEvent.type == EventType.ExecuteCommand) && keyEvent.commandName == "SelectAll")
-                {
-                    SelectAll();
-                }
-            }
-
-            UpdateLabel();
-            eventData.Use();
-        }
-
-        private bool HandleTerminalKey(KeyCode key, bool protectComposition)
+        protected override bool HandleEditorKey(KeyCode key, bool protectComposition)
         {
             switch (key)
             {
-                case KeyCode.Return:
-                case KeyCode.KeypadEnter:
-                    submission.Request(Time.frameCount, CompletionInput);
-                    return true;
-                case KeyCode.Tab:
-                    if (!protectComposition)
-                        CompletionRequested?.Invoke();
-                    return true;
                 case KeyCode.UpArrow:
                 case KeyCode.DownArrow:
                     if (!protectComposition)

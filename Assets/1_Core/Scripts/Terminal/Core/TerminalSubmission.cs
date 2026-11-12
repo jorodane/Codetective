@@ -31,5 +31,8 @@ namespace Codetective.Terminal
         }
 
         public void Cancel() => pending = false;
+
+        /// <summary>A completion used this physical gesture; its duplicate UI/IME event must not submit.</summary>
+        public void Consume(int frame) { requestFrame = frame; pending = false; }
     }
 }

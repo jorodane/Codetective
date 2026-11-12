@@ -1395,7 +1395,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "Enter 실행 · Tab 완성 · ↑↓ 후보 · 휠 기록 · ESC 전체 보기"
+  m_Text: "Tab/Enter/Space 완성 · 다음 Enter 실행 · ↑↓ 후보 · ESC 전체 보기"
 --- !u!1 &100068
 GameObject:
   m_ObjectHideFlags: 0
