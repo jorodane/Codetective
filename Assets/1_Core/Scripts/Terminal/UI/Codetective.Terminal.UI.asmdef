@@ -1,0 +1,5 @@
+{
+    "name": "Codetective.Terminal.UI",
+    "rootNamespace": "Codetective.Terminal",
+    "references": ["Codetective.Terminal.Core", "Codetective.Operations.Core", "Unity.ugui", "Unity.InputSystem"]
+}

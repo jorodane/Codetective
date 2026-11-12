@@ -1,0 +1,6 @@
+{
+    "name": "Codetective.Terminal.UI.EditorTests",
+    "references": ["Codetective.Terminal.UI", "Codetective.Terminal.Core", "Codetective.Operations.Core", "Unity.ugui"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"]
+}

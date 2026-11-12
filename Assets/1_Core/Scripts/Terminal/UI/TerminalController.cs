@@ -67,7 +67,7 @@ namespace Codetective.Terminal
         private IReadOnlyList<TerminalCompletion> completions = Array.Empty<TerminalCompletion>();
         private int selectedCompletion;
         private int firstVisibleCompletion;
-        private bool dismissed;
+        private readonly CompletionVisibility visibility = new CompletionVisibility();
         private bool scrollTranscript;
         private bool followTranscript;
         private Vector2 preservedTranscriptPosition;
@@ -140,7 +140,7 @@ namespace Codetective.Terminal
                 // IME changes do not raise onValueChanged until the syllable is committed.
                 if (textChanged)
                 {
-                    dismissed = false;
+                    visibility.Edit();
                     selectedCompletion = 0;
                 }
                 RefreshCompletions(current);
@@ -173,7 +173,7 @@ namespace Codetective.Terminal
 
             input.SetTextWithoutNotify(string.Empty);
             input.FocusAtEnd();
-            dismissed = false;
+            visibility.Edit();
             RefreshCompletions();
         }
 
@@ -226,7 +226,7 @@ namespace Codetective.Terminal
             // Preserve the visible choices until that button's click can be delivered.
             if (input.IsLosingFocus)
                 return;
-            dismissed = false;
+            visibility.Edit();
             selectedCompletion = 0;
             RefreshCompletions();
         }
@@ -238,6 +238,7 @@ namespace Codetective.Terminal
 
         private void RefreshCompletions(TerminalCompletionInput current, bool showEmpty = false)
         {
+            if (showEmpty) visibility.Open();
             string previousSelection = selectedCompletion >= 0 && selectedCompletion < completions.Count ? completions[selectedCompletion].ReplacementText : null;
             lastText = current.Text;
             lastCaret = current.Caret;
@@ -257,8 +258,7 @@ namespace Codetective.Terminal
                 }
             }
 
-            completions = interactionEnabled && !dismissed && lastFocus && current.IsAtEnd &&
-                          (showEmpty || !string.IsNullOrWhiteSpace(lastText))
+            completions = visibility.ShouldShow(current, lastFocus, interactionEnabled)
                 ? session.Complete(lastText, current.IsComposing)
                 : Array.Empty<TerminalCompletion>();
             // A fully typed word is already committed; keep longer names from taking it over.
@@ -298,7 +298,7 @@ namespace Codetective.Terminal
         {
             if (completions.Count == 0)
             {
-                dismissed = false;
+                visibility.Open();
                 RefreshCompletions(true);
                 return;
             }
@@ -310,7 +310,7 @@ namespace Codetective.Terminal
         {
             if (current.Text != lastText || current.IsComposing != lastComposing)
             {
-                dismissed = false;
+                visibility.Edit();
                 selectedCompletion = 0;
             }
             RefreshCompletions(current);
@@ -319,11 +319,11 @@ namespace Codetective.Terminal
             return new InlineCompletion(value, value.Length);
         }
 
-        private void RequestCompletions() { dismissed = false; RefreshCompletions(true); }
+        private void RequestCompletions() { visibility.Open(); RefreshCompletions(); }
 
         private void CompletionApplied()
         {
-            dismissed = false;
+            visibility.Edit();
             selectedCompletion = 0;
             RefreshCompletions();
         }
@@ -340,7 +340,7 @@ namespace Codetective.Terminal
 
         private void DismissCompletions()
         {
-            dismissed = true;
+            visibility.Dismiss();
             RefreshCompletions();
         }
     }
