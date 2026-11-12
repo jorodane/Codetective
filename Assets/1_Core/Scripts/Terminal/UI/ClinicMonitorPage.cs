@@ -31,7 +31,9 @@ namespace Codetective.Terminal
         private void Update()
         {
             if (runtime == null || Time.unscaledTime < nextRefresh) return;
-            nextRefresh = Time.unscaledTime + 0.2f; Refresh();
+            nextRefresh = Time.unscaledTime + 0.2f;
+            if (host.SelectedProfileId != profileId) SelectProfile(host.SelectedProfileId);
+            Refresh();
         }
         private void OnEnable() { if (runtime != null && body != null) { SelectProfile(host.SelectedProfileId); Refresh(); } }
         private void Build(Font font)
@@ -72,7 +74,13 @@ namespace Codetective.Terminal
         }
         private void Refresh()
         {
-            status.text = (runtime.Entity(profileId)?.Label ?? profileId) + (recordsPage ? " / 직접 남긴 상담 기록" : " / 환자 프로필");
+            if (!runtime.VisibleProfileIds.Contains(profileId))
+            {
+                string available = runtime.VisibleProfileIds.FirstOrDefault();
+                if (available == null) { status.text = "프로필"; body.text = "열람 가능한 프로필이 없습니다."; return; }
+                host.SelectedProfileId = available; SelectProfile(available);
+            }
+            status.text = (runtime.Entity(profileId)?.Label ?? profileId) + (recordsPage ? " / 직접 남긴 상담 기록" : " / 인물 프로필");
             if (!recordsPage) { body.text = runtime.ProfileSummary(profileId); return; }
             var text = new StringBuilder();
             foreach (ConsultationNote note in runtime.NotesFor(profileId)) text.Append("[메모 ").Append(note.id).Append(" / DAY ").Append(note.day)

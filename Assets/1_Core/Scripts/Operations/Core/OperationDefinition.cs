@@ -46,16 +46,18 @@ namespace Codetective.Operations
         public string[] UnlockFacts = Array.Empty<string>();
         public string[] GrantAuthorities = Array.Empty<string>();
         public MemberToggle[] MemberChanges = Array.Empty<MemberToggle>();
+        public StoryEffects StoryEffects = new StoryEffects();
 
         public OperationDefinition Copy() => new OperationDefinition { Code = Code, Label = Label, Aliases = Aliases.ToArray(),
             Names = Names.Select(n => new LocalizedCommandName(n.language, n.name, n.description)).ToArray(),
             Parameters = Parameters.Select(p => p.Copy()).ToArray(), ReturnKind = ReturnKind, ReturnSchemaId = ReturnSchemaId,
             Property = Property, Overrides = Overrides, Minutes = Minutes, Access = Access.Copy(), Result = Result.Copy(),
             ReturnField = ReturnField, ReturnEntityId = ReturnEntityId, FieldWrites = FieldWrites.Select(w => w.Copy()).ToArray(),
-            UnlockFacts = UnlockFacts.ToArray(), GrantAuthorities = GrantAuthorities.ToArray(), MemberChanges = MemberChanges.Select(m => m.Copy()).ToArray() };
+            UnlockFacts = UnlockFacts.ToArray(), GrantAuthorities = GrantAuthorities.ToArray(), MemberChanges = MemberChanges.Select(m => m.Copy()).ToArray(), StoryEffects = StoryEffects?.Copy() ?? new StoryEffects() };
 
         public Operation Compile()
         {
+            StoryEffects?.Validate();
             if (Access.Condition != null || Access.TargetCondition != null)
                 throw new CommandException("저장 가능한 함수 선언에는 사실/권한 조건을 사용하세요.");
             if (!CommandParser.IsIdentifier(Code) || CommandParser.IsAllocationKeyword(Code) || double.IsNaN(Minutes) || double.IsInfinity(Minutes) || Minutes < 0)
@@ -91,6 +93,7 @@ namespace Codetective.Operations
             // Validate every write before changing values, knowledge, or available conversation topics.
             for (int i = 0; i < writes.Length; i++) target.SetValue(FieldWrites[i].Field, writes[i]);
             runtime.Facts.UnionWith(UnlockFacts); runtime.Authorities.UnionWith(GrantAuthorities);
+            runtime.ApplyStoryEffects(StoryEffects);
             foreach (MemberToggle change in MemberChanges)
                 if (change.Function) target.SetFunctionEnabled(change.Name, change.Enabled); else target.SetVariableEnabled(change.Name, change.Enabled);
             return !string.IsNullOrEmpty(ReturnField) ? target.GetValue(ReturnField) : returned ?? Result.Copy();

@@ -67,6 +67,15 @@ namespace Codetective.Operations
                 Invoke = c => { c.Runtime.Facts.Add("testimony_crosschecked"); return Datum.Ref(DataKind.Statement, "revised_statement", "추가 진술", "분석 결과를 제시하여 새로운 진술을 확보했습니다."); } });
             ClinicCommandNames.Apply(client);
             runtime.Register(client);
+            clientType.Variables.Add(new VariableDefinition { Code = "occupation", Label = "직업", Kind = DataKind.Text, DefaultValue = Datum.Text("회사원"), Names = BuiltinSchemas.Ko("직업") });
+            clientType.Variables.Add(new VariableDefinition { Code = "internalAssessment", Label = "내부 평가", Kind = DataKind.Text,
+                DefaultValue = Datum.Text("현장지원과 전용 기록"), Access = new AccessRule { PlayerAccess = PlayerAccess.Internal } });
+            clientType.Operations.Add(new OperationDefinition { Code = "askAboutFoundation", Label = "신문의 재단 기사에 대해 묻는다", Names = BuiltinSchemas.Ko("재단에대하여"),
+                Access = new AccessRule { Story = new StoryCondition { triggersOn = new[] { "news.nsf_rehabilitation" } } },
+                ReturnKind = DataKind.Statement, Result = Datum.Ref(DataKind.Statement, "foundation_lead", "재활 지원 진술", "정부 지원이 중단된 뒤 NSF의 도움으로 치료를 이어가는 사람들이 있다고 합니다."),
+                UnlockFacts = new[] { "foundation_support_mentioned" },
+                StoryEffects = new StoryEffects { triggers = new[] { new TriggerValue { id = "foundation.mentioned", value = true } } } }.Compile());
+            EnsureKernelProfile(runtime);
             EntitySchema coffeeType = Define(runtime, "Coffee", "커피형", DataKind.Item);
             coffeeType.Access.Facts = new[] { "coffee_received" };
             var coffee = new Entity("coffee", "Kernel의 커피", coffeeType);
@@ -94,6 +103,16 @@ namespace Codetective.Operations
                 keyword = "야간 출입 기록", fact = "entry_record_mentioned", dataName = "entryRecordClue", kind = DataKind.Clue });
             runtime.SaveProtocol("protocol recon(Place target) { return target.inspect(); }");
             return runtime;
+        }
+
+        public static void EnsureKernelProfile(KernelRuntime runtime)
+        {
+            if (runtime.Entity("kernel") != null) return;
+            Entity kernel = runtime.CreateInstance("Person", "kernel", "Kernel", false);
+            foreach (var field in new[] { new[] { "legalName", "이름" }, new[] { "birthDate", "생년월일" }, new[] { "family", "가족관계" },
+                new[] { "pastAgency", "과거 소속" }, new[] { "serviceRecord", "작전 이력" } })
+                kernel.AddVariable(new VariableDefinition { Code = field[0], Label = field[1], Kind = DataKind.Text, DefaultValue = Datum.Text("[데이터 말소됨]") });
+            kernel.SetValue("description", Datum.Text("현재 코드네임: Kernel / 위장 신분: 개인 심리상담소 상담가"));
         }
 
         private static EntitySchema Define(KernelRuntime runtime, string id, string korean, DataKind kind)

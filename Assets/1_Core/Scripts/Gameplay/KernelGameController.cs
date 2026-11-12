@@ -27,11 +27,21 @@ namespace Codetective.Gameplay
         [SerializeField] private Transform calendar;
         [SerializeField] private Font font;
         [SerializeField] private DialoguePresentationDefinition dialoguePresentation;
+        [SerializeField] private Transform newspaperAnchor;
 
         public KernelRuntime Runtime { get; private set; }
         public string CurrentView { get; private set; } = "overview";
         public bool IsViewTransitioning => views != null && views.IsTransitioning;
         public DialoguePresentationDefinition DialoguePresentation => dialoguePresentation;
+        public ItemCarryController Carry { get; private set; }
+        public bool IsDateTransitioning { get; private set; }
+        public string SelectedProfileId
+        {
+            get => terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.SelectedProfileId ?? selectedProfile;
+            set { selectedProfile = value; MonitorPageHost host = terminalRoot?.GetComponentInChildren<MonitorPageHost>(true); if (host != null) host.SelectedProfileId = value; }
+        }
+        private string selectedProfile = "client";
+        private DeskNewspaper newspaper;
         private readonly List<SlidingDrawer> drawers = new List<SlidingDrawer>();
         public IReadOnlyList<SlidingDrawer> Drawers => drawers;
         public bool CanOperateDrawers => inspection != null && inspection.Mode == InspectionMode.Inspecting && CurrentView == "drawer" &&
@@ -61,6 +71,7 @@ namespace Codetective.Gameplay
                 try { Runtime.Restore(JsonUtility.FromJson<KernelSnapshot>(File.ReadAllText(SavePath))); Feedback = "날짜 기록을 불러왔습니다."; }
                 catch (Exception error) { Runtime = scenario.CreateRuntime(); Feedback = "저장 기록을 읽지 못해 새 작전을 시작합니다: " + error.Message; }
             }
+            ClinicScenario.EnsureKernelProfile(Runtime);
             int preferredLanguage = PlayerPrefs.GetInt(CommandLanguagePreference, (int)(scenario != null ? scenario.commandLanguage : CommandLocale.Korean));
             if (Enum.IsDefined(typeof(CommandLocale), preferredLanguage)) Runtime.Language = (CommandLocale)preferredLanguage;
             Runtime.SceneActionRequested += SceneAction;
@@ -81,6 +92,10 @@ namespace Codetective.Gameplay
             CreateCoffeeCopy();
             CreateCalendarText();
             InitializeDrawers();
+            Carry = GetComponent<ItemCarryController>() ?? gameObject.AddComponent<ItemCarryController>();
+            Carry.Initialize(views.ControlledCamera.transform); Carry.Used += UseItem; inspection.Carry = Carry;
+            newspaper = gameObject.AddComponent<DeskNewspaper>();
+            newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry); newspaper.Refresh(Runtime);
             ui.Initialize(this, inspection, font);
             sceneLights = FindObjectsOfType<Light>();
             initialLights = Array.ConvertAll(sceneLights, light => light.enabled);
@@ -92,9 +107,11 @@ namespace Codetective.Gameplay
 
         private void Update()
         {
-            Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
+            if (!IsDateTransitioning) Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
             if (narrativeDirty && Time.unscaledTime >= narrativeSaveAt) { narrativeDirty = false; SaveNow(); }
             foreach (SlidingDrawer drawer in drawers) drawer.SetInteractionEnabled(CanOperateDrawers);
+            // Keep the close monitor and profile views readable while retaining the held item and E action.
+            Carry?.SetPresentationVisible(CurrentView != "monitor" && CurrentView != "profile");
             if (pendingView != null && !views.IsTransitioning)
             {
                 ui.ShowContext(pendingView);
@@ -127,6 +144,41 @@ namespace Codetective.Gameplay
             if (inspection.Mode == InspectionMode.Menu) return;
             terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.ShowPage(pageId);
             ShowMonitor();
+        }
+        private void UseItem(HoldableItem item)
+        {
+            if (item.Use == HeldItemUse.Newspaper)
+            {
+                Runtime.ReadNewspaper(); newspaper.Refresh(Runtime); ui.ShowNewspaper();
+            }
+            else if (item.Use == HeldItemUse.Profile && Runtime.VisibleProfileIds.Contains(item.ProfileId))
+            {
+                SelectedProfileId = item.ProfileId;
+                int index = views.AngleSet.FindId("profile");
+                if (index >= 0) inspection.InspectAngle(views.AngleSet.Get(index));
+            }
+        }
+        public void UseHeldItem()
+        {
+            if (!IsDateTransitioning && inspection.Mode != InspectionMode.Menu && !IsViewTransitioning)
+                Carry.TryUse(inspection.TextInputFocused);
+        }
+        public void PutDownItem() { if (!IsDateTransitioning && !inspection.TextInputFocused) Carry.PutDown(); }
+        public void BeginNextDay()
+        {
+            if (!Runtime.IsDayEnded) { Feedback = "18시 이후 다음 날로 진행할 수 있습니다."; return; }
+            if (!IsDateTransitioning && inspection.Mode != InspectionMode.Menu) StartCoroutine(ChangeDate());
+        }
+        private IEnumerator ChangeDate()
+        {
+            IsDateTransitioning = true; inspection.NavigationBlocked = true;
+            ui.HideContext(); Carry.PutDown();
+            yield return ui.FadeDate(0, 1, 0.45f, "");
+            Runtime.NextDay(); newspaper.Refresh(Runtime); SaveNow();
+            inspection.ReturnToOverview();
+            yield return ui.FadeDate(1, 1, 1.2f, "DAY " + Runtime.Day.ToString("D2") + "\n09:00  업무 시작");
+            yield return ui.FadeDate(1, 0, 0.6f, "DAY " + Runtime.Day.ToString("D2") + "\n09:00  업무 시작");
+            inspection.NavigationBlocked = false; IsDateTransitioning = false;
         }
         private void InitializeDrawers()
         {
@@ -266,7 +318,8 @@ namespace Codetective.Gameplay
             StopAllCoroutines();
             if (sceneLights != null) for (int i = 0; i < sceneLights.Length; i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (curtainCloth != null) curtainCloth.localScale = foldedScale;
-            if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.PointerBlocked = null; }
+            if (Carry != null) { Carry.PutDown(); Carry.Used -= UseItem; }
+            if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.NavigationBlocked = false; }
             Runtime.SceneActionRequested -= SceneAction;
             Runtime.DayEnded -= SaveNow;
             Runtime.NarrativeChanged -= QueueNarrativeSave;

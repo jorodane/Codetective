@@ -16,6 +16,7 @@ namespace Codetective.Operations
         public double ResponseMinutes { get; private set; }
         public ConsultationLine CurrentConsultation => !AwaitingAssignment && ConsultationIndex < Consultation.Count ? Consultation[ConsultationIndex] : null;
         public string ClockText => $"DAY {Day:00}  {(int)Minute / 60:00}:{(int)Minute % 60:00}";
+        public event Action<int> DayStarted;
 
         public void Tick(double minutes)
         {
@@ -49,7 +50,10 @@ namespace Codetective.Operations
             Minute = 540;
             IsDayEnded = false;
             ResponseMinutes = 0;
+            DeliverNewspaper();
             Report("DAY " + Day + " — 09:00 업무 시작. 현장 상황이 이어집니다.");
+            NarrativeUpdated();
+            if (!DryRun) DayStarted?.Invoke(Day);
         }
 
         public Datum HeadquartersOrder(string action)
@@ -100,6 +104,9 @@ namespace Codetective.Operations
                 nextConsultationNoteId = nextNoteId,
                 mailProgress = mailProgress.Values.Select(m => new MailProgress { id = m.id, read = m.read, accepted = m.accepted }).ToArray(),
                 drawers = drawers.Select(d => new DrawerState { id = d.Key, open = d.Value }).ToArray(),
+                triggers = triggers.Select(t => new TriggerValue { id = t.Key, value = t.Value }).ToArray(),
+                quests = quests.Values.Select(q => q.Copy()).ToArray(),
+                newspapers = editions.Values.Select(e => e.Copy()).ToArray(),
                 data = data.Values.Select(CloneSlot).ToArray(), protocols = protocols.Values.Select(p => p.Source).ToArray(),
                 entities = entities.Values.Select(e => new EntitySnapshot
                 {
@@ -107,7 +114,7 @@ namespace Codetective.Operations
                     rootNames = roots.Where(r => r.Value == e).Select(r => r.Key).ToArray(), values = e.CaptureValues(),
                     children = e.Children.Select(c => new EntityChildSnapshot { name = c.Key, id = c.Value.Id }).ToArray(),
                     localVariables = e.CaptureLocalVariables(), localFunctions = e.CaptureLocalFunctions(),
-                    disabledVariables = e.CaptureDisabledVariables(), disabledFunctions = e.CaptureDisabledFunctions()
+                    disabledVariables = e.CaptureDisabledVariables(), disabledFunctions = e.CaptureDisabledFunctions(), playerAccess = e.CapturePlayerAccess()
                 }).ToArray(),
                 agents = Threads.Select(a => new AgentSnapshot
                 {
@@ -145,6 +152,7 @@ namespace Codetective.Operations
                 restoredAgents.Add(agent);
             }
             Day = snapshot.day; Minute = snapshot.minute; IsDayEnded = snapshot.dayEnded;
+            RestoreStoryState(snapshot);
             RestoreEntities(snapshot.entities);
             Suspicion = snapshot.suspicion; Exposure = snapshot.exposure; ResponseMinutes = snapshot.responseMinutes;
             ConsultationIndex = Math.Max(0, Math.Min(snapshot.consultationIndex, Consultation.Count));
@@ -153,6 +161,7 @@ namespace Codetective.Operations
             Authorities.Clear(); Authorities.UnionWith(snapshot.authorities ?? Array.Empty<string>());
             RecordedClues.Clear(); RecordedClues.UnionWith(snapshot.recordedClues ?? Array.Empty<string>());
             RestoreNarrative(snapshot);
+            RestoreNewspapers(snapshot.newspapers);
             data.Clear();
             foreach (DataSlot slot in snapshot.data ?? Array.Empty<DataSlot>())
             {

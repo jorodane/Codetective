@@ -41,6 +41,7 @@ namespace Codetective.Operations
             VariableDefinition field = localVariables.Values.FirstOrDefault(v => v.Matches(name));
             if (field == null) return false;
             localVariables.Remove(field.Code); values.Remove(field.Code); disabledVariables.Remove(field.Code);
+            playerAccess.Remove("variable:" + field.Code);
             ValueChanged?.Invoke(); return true;
         }
 
@@ -63,6 +64,7 @@ namespace Codetective.Operations
             Operation function = localFunctions.Values.FirstOrDefault(f => f.Matches(name));
             if (function == null) return false;
             localFunctions.Remove(function.Code); functionDefinitions.Remove(function.Code); disabledFunctions.Remove(function.Code);
+            playerAccess.Remove("function:" + function.Code);
             ValueChanged?.Invoke(); return true;
         }
 

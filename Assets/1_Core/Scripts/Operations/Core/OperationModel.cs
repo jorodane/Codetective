@@ -49,6 +49,8 @@ namespace Codetective.Operations
     [Serializable]
     public sealed class AccessRule
     {
+        public PlayerAccess PlayerAccess = PlayerAccess.Inherit;
+        public StoryCondition Story = new StoryCondition();
         public string[] Facts = Array.Empty<string>();
         public string[] Authorities = Array.Empty<string>();
         public string[] ForbiddenFacts = Array.Empty<string>();
@@ -57,10 +59,12 @@ namespace Codetective.Operations
         [NonSerialized] public Func<KernelRuntime, bool> Condition;
         [NonSerialized] public Func<KernelRuntime, Entity, bool> TargetCondition;
         public AccessRule Copy() => new AccessRule { Facts = Facts.ToArray(), Authorities = Authorities.ToArray(), ForbiddenFacts = ForbiddenFacts.ToArray(),
-            RequiredData = RequiredData, NeedsReadyThread = NeedsReadyThread, Condition = Condition, TargetCondition = TargetCondition };
+            RequiredData = RequiredData, NeedsReadyThread = NeedsReadyThread, Condition = Condition, TargetCondition = TargetCondition, PlayerAccess = PlayerAccess, Story = Story?.Copy() ?? new StoryCondition() };
 
-        public string Denial(KernelRuntime runtime, IEnumerable<Datum> locals = null, Entity target = null)
+        public string Denial(KernelRuntime runtime, IEnumerable<Datum> locals = null, Entity target = null, bool ignorePlayerAccess = false)
         {
+            if (!ignorePlayerAccess && PlayerAccess == PlayerAccess.Internal) return "현재 제공되지 않는 항목입니다.";
+            if (Story != null && !Story.Matches(runtime)) return "현재 이야기 진행 상태에서는 사용할 수 없습니다.";
             if (Facts.Any(f => !runtime.Facts.Contains(f))) return "아직 필요한 정보를 알지 못합니다.";
             if (Authorities.Any(a => !runtime.Authorities.Contains(a))) return "작전 권한이 없습니다.";
             if (ForbiddenFacts.Any(runtime.Facts.Contains)) return "현재 금지된 권한입니다.";
@@ -183,6 +187,9 @@ namespace Codetective.Operations
         public int nextConsultationNoteId;
         public MailProgress[] mailProgress;
         public DrawerState[] drawers;
+        public TriggerValue[] triggers;
+        public QuestProgress[] quests;
+        public NewspaperEdition[] newspapers;
     }
 
     [Serializable]
@@ -200,6 +207,7 @@ namespace Codetective.Operations
         public OperationDefinition[] localFunctions;
         public string[] disabledVariables;
         public string[] disabledFunctions;
+        public PlayerAccessOverride[] playerAccess;
     }
     [Serializable] public sealed class EntityChildSnapshot { public string name; public string id; }
 

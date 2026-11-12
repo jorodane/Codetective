@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: e324e603b6e3eaf6a2eb41ad35022c85
+    type: 3
+  m_Name: ResearchFunding
+  m_EditorClassIdentifier: ''
+  article:
+    id: research-funding
+    headline: 정부 연구 지원 감축… 재활 치료의 빈자리는 누가 메우나
+    body: '정부가 신경과학과 기억 재활 분야의 일부 연구 지원을 줄이면서 지역 치료 기관들이 운영에 어려움을 겪고 있다. 당국은 자금 흐름을
+      재검토하기 위한 조치라고 설명했으나 구체적인 이유는 공개하지 않았다.
+
+
+      Nous Sphaira Foundation(NSF)은 치료를 중단할 위기에 놓인 환자를 위한 지원을 확대한다고 밝혔다. 재단의 지원으로
+      치료를 이어가게 된 가족들은 환영의 뜻을 전했다. 일부 의료계 관계자는 공공 지원의 빈자리를 민간 재단에만 맡겨서는 안 된다고 지적했다.'
+    firstDay: 1
+    lastDay: 1
+    priority: 20
+    condition:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    readFacts:
+    - news_research_funding
+    onRead:
+      triggers:
+      - id: news.nsf_rehabilitation
+        value: 1
+      quests: []

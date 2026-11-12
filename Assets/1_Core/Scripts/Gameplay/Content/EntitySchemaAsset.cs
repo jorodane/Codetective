@@ -24,10 +24,15 @@ namespace Codetective.Gameplay
 
     [Serializable] public sealed class AccessDefinition
     {
+        [Tooltip("Inherit uses the parent declaration (default public). Internal retains the data for story logic but blocks player access.")]
+        public PlayerAccess playerAccess = PlayerAccess.Inherit;
+        [Tooltip("The same global trigger and quest-stage conditions are used by mail, news, permissions and command execution.")]
+        public StoryCondition story = new StoryCondition();
         public string[] requiredFacts = Array.Empty<string>();
         public string[] requiredAuthorities = Array.Empty<string>();
         public string[] forbiddenFacts = Array.Empty<string>();
-        public AccessRule Compile() => new AccessRule { Facts = requiredFacts, Authorities = requiredAuthorities, ForbiddenFacts = forbiddenFacts };
+        public AccessRule Compile() => new AccessRule { Facts = requiredFacts, Authorities = requiredAuthorities, ForbiddenFacts = forbiddenFacts,
+            PlayerAccess = playerAccess, Story = story?.Copy() ?? new StoryCondition() };
     }
 
     [Serializable] public sealed class FieldDefinition

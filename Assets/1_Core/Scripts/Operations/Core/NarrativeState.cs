@@ -20,9 +20,13 @@ namespace Codetective.Operations
         public string acceptLabel = "확인";
         public string[] acceptFacts = Array.Empty<string>();
         public string[] grantAuthorities = Array.Empty<string>();
+        public StoryCondition condition = new StoryCondition();
+        public StoryEffects onRead = new StoryEffects();
+        public StoryEffects onAccept = new StoryEffects();
         public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, subject = subject, body = body, day = day,
             requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel,
-            acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray() };
+            acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray(), condition = condition?.Copy() ?? new StoryCondition(),
+            onRead = onRead?.Copy() ?? new StoryEffects(), onAccept = onAccept?.Copy() ?? new StoryEffects() };
     }
     [Serializable] public sealed class MailProgress { public string id; public bool read; public bool accepted; }
     [Serializable] public sealed class ConsultationNote
@@ -52,18 +56,19 @@ namespace Codetective.Operations
         public int UnreadMailCount(Mailbox box) => Inbox(box).Count(m => !IsMailRead(m.id));
         public bool IsMailRead(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.read;
         public bool IsMailAccepted(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.accepted;
-        private bool MailAvailable(StoryMail message) => message.day <= Day && message.requiredFacts.All(Facts.Contains);
+        private bool MailAvailable(StoryMail message) => message.day <= Day && message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this);
         public void RegisterMail(StoryMail message)
         {
             if (message == null || string.IsNullOrWhiteSpace(message.id) || message.day < 1 || mail.ContainsKey(message.id))
                 throw new CommandException("메일 ID/도착일이 유효하지 않거나 중복됩니다.");
+            message.onRead?.Validate(); message.onAccept?.Validate();
             mail.Add(message.id, message.Copy()); Revision++;
         }
         public StoryMail ReadMail(string id)
         {
             StoryMail message = RequireMail(id);
             if (!mailProgress.TryGetValue(id, out MailProgress state)) mailProgress[id] = state = new MailProgress { id = id };
-            if (!state.read) { state.read = true; Facts.UnionWith(message.readFacts); Report("메일 확인: " + message.subject); NarrativeUpdated(); }
+            if (!state.read) { state.read = true; Facts.UnionWith(message.readFacts); ApplyStoryEffects(message.onRead); Report("메일 확인: " + message.subject); NarrativeUpdated(); }
             return message.Copy();
         }
         public void AcceptMail(string id)
@@ -74,6 +79,7 @@ namespace Codetective.Operations
             MailProgress state = mailProgress[id];
             if (state.accepted) return;
             state.accepted = true; Facts.UnionWith(message.acceptFacts); Authorities.UnionWith(message.grantAuthorities);
+            ApplyStoryEffects(message.onAccept);
             Report("메일 업무 수락: " + message.subject);
             NarrativeUpdated();
         }
@@ -81,7 +87,11 @@ namespace Codetective.Operations
             message : throw new CommandException("아직 도착하지 않았거나 존재하지 않는 메일입니다.");
 
         public static string ProfileOf(ConsultationLine line) => string.IsNullOrWhiteSpace(line?.profileId) ? "client" : line.profileId;
-        public IEnumerable<string> ConsultationProfiles => Consultation.Select(ProfileOf).Concat(notes.Select(n => n.profileId)).Distinct(StringComparer.Ordinal);
+        private bool ProfileAvailable(Entity entity) => entity.Schema.IsA(Schemas.Require("Person")) && !entity.Schema.IsA(Schemas.Require("Thread")) && IsPlayerVisible(entity);
+        public IEnumerable<string> VisibleProfileIds => entities.Values.Where(ProfileAvailable)
+            .Select(e => e.Id).Concat(Consultation.Select(ProfileOf).Concat(notes.Select(n => n.profileId))
+                .Where(id => Entity(id) == null || ProfileAvailable(Entity(id)))).Distinct(StringComparer.Ordinal);
+        public IEnumerable<string> ConsultationProfiles => VisibleProfileIds;
         public IEnumerable<ConsultationNote> NotesFor(string profileId) => notes.Where(n => n.profileId == profileId).Select(n => n.Copy());
         public ConsultationNote AddConsultationNote(string profileId, string text)
         {
@@ -102,7 +112,17 @@ namespace Codetective.Operations
         }
         public string ProfileSummary(string profileId, bool includeNotes = true)
         {
-            var text = new StringBuilder(); text.Append(Entity(profileId)?.Label ?? profileId).Append("\n\n기록한 단서\n");
+            if (!VisibleProfileIds.Contains(profileId)) throw new CommandException("현재 열람할 수 없는 프로필입니다.");
+            Entity person = Entity(profileId);
+            var text = new StringBuilder(); text.Append(person?.Label ?? profileId).Append("\n\n");
+            if (person != null)
+                foreach (VariableDefinition field in person.Variables.Where(f => f.Code != "id" && f.Code != "name" && VariableDenial(person, f, null) == null))
+                {
+                    Datum value = person.GetValue(field.Code);
+                    if (value.kind != DataKind.Empty && !(value.kind == DataKind.Text && string.IsNullOrEmpty(value.text)) && IsPlayerVisible(value))
+                        text.Append(string.IsNullOrEmpty(field.Label) ? field.NameFor(Language) : field.Label).Append(": ").Append(value).Append('\n');
+                }
+            text.Append("\n기록한 단서\n");
             bool any = false;
             foreach (ConsultationLine line in Consultation.Where(l => ProfileOf(l) == profileId && RecordedClues.Contains(l.fact)))
             { text.Append("● ").Append(line.keyword).Append('\n').Append(line.sentence).Append("\n\n"); any = true; }
@@ -131,12 +151,21 @@ namespace Codetective.Operations
             mailProgress.Clear();
             foreach (MailProgress state in snapshot.mailProgress ?? Array.Empty<MailProgress>())
                 mailProgress.Add(state.id, new MailProgress { id = state.id, read = state.read || state.accepted, accepted = state.accepted });
+            if (snapshot.triggers == null && snapshot.quests == null)
+                foreach (StoryMail message in mail.Values)
+                {
+                    if (IsMailRead(message.id)) ApplyStoryEffects(message.onRead);
+                    if (IsMailAccepted(message.id)) ApplyStoryEffects(message.onAccept);
+                }
             // Older daily saves predate the assignment gate; preserve their ongoing case.
             if (snapshot.mailProgress == null && !string.IsNullOrEmpty(StoryStartFact))
             {
                 Facts.Add(StoryStartFact);
                 foreach (StoryMail message in mail.Values.Where(m => m.requiresAcceptance && m.acceptFacts.Contains(StoryStartFact)))
+                {
                     mailProgress[message.id] = new MailProgress { id = message.id, read = true, accepted = true };
+                    ApplyStoryEffects(message.onAccept);
+                }
             }
             drawers.Clear();
             foreach (DrawerState drawer in snapshot.drawers ?? Array.Empty<DrawerState>()) drawers.Add(drawer.id, drawer.open);

@@ -59,8 +59,8 @@ namespace Codetective.Operations
             string[] path = expression.Path;
             if (path.Length == 1)
             {
-                if (locals.TryGetValue(path[0], out Datum local)) return local.Copy();
-                if (data.TryGetValue(path[0], out DataSlot slot)) return slot.value.Copy();
+                if (locals.TryGetValue(path[0], out Datum local)) return PlayerValueVisible(local, locals) ? local.Copy() : Datum.Empty;
+                if (data.TryGetValue(path[0], out DataSlot slot)) return PlayerValueVisible(slot.value, locals) ? slot.value.Copy() : Datum.Empty;
                 if (protocols.ContainsKey(path[0])) return Datum.Ref(DataKind.Protocol, path[0], path[0]);
             }
             try

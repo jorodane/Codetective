@@ -1,0 +1,64 @@
+Codetective: 날짜 · 신문 · 물건 · 프로필 · 이야기 진행 상태
+
+플레이 확인
+- MainScene의 책상 위 신문을 클릭하면 든다. 입력창에 포커스가 없을 때 E로 읽는다.
+- 우클릭 / 놓기 버튼은 물건을 원래 자리에 내려놓는다. 읽기 화면에서 ESC는 화면만 닫는다.
+- 모니터 입력창, 상담 기록, 프로토콜 편집기 등 모든 InputField의 포커스 중에는 E가 물건을 사용하지 않는다.
+- 18:00 이후 HUD 또는 시계 화면의 다음 날 버튼을 누르면 암전 → DAY / 09:00 → 새 신문 순서로 전환된다.
+- 기존 Profile 앵글에서 이전/다음 인물로 프로필을 조회한다. 모니터의 인물 선택과 공유된다.
+- Kernel 프로필은 말소된 신원으로 시작한다. Thread의 실제 신원은 프로필 목록에 포함하지 않는다.
+
+물건 추가
+물건 루트에 HoldableItem과 콜라이더를 둔다. 자식 콜라이더도 지원한다.
+Item ID는 고정 식별자, Display Name은 화면 이름, Use는 Newspaper / Profile / Custom이다.
+Profile은 Profile ID에 해당 인물의 인스턴스 ID를 지정한다. Custom은 On Use(UnityEvent)를 연결한다.
+시작 시 ItemCarryController가 씬의 물건을 등록한다. 나중에 생성한 물건은 game.Carry.Register(item)로 등록한다.
+한 번에 한 물건을 든다. 내려놓을 때 원래 부모·위치·회전·크기·콜라이더·물리 상태를 복원한다.
+확대된 모니터와 프로필을 읽는 동안에는 든 메시를 숨기고 물건과 사용 버튼은 유지한다.
+MainScene / KernelSystems / MorningNewspaperPlacement에서 신문의 가로 위치와 회전을 조절한다.
+신문 높이는 책상 렌더러의 윗면에 맞춘다. 현재 종이 모형은 기본 메시이며 읽기 화면은 스크롤을 지원한다.
+
+공유하는 이야기 상태 (Codetective.Operations)
+runtime.SetTrigger("facility.archiveSecured", true);   // false로 다시 잠글 수 있음
+runtime.GetTrigger("facility.archiveSecured");
+runtime.SetQuestStage("nsf.introduction", 20, QuestStatus.Active);
+runtime.SetQuestStage("nsf.introduction", 100, QuestStatus.Completed);
+runtime.GetQuest("nsf.introduction");                 // 복사본 반환
+퀘스트는 고정 ID + 정수 단계 + NotStarted/Active/Completed/Failed 상태다.
+StoryCondition은 Triggers On 전부 참, Triggers Off 전부 거짓, Quests의 단계 범위와 상태를 모두 검사한다.
+StoryEffects는 같은 ID의 트리거와 퀘스트를 변경한다. 함수·메일·신문이 이 구조를 공유한다.
+Facts는 획득한 지식, Authorities는 작전 허가로 유지한다. 가역적인 이야기 상태는 트리거/퀘스트로 관리한다.
+진행 상태를 임의로 변경하는 명령은 플레이어 언어에 노출하지 않는다. 스토리/월드 코드가 위 API를 사용한다.
+
+플레이어 공개 범위
+Entity Schema / Entity Instance / Field의 Access에서 Player Access와 Story를 설정한다.
+함수(ActionDefinition)는 Player Access, Story, Story Effects를 설정한다.
+Inherit = 상위 선언(기본 공개), Public = 공개, Internal = 내부용이다.
+Internal도 실제 인스턴스에는 남아 있어 월드 코드는 GetValue/SetValue로 사용한다.
+공개 멤버의 Story 조건이 맞지 않으면 권한 목록·읽기·쓰기·호출·프로필에서 함께 제한된다.
+상위 스키마의 조건은 하위에서도 적용한다. 이름을 직접 입력하거나 기존 참조를 사용해도 우회하지 못한다.
+특정 인스턴스만 공개 범위를 바꾸는 API:
+entity.SetEntityAccess(PlayerAccess.Internal);
+entity.SetVariableAccess("note", PlayerAccess.Public);
+entity.SetFunctionAccess("ask", PlayerAccess.Inherit);
+공개 범위 변경으로 Story 조건을 무시할 수는 없다. Enabled는 기존처럼 멤버 자체의 활성 상태를 별도로 제어한다.
+
+신문과 메일 제작
+Create > Codetective > Story > Newspaper Article / Mail 에셋을 만든다.
+ClinicScenario.asset의 Newspaper / Mail 배열에 등록한다.
+신문: 고정 ID, Headline, Body, First/Last Day, Priority, Condition, Read Facts, On Read.
+아침에 조건을 평가해 그날 기사 ID 목록을 확정한다. 일과 중 상태 변화는 다음 아침의 종이에 반영된다.
+이미 발행한 신문은 조건이 바뀌어도 종이 내용이 바뀌지 않는다. On Read는 해당 날짜에 한 번만 실행한다.
+메일: Condition으로 도착 여부, On Read / On Accept로 공통 이야기 상태를 변경한다.
+샘플: 첫 정부 임무 수락 → nsf.introduction 10 / Active,
+후속 보고 완료 → 100 / Completed → 다음 날 InvestigationFollowup 기사.
+ResearchFunding 또는 CommunityCare 읽기 → news.nsf_rehabilitation ON
+→ 상담손님.재단에대하여() / client.askAboutFoundation() 권한 해금.
+현재 기사들은 시스템 확인용 콘텐츠이며 전체 시설/사건 분기를 대신하지 않는다.
+
+저장과 테스트
+날짜, 트리거, 퀘스트, 인스턴스 공개 범위, 발행한 신문과 읽음 여부를 KernelSnapshot에 저장한다.
+이야기 변경과 날짜 경계는 저장에 반영된다. 구형 저장에는 현재 날짜 신문을 제공한다.
+진행 중인 Thread는 잠긴 권한을 실행하기 전에 다시 검사하며, 프로토콜 복사본 테스트는 실제 상태를 바꾸지 않는다.
+Core 테스트: StoryProgressionTests, NewspaperTests.
+Unity Editor 테스트: ItemCarryTests, TextInputFocusTests, EntityAssetTests.

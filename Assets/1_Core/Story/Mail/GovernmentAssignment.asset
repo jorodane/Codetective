@@ -50,3 +50,18 @@ MonoBehaviour:
     - mission01_started
     grantAuthorities:
     - clinic.basic
+    condition:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    onRead:
+      triggers: []
+      quests: []
+    onAccept:
+      triggers:
+      - id: intro.complete
+        value: 1
+      quests:
+      - id: nsf.introduction
+        stage: 10
+        status: 1

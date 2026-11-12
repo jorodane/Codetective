@@ -15,6 +15,8 @@ namespace Codetective.Gameplay
         public EntityInstanceAsset[] instances = Array.Empty<EntityInstanceAsset>();
         public EntityDefinition[] additionalObjects = Array.Empty<EntityDefinition>();
         public StoryMailAsset[] mail = Array.Empty<StoryMailAsset>();
+        public NewspaperArticleAsset[] newspaper = Array.Empty<NewspaperArticleAsset>();
+        public StoryEffects initialStoryState = new StoryEffects();
         public string storyStartFact = "";
 
         public KernelRuntime CreateRuntime()
@@ -25,6 +27,9 @@ namespace Codetective.Gameplay
             EntityAssetCompiler.Install(runtime, schemas, instances, additionalObjects);
             foreach (StoryMailAsset item in mail) if (item != null) runtime.RegisterMail(item.message);
             runtime.StoryStartFact = storyStartFact;
+            runtime.ApplyStoryEffects(initialStoryState);
+            foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);
+            runtime.DeliverNewspaper();
             return runtime;
         }
     }
@@ -50,6 +55,9 @@ namespace Codetective.Gameplay
     }
     [Serializable] public sealed class ActionDefinition
     {
+        public PlayerAccess playerAccess = PlayerAccess.Inherit;
+        public StoryCondition story = new StoryCondition();
+        public StoryEffects storyEffects = new StoryEffects();
         public string code;
         public string label;
         public string[] aliases = Array.Empty<string>();

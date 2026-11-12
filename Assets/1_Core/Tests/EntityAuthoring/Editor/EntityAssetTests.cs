@@ -19,6 +19,36 @@ namespace Codetective.Tests.Operations
         { foreach (ScriptableObject asset in assets) Object.DestroyImmediate(asset); assets.Clear(); }
 
         [Test]
+        public void AuthoredMembersAndActionsShareGlobalTriggerAndQuestConditions()
+        {
+            var type = Asset<EntitySchemaAsset>(); type.schemaId = "Contact"; type.builtinParent = "Person";
+            type.fields = new[] { new FieldDefinition { code = "privateFile", defaultValue = Datum.Text("internal"), access = new AccessDefinition { playerAccess = PlayerAccess.Internal } } };
+            type.functions = new[] { new ActionDefinition { code = "brief", result = Datum.Text("ok"),
+                story = new StoryCondition { triggersOn = new[] { "intro" }, quests = new[] { new QuestRequirement { id = "case", minimumStage = 10 } } },
+                storyEffects = new StoryEffects { quests = new[] { new QuestProgress { id = "case", stage = 20 } } } } };
+            var person = Asset<EntityInstanceAsset>(); person.schema = type; person.instanceId = "contact";
+            var runtime = new KernelRuntime(); EntityAssetCompiler.Install(runtime, null, new[] { person });
+            Assert.That(runtime.Execute("contact.privateFile").Success, Is.False);
+            Assert.That(runtime.Entity("contact").GetValue("privateFile").text, Is.EqualTo("internal"));
+            Assert.That(runtime.Execute("contact.brief()").Success, Is.False);
+            runtime.SetTrigger("intro", true); runtime.SetQuestStage("case", 10);
+            Assert.That(runtime.Execute("contact.brief()").Success, Is.True);
+            Assert.That(runtime.GetQuest("case").stage, Is.EqualTo(20));
+            runtime.SetTrigger("intro", false); Assert.That(runtime.Complete("contact.bri"), Is.Empty);
+        }
+
+        [Test]
+        public void ScenarioRegistersAuthoredNewsAndSelectsItAtMorningDelivery()
+        {
+            var scenario = Asset<KernelScenarioDefinition>(); var article = Asset<NewspaperArticleAsset>();
+            article.article = new NewsArticle { id = "news", headline = "오늘의 소식", firstDay = 1, lastDay = 1,
+                onRead = new StoryEffects { triggers = new[] { new TriggerValue { id = "news.known", value = true } } } };
+            scenario.newspaper = new[] { article }; KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.TodayNewspaper.day, Is.EqualTo(1)); Assert.That(runtime.NewspaperArticles(1).Single().headline, Is.EqualTo("오늘의 소식"));
+            runtime.ReadNewspaper(); Assert.That(runtime.GetTrigger("news.known"), Is.True);
+        }
+
+        [Test]
         public void AuthoredHierarchyInstantiatesInheritedFieldsAndTargetBoundFunctions()
         {
             var parent = Asset<EntitySchemaAsset>();
@@ -174,6 +204,28 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.NotesFor("client").Single().text, Is.EqualTo("직접 작성한 내용"));
             Assert.That(restored.IsDrawerOpen("desk.Drawer_1"), Is.True);
             Assert.That(restored.Inbox(Mailbox.Clinic).Count(), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ShippedNewsUnlocksPermissionsAndStoryStateRoundTripsThroughUnityJson()
+        {
+            var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
+            KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.TodayNewspaper.articleIds, Does.Contain("research-funding"));
+            Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.False);
+            runtime.ReadNewspaper(); Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.True);
+            runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro");
+            Assert.That(runtime.GetQuest("nsf.introduction").stage, Is.EqualTo(10));
+            runtime.Entity("client").SetFunctionAccess("askAboutFoundation", PlayerAccess.Internal);
+            var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
+            Assert.That(restored.TodayNewspaper.read, Is.True); Assert.That(restored.GetTrigger("foundation.mentioned"), Is.True);
+            Assert.That(restored.GetQuest("nsf.introduction").stage, Is.EqualTo(10));
+            Assert.That(restored.Execute("상담손님.재단에대하여()").Success, Is.False);
+            restored.Entity("client").SetFunctionAccess("askAboutFoundation", PlayerAccess.Inherit);
+            Assert.That(restored.Execute("상담손님.재단에대하여()").Success, Is.True);
+            restored.Facts.Add("testimony_crosschecked"); restored.ReadMail("kernel-followup"); restored.AcceptMail("kernel-followup");
+            restored.Tick(540); restored.NextDay();
+            Assert.That(restored.NewspaperArticles(2).First().id, Is.EqualTo("investigation-followup"));
         }
 #endif
     }

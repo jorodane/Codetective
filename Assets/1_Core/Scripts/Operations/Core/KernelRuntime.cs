@@ -193,12 +193,12 @@ namespace Codetective.Operations
                 CheckOperationAccess(target, operation, locals);
                 Datum[] args = expression.Arguments.Select(e => Evaluate(e, locals, agent)).ToArray();
                 Validate(operation.Parameters, args, operation.Variadic);
-                return Invoke(target, operation, args, agent);
+                return PlayerValue(Invoke(target, operation, args, agent), locals);
             }
             if (path.Length == 1)
             {
-                if (locals != null && locals.TryGetValue(path[0], out Datum local)) return local.Copy();
-                if (data.TryGetValue(path[0], out DataSlot slot)) return slot.value.Copy();
+                if (locals != null && locals.TryGetValue(path[0], out Datum local)) return PlayerValue(local, locals);
+                if (data.TryGetValue(path[0], out DataSlot slot)) return PlayerValue(slot.value, locals);
                 if (protocols.ContainsKey(path[0])) return Datum.Ref(DataKind.Protocol, path[0], path[0]);
             }
             try
@@ -213,13 +213,13 @@ namespace Codetective.Operations
                 VariableDefinition field = target.FindVariable(path.Last());
                 if (field != null)
                 {
-                    foreach (AccessRule rule in target.VariableRules(field)) CheckAccess(rule, locals, target);
-                    return target.GetValue(field.Code);
+                    CheckVariableAccess(target, field, locals);
+                    return PlayerValue(target.GetValue(field.Code), locals);
                 }
                 Operation property = target.Find(path.Last());
                 if (property == null || !property.Property) throw new CommandException("알 수 없는 데이터/속성입니다: " + path.Last());
                 CheckOperationAccess(target, property, locals);
-                return Invoke(target, property, Array.Empty<Datum>(), agent);
+                return PlayerValue(Invoke(target, property, Array.Empty<Datum>(), agent), locals);
             }
         }
 
@@ -237,7 +237,7 @@ namespace Codetective.Operations
                 Entity child = entity.Child(path[i]);
                 if (child == null && entity.FindVariable(path[i]) is VariableDefinition field)
                 {
-                    foreach (AccessRule rule in entity.VariableRules(field)) CheckAccess(rule, locals, entity);
+                    CheckVariableAccess(entity, field, locals);
                     child = ReferenceTarget(entity.GetValue(field.Code));
                 }
                 entity = child;
@@ -282,7 +282,7 @@ namespace Codetective.Operations
 
         private void CheckAccess(AccessRule rule, Dictionary<string, Datum> locals = null, Entity target = null)
         {
-            string denial = rule.Denial(this, locals?.Values, target);
+            string denial = rule.Denial(this, locals?.Values, target, true);
             if (denial != null) throw new CommandException(denial);
         }
 
@@ -365,8 +365,8 @@ namespace Codetective.Operations
 
         private IEnumerable<KeyValuePair<string, Datum>> AvailableValues(Dictionary<string, Datum> locals, string prefix, bool composing)
         {
-            if (locals != null) foreach (var local in locals) if (!local.Key.StartsWith("\u0001", StringComparison.Ordinal)) yield return local;
-            foreach (var slot in data) if (locals == null || !locals.ContainsKey(slot.Key)) yield return new KeyValuePair<string, Datum>(slot.Key, slot.Value.value);
+            if (locals != null) foreach (var local in locals) if (!local.Key.StartsWith("\u0001", StringComparison.Ordinal) && PlayerValueVisible(local.Value, locals)) yield return local;
+            foreach (var slot in data) if ((locals == null || !locals.ContainsKey(slot.Key)) && PlayerValueVisible(slot.Value.value, locals)) yield return new KeyValuePair<string, Datum>(slot.Key, slot.Value.value);
             foreach (var root in roots)
                 if (root.Key == root.Value.Id && EntityDenial(root.Value) == null)
                 {

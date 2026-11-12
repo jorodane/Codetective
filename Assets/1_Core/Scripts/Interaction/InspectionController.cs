@@ -37,6 +37,9 @@ namespace Codetective.Interaction
         public Func<bool> BackHandler { get; set; }
         public Func<Vector2, bool> PointerBlocked { get; set; }
         public bool ModalInputBlocked { get; set; }
+        public bool NavigationBlocked { get; set; }
+        public ItemCarryController Carry { get; set; }
+        public bool TextInputFocused => TextInputFocus.IsActive || (activeTerminal != null && activeTerminal.IsCompositionProtected);
 
         private void Awake()
         {
@@ -75,6 +78,7 @@ namespace Codetective.Interaction
 
         private void Update()
         {
+            if (NavigationBlocked) return;
 #if ENABLE_INPUT_SYSTEM
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
@@ -104,7 +108,9 @@ namespace Codetective.Interaction
 
             Mouse mouse = Mouse.current;
             if (flow.Mode == InspectionMode.Overview && mouse != null && mouse.leftButton.wasPressedThisFrame)
-                InspectAtScreenPoint(mouse.position.ReadValue());
+            {
+                if (!InteractAtScreenPoint(mouse.position.ReadValue())) InspectAtScreenPoint(mouse.position.ReadValue());
+            }
             else if (flow.Mode == InspectionMode.Inspecting && mouse != null && mouse.leftButton.wasPressedThisFrame)
                 InteractAtScreenPoint(mouse.position.ReadValue());
 #endif
@@ -113,14 +119,20 @@ namespace Codetective.Interaction
         private void LateUpdate()
         {
             // The click that starts the zoom must not also activate a terminal control.
-            bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked;
+            bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked && !NavigationBlocked;
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
                 activeTerminal.SetInteractionEnabled(ready);
+#if ENABLE_INPUT_SYSTEM
+            // Run after EventSystem so clicking an input and pressing E together cannot use an object.
+            if (NavigationBlocked || flow.Mode == InspectionMode.Menu || views.IsTransitioning || ModalInputBlocked || Carry == null) return;
+            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame) Carry.TryUse(TextInputFocused);
+            if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame && !TextInputFocused) Carry.PutDown();
+#endif
         }
 
         public void InspectAtScreenPoint(Vector2 point)
         {
-            if (flow.Mode != InspectionMode.Overview || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
+            if (flow.Mode != InspectionMode.Overview || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
                 return;
             Ray ray = views.ControlledCamera.ScreenPointToRay(point);
             if (Physics.Raycast(ray, out RaycastHit hit, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide))
@@ -139,7 +151,7 @@ namespace Codetective.Interaction
 
         public bool InteractAtScreenPoint(Vector2 point)
         {
-            if (flow.Mode != InspectionMode.Inspecting || views.IsTransitioning || ModalInputBlocked ||
+            if (flow.Mode == InspectionMode.Menu || NavigationBlocked || views.IsTransitioning || ModalInputBlocked ||
                 (PointerBlocked != null && PointerBlocked(point))) return false;
             RaycastHit[] hits = Physics.RaycastAll(views.ControlledCamera.ScreenPointToRay(point), clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -163,7 +175,7 @@ namespace Codetective.Interaction
 
         private void InspectAngle(CameraAnglePreset angle, TerminalController targetTerminal)
         {
-            if (flow.Mode == InspectionMode.Menu || angle == null || views.AngleSet == null)
+            if (flow.Mode == InspectionMode.Menu || NavigationBlocked || angle == null || views.AngleSet == null)
                 return;
             if (flow.Mode == InspectionMode.Inspecting && views.ActiveAngle == angle)
                 return;
@@ -203,6 +215,7 @@ namespace Codetective.Interaction
 
         public void HandleEscape()
         {
+            if (NavigationBlocked) return;
             if (flow.Mode == InspectionMode.Inspecting && !RequestOverview())
                 return;
 

@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: e324e603b6e3eaf6a2eb41ad35022c85
+    type: 3
+  m_Name: CommunityCare
+  m_EditorClassIdentifier: ''
+  article:
+    id: community-care
+    headline: 지역 기억 재활 지원, 치료 연속성이 과제
+    body: '지역 기억장애 환자와 가족들은 치료 기관이 바뀌어도 돌봄이 이어져야 한다고 호소했다. NSF가 운영하는 지원 창구에는 치료비와
+      통원 상담 문의가 이어졌다.
+
+
+      전문가들은 연구 자금과 의료 지원의 변화가 환자의 일상에 직접 영향을 미친다며, 정책과 기관의 결정을 장기간 살펴야 한다고 말했다.'
+    firstDay: 2
+    lastDay: 2147483647
+    priority: 0
+    condition:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    readFacts:
+    - news_community_care
+    onRead:
+      triggers:
+      - id: news.nsf_rehabilitation
+        value: 1
+      quests: []

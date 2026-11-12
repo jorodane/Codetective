@@ -27,4 +27,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 657437bbd3ff730a5f0e3b9666c1f08e, type: 2}
   - {fileID: 11400000, guid: e4ec938a9d6953cf9424ca64b1d1e1f8, type: 2}
   - {fileID: 11400000, guid: 5ba67d938f6ed226b4ee1db5aad41495, type: 2}
+  newspaper:
+  - {fileID: 11400000, guid: abf57bc08d7dcd35d7a2010223d0a78c, type: 2}
+  - {fileID: 11400000, guid: fbf5ae086b65e6810237bb457cd0a20d, type: 2}
+  - {fileID: 11400000, guid: 1ebd659b713a49d9a01ecc2e03eafe17, type: 2}
   storyStartFact: kernel_assignment_accepted
