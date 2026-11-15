@@ -37,7 +37,17 @@ namespace Codetective.Interaction
         public Func<bool> BackHandler { get; set; }
         public Func<Vector2, bool> PointerBlocked { get; set; }
         public bool ModalInputBlocked { get; set; }
-        public bool NavigationBlocked { get; set; }
+        private bool navigationBlocked;
+        public bool NavigationBlocked
+        {
+            get => navigationBlocked;
+            set
+            {
+                navigationBlocked = value;
+                // Cinematics start before EventSystem.Update. Cancel queued input immediately, retaining the current view for reactivation.
+                if (value && activeTerminal != null) activeTerminal.SetInteractionEnabled(false);
+            }
+        }
         public ItemCarryController Carry { get; set; }
         public bool TextInputFocused => TextInputFocus.IsActive || (activeTerminal != null && activeTerminal.IsCompositionProtected);
 
