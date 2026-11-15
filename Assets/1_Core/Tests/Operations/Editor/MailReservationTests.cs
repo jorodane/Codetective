@@ -7,6 +7,32 @@ namespace Codetective.Tests.Operations
 {
     public sealed class MailReservationTests
     {
+        [TestCase(0)] [TestCase(1)]
+        public void NormalSerializedMailDoesNotBecomeAReservationWhenUnityCreatesAnEmptyInlineObject(int placeholderDay)
+        {
+            var r = new KernelRuntime();
+            var message = new StoryMail { id = "legacy", requiresAcceptance = true, acceptFacts = new[] { "assigned" },
+                reservation = new ReservationRequest { day = placeholderDay } };
+            Assert.That(() => r.RegisterMail(message), Throws.Nothing);
+            Assert.That(r.HasClinicSchedule, Is.False); Assert.That(r.PendingReservationCount, Is.Zero);
+            r.ReadMail("legacy"); r.AcceptMail("legacy"); Assert.That(r.Facts, Does.Contain("assigned"));
+            Assert.That(r.Inbox(Mailbox.Clinic).Single().reservation, Is.Null);
+        }
+        [Test]
+        public void ExplicitlyMarkedMalformedInquiriesStillFailValidation()
+        {
+            var r = new KernelRuntime();
+            Assert.That(() => r.RegisterMail(new StoryMail { id = "missingApproval", isReservationInquiry = true, reservation = new ReservationRequest() }), Throws.TypeOf<CommandException>());
+            Assert.That(() => r.RegisterMail(new StoryMail { id = "missingPayload", isReservationInquiry = true }), Throws.TypeOf<CommandException>());
+            Assert.That(r.PendingReservationCount, Is.Zero);
+        }
+        [Test]
+        public void LegacyApprovalChoicesIdentifyAnInquiryWithoutTheNewFlag()
+        {
+            KernelRuntime r = World(); r.ReadMail("inquiry");
+            Assert.That(r.Inbox(Mailbox.Clinic).Single().HasReservation, Is.True);
+            r.ChooseMail("inquiry", "approve"); Assert.That(r.ScheduleForDay(2).Count, Is.EqualTo(3));
+        }
         private static PatientAppointment Appointment(string id, int minute, int end = 0) => new PatientAppointment { id = id, profileId = "client", patientName = "예약자",
             startMinute = minute, endMinute = end, dialogue = new[] { new ConsultationLine { sentence = "예약하고 왔어요.", keyword = "문의", fact = id + "Fact", dataName = id + "Data" } } };
         private static StoryMail Inquiry(string id = "inquiry", int day = 2, int minute = 660, int end = 720) => new StoryMail { id = id, mailbox = Mailbox.Clinic, subject = "예약 문의",

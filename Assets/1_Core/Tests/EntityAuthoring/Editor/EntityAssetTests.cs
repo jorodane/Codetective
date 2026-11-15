@@ -76,6 +76,17 @@ namespace Codetective.Tests.Operations
         }
 
         [Test]
+        public void OrdinaryMailWithAnInlinePlaceholderDoesNotPreventScenarioInitialization()
+        {
+            var scenario = Asset<KernelScenarioDefinition>(); var message = Asset<StoryMailAsset>();
+            message.message = new StoryMail { id = "intro", requiresAcceptance = true, acceptFacts = new[] { "assigned" }, reservation = new ReservationRequest { day = 0 } };
+            scenario.mail = new[] { message }; scenario.storyStartFact = "assigned";
+            KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.AwaitingAssignment, Is.True); Assert.That(runtime.HasClinicSchedule, Is.False);
+            runtime.ReadMail("intro"); runtime.AcceptMail("intro"); Assert.That(runtime.AwaitingAssignment, Is.False);
+        }
+
+        [Test]
         public void AuthoredInquiryChoicesCreateAReservationOnlyAfterApproval()
         {
             var scenario = Asset<KernelScenarioDefinition>(); var message = Asset<StoryMailAsset>();
@@ -322,6 +333,20 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 570, 660, 780 }));
             Assert.That(restored.GetTrigger("clinic.request.care_followup.approved"), Is.True);
             restored.ChooseMail("clinic-reservation-followup", "approve"); Assert.That(restored.ScheduleForDay(2).Count, Is.EqualTo(3));
+        }
+        [Test]
+        public void UnityLoadedOrdinaryMailAssetsAreNotReservationInquiries()
+        {
+            foreach (string name in new[] { "GovernmentAssignment", "GovernmentFollowup", "ClinicAppointment" })
+            {
+                StoryMailAsset asset = AssetDatabase.LoadAssetAtPath<StoryMailAsset>("Assets/1_Core/Story/Mail/" + name + ".asset");
+                Assert.That(asset.message.HasReservation, Is.False, name);
+                StoryMail roundTrip = JsonUtility.FromJson<StoryMail>(JsonUtility.ToJson(asset.message));
+                Assert.That(() => new KernelRuntime().RegisterMail(roundTrip), Throws.Nothing, name);
+            }
+            StoryMailAsset inquiry = AssetDatabase.LoadAssetAtPath<StoryMailAsset>("Assets/1_Core/Story/Mail/ClinicReservationInquiry.asset");
+            Assert.That(inquiry.message.HasReservation, Is.True);
+            Assert.That(() => AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset").CreateRuntime(), Throws.Nothing);
         }
 #endif
     }

@@ -65,9 +65,15 @@ namespace Codetective.Gameplay
         private const string CommandLanguagePreference = "Codetective.CommandLanguage";
         private bool narrativeDirty;
         private float narrativeSaveAt;
+        private bool initialized;
+        private bool sceneBasisCaptured;
 
         private void Awake()
         {
+            foldedScale = curtainCloth != null ? curtainCloth.localScale : Vector3.one;
+            hourBasis = ClockBasis(clockHour);
+            minuteBasis = ClockBasis(clockMinute);
+            sceneBasisCaptured = true;
             Runtime = scenario != null ? scenario.CreateRuntime() : ClinicScenario.Create();
             if (scenario != null && scenario.loadDailySave && File.Exists(SavePath))
             {
@@ -81,17 +87,16 @@ namespace Codetective.Gameplay
             Runtime.DayEnded += SaveNow;
             Runtime.NarrativeChanged += QueueNarrativeSave;
             if (terminalRoot != null) terminalRoot.GetComponentInChildren<TerminalController>(true).AttachRuntime(Runtime);
-            foldedScale = curtainCloth != null ? curtainCloth.localScale : Vector3.one;
-            hourBasis = ClockBasis(clockHour);
-            minuteBasis = ClockBasis(clockMinute);
             ui = GetComponent<KernelGameUI>();
             views = inspection.GetComponent<CameraAngleController>();
             inspection.AngleEntered += EnterView;
             inspection.OverviewEntered += LeaveView;
+            initialized = true;
         }
 
         private void Start()
         {
+            if (!initialized) { enabled = false; return; }
             CreateCoffeeCopy();
             CreateCalendarText();
             InitializeDrawers();
@@ -113,6 +118,7 @@ namespace Codetective.Gameplay
 
         private void Update()
         {
+            if (!initialized) return;
             if (!IsDateTransitioning) Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
             if (!IsDateTransitioning && Runtime.IsClinicTransitioning && !IsVisitPresenting) StartCoroutine(PresentVisits());
             if (Runtime.IsDayEnded && !Runtime.IsClinicTransitioning && !IsDateTransitioning && !IsVisitPresenting && summaryShownDay != Runtime.Day &&
@@ -246,6 +252,7 @@ namespace Codetective.Gameplay
 
         public void SaveNow()
         {
+            if (!initialized || Runtime == null) return;
             narrativeDirty = false;
             try
             {
@@ -364,15 +371,18 @@ namespace Codetective.Gameplay
 
         private void OnDestroy()
         {
-            if (narrativeDirty) SaveNow();
+            if (initialized && narrativeDirty) SaveNow();
             StopAllCoroutines();
-            if (sceneLights != null) for (int i = 0; i < sceneLights.Length; i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
-            if (curtainCloth != null) curtainCloth.localScale = foldedScale;
+            if (sceneLights != null && initialLights != null) for (int i = 0; i < Math.Min(sceneLights.Length, initialLights.Length); i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
+            if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;
             if (Carry != null) { Carry.PutDown(); Carry.Used -= UseItem; }
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.NavigationBlocked = false; }
-            Runtime.SceneActionRequested -= SceneAction;
-            Runtime.DayEnded -= SaveNow;
-            Runtime.NarrativeChanged -= QueueNarrativeSave;
+            if (Runtime != null)
+            {
+                Runtime.SceneActionRequested -= SceneAction;
+                Runtime.DayEnded -= SaveNow;
+                Runtime.NarrativeChanged -= QueueNarrativeSave;
+            }
         }
     }
 }

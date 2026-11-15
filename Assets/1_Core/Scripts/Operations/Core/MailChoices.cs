@@ -56,10 +56,10 @@ namespace Codetective.Operations
             if ((message.requiresAcceptance && choices.Length > 0) || choices.Any(c => c == null || !CommandParser.IsIdentifier(c.id) || string.IsNullOrWhiteSpace(c.label) ||
                 !Enum.IsDefined(typeof(MailChoiceResult), c.result) || (c.approvesReservation && (message.reservation == null || c.result != MailChoiceResult.Approved))) ||
                 choices.Select(c => c.id).Distinct().Count() != choices.Length)
-                throw new CommandException("메일 선택지의 ID/응답/예약 연결을 확인하세요.");
+                throw new CommandException("메일 '" + message.id + "': 선택지의 ID/응답/예약 연결을 확인하세요.");
             foreach (MailChoice choice in choices) choice.effects?.Validate();
-            if (message.reservation != null && (message.reservation.day < message.day || !choices.Any(c => c.approvesReservation)))
-                throw new CommandException("예약 문의에는 도착일 이후의 예약 날짜와 승인 선택지가 필요합니다.");
+            if (message.HasReservation && (message.reservation == null || message.reservation.day < message.day || !choices.Any(c => c.approvesReservation)))
+                throw new CommandException("메일 '" + message.id + "': 예약 문의에는 도착일 이후의 예약 날짜와 승인 선택지가 필요합니다.");
         }
     }
 }

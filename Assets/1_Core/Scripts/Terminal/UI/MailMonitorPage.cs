@@ -93,7 +93,7 @@ namespace Codetective.Terminal
             StoryMail selected = messages.FirstOrDefault(m => m.id == selectedId);
             title.text = selected?.subject ?? (mailbox == Mailbox.Kernel ? "Kernel 메일함" : "상담소 메일함");
             detail.text = selected == null ? "도착한 메일이 없습니다." : "보낸 사람: " + selected.sender + "\nDAY " + selected.day + "\n\n" + selected.body;
-            if (selected?.reservation != null)
+            if (selected?.HasReservation == true)
             {
                 ReservationRequest request = selected.reservation;
                 detail.text += "\n\n예약 문의: DAY " + request.day + " / " + KernelRuntime.TimeOfDay(request.appointment.startMinute) +
@@ -148,7 +148,7 @@ namespace Codetective.Terminal
             try
             {
                 runtime.ChooseMail(selectedId, choiceId);
-                feedback.text = runtime.IsMailAccepted(selectedId) && runtime.Inbox(mailbox).First(m => m.id == selectedId).reservation != null ?
+                feedback.text = runtime.IsMailAccepted(selectedId) && runtime.Inbox(mailbox).First(m => m.id == selectedId).HasReservation ?
                     "예약을 승인했습니다. 스케줄에서 확인하세요." : "답변을 기록했습니다: " + runtime.SelectedMailChoiceLabel(selectedId);
                 Refresh(false);
             }
@@ -158,7 +158,7 @@ namespace Codetective.Terminal
         {
             MonitorPageHost host = GetComponentInParent<MonitorPageHost>();
             StoryMail selected = runtime.Inbox(mailbox).FirstOrDefault(m => m.id == selectedId);
-            host.SelectedScheduleDay = selected?.reservation?.day ?? runtime.Day; host.ShowPage("schedule");
+            host.SelectedScheduleDay = selected?.HasReservation == true ? selected.reservation.day : runtime.Day; host.ShowPage("schedule");
         }
     }
 }

@@ -22,7 +22,7 @@ namespace Codetective.Operations
         private readonly Dictionary<string, ConfirmedReservation> confirmedReservations = new Dictionary<string, ConfirmedReservation>(StringComparer.Ordinal);
         private static string ReservationKey(string mailId) => "mail:" + mailId;
         public string ReservationMailFor(string appointmentId) => appointmentId != null && appointmentId.StartsWith("mail:", StringComparison.Ordinal) ? appointmentId.Substring(5) : null;
-        public int PendingReservationCount => Inbox(Mailbox.Clinic).Concat(Inbox(Mailbox.Kernel)).Count(m => m.reservation != null && string.IsNullOrEmpty(SelectedMailChoice(m.id)));
+        public int PendingReservationCount => Inbox(Mailbox.Clinic).Concat(Inbox(Mailbox.Kernel)).Count(m => m.HasReservation && string.IsNullOrEmpty(SelectedMailChoice(m.id)));
         public IReadOnlyList<AppointmentProgress> ScheduleForDay(int day)
         {
             if (day < 1) throw new CommandException("날짜는 1일부터 조회할 수 있습니다.");

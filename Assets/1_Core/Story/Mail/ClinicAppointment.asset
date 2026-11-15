@@ -37,6 +37,7 @@ MonoBehaviour:
     requiredFacts:
     - kernel_assignment_accepted
     readFacts: []
+    isReservationInquiry: 0
     requiresAcceptance: 0
     acceptLabel: 확인
     acceptFacts: []

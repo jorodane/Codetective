@@ -43,6 +43,7 @@ MonoBehaviour:
     requiredFacts: []
     readFacts:
     - kernel_contact_received
+    isReservationInquiry: 0
     requiresAcceptance: 1
     acceptLabel: 임무 수락
     acceptFacts:

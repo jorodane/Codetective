@@ -24,12 +24,17 @@ namespace Codetective.Operations
         public StoryEffects onRead = new StoryEffects();
         public StoryEffects onAccept = new StoryEffects();
         public MailChoice[] choices = Array.Empty<MailChoice>();
+        public bool isReservationInquiry;
         public ReservationRequest reservation;
+        // Unity inline serialization can materialize an empty ReservationRequest for ordinary mail.
+        // An approval choice also identifies pre-flag inquiry assets and programmatic definitions.
+        public bool HasReservation => isReservationInquiry || (choices ?? Array.Empty<MailChoice>()).Any(c => c != null && c.approvesReservation);
         public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, subject = subject, body = body, day = day,
             requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel,
             acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray(), condition = condition?.Copy() ?? new StoryCondition(),
             onRead = onRead?.Copy() ?? new StoryEffects(), onAccept = onAccept?.Copy() ?? new StoryEffects(),
-            choices = (choices ?? Array.Empty<MailChoice>()).Select(c => c.Copy()).ToArray(), reservation = reservation?.Copy() };
+            choices = (choices ?? Array.Empty<MailChoice>()).Select(c => c.Copy()).ToArray(), isReservationInquiry = HasReservation,
+            reservation = HasReservation ? reservation?.Copy() : null };
     }
     [Serializable] public sealed class MailProgress
     {
@@ -71,7 +76,7 @@ namespace Codetective.Operations
                 throw new CommandException("메일 ID/도착일이 유효하지 않거나 중복됩니다.");
             message.onRead?.Validate(); message.onAccept?.Validate();
             ValidateMailChoices(message);
-            if (message.reservation != null) RegisterReservation(message.id, message.reservation);
+            if (message.HasReservation) RegisterReservation(message.id, message.reservation);
             mail.Add(message.id, message.Copy()); Revision++;
         }
         public StoryMail ReadMail(string id)

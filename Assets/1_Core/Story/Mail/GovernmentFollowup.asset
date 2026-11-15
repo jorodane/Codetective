@@ -33,6 +33,7 @@ MonoBehaviour:
     - testimony_crosschecked
     readFacts:
     - mission01_report_received
+    isReservationInquiry: 0
     requiresAcceptance: 1
     acceptLabel: 조사 결과 보고 완료
     acceptFacts:
