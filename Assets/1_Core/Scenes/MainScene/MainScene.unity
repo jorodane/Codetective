@@ -5814,10 +5814,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 333775983412167443, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
     - target: {fileID: 564467821866731268, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.8499215
@@ -5845,14 +5841,6 @@ PrefabInstance:
     - target: {fileID: 564467821866731268, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 62.675
-      objectReference: {fileID: 0}
-    - target: {fileID: 600642681783686052, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 891531306972861941, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
       objectReference: {fileID: 0}
     - target: {fileID: 911465284512572271, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -5902,14 +5890,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 32.397
       objectReference: {fileID: 0}
-    - target: {fileID: 1439250154679282276, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 1856943677711005524, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
-      objectReference: {fileID: 0}
     - target: {fileID: 2050703633564053563, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.9719779
@@ -5938,22 +5918,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: -11.755
       objectReference: {fileID: 0}
-    - target: {fileID: 2152925169078728066, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 2499018273776349153, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 2690939805822222186, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 2702853163781787561, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
-      objectReference: {fileID: 0}
     - target: {fileID: 2782998680754933519, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -5965,14 +5929,6 @@ PrefabInstance:
     - target: {fileID: 2782998680754933519, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalPosition.z
       value: -0.734
-      objectReference: {fileID: 0}
-    - target: {fileID: 2959735182018519692, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
-      objectReference: {fileID: 0}
-    - target: {fileID: 3290804485262163865, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
       objectReference: {fileID: 0}
     - target: {fileID: 3622302755687682234, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -6078,26 +6034,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 15.71
       objectReference: {fileID: 0}
-    - target: {fileID: 3894219503057873350, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 3939722206356046718, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_Size
-      value: 2.0226665
-      objectReference: {fileID: 0}
-    - target: {fileID: 3939722206356046718, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3939722206356046718, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_LocalReferencePoint.y
-      value: 0.8594384
-      objectReference: {fileID: 0}
-    - target: {fileID: 3939722206356046718, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_LocalReferencePoint.z
-      value: -0.13101332
-      objectReference: {fileID: 0}
     - target: {fileID: 4104785577476716038, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.9569497
@@ -6146,14 +6082,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 43.163
       objectReference: {fileID: 0}
-    - target: {fileID: 4263010742175011582, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
-      objectReference: {fileID: 0}
-    - target: {fileID: 4527642282726867930, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
-      objectReference: {fileID: 0}
     - target: {fileID: 4814603426568268087, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.9595013
@@ -6185,22 +6113,6 @@ PrefabInstance:
     - target: {fileID: 4978816779655408403, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_Name
       value: npc_csl_00_character_02m_01
-      objectReference: {fileID: 0}
-    - target: {fileID: 5003494680788460396, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
-      objectReference: {fileID: 0}
-    - target: {fileID: 5113929873556983180, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 5197569907271636867, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 5222027965199455121, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
       objectReference: {fileID: 0}
     - target: {fileID: 5644030507746144681, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalPosition.x
@@ -6298,22 +6210,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: -2.874
       objectReference: {fileID: 0}
-    - target: {fileID: 5898692475899808504, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 5948192648782873551, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 6070782917659021228, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 6197968002415599395, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
     - target: {fileID: 6256878767693523248, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.97968245
@@ -6333,10 +6229,6 @@ PrefabInstance:
     - target: {fileID: 6256878767693523248, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: -23.139
-      objectReference: {fileID: 0}
-    - target: {fileID: 6830735587175983889, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
       objectReference: {fileID: 0}
     - target: {fileID: 7082403871463426898, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -6366,30 +6258,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 43.038
       objectReference: {fileID: 0}
-    - target: {fileID: 7283705244541201417, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 7308507501815097670, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
-      objectReference: {fileID: 0}
-    - target: {fileID: 7336598759279426569, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 8014529812597220523, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
-    - target: {fileID: 8057179251487184112, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.4
-      objectReference: {fileID: 0}
-    - target: {fileID: 8093900900210005527, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
-      objectReference: {fileID: 0}
     - target: {fileID: 8207753919693730111, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.7495123
@@ -6417,18 +6285,6 @@ PrefabInstance:
     - target: {fileID: 8207753919693730111, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: -13.488
-      objectReference: {fileID: 0}
-    - target: {fileID: 8255707757980244822, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 8600602306602884751, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 0.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 8720909754994427096, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
-      propertyPath: m_ScaleInLightmap
-      value: 1.6
       objectReference: {fileID: 0}
     - target: {fileID: 9101347595687799795, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalRotation.w
