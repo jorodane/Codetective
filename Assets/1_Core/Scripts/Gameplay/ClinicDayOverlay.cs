@@ -58,7 +58,7 @@ namespace Codetective.Gameplay
             foreach (AppointmentProgress visit in record.visits)
                 text.Append(KernelRuntime.TimeOfDay(visit.startMinute)).Append("  ").Append(visit.patientName).Append("  ·  ")
                     .Append(visit.outcome == VisitOutcome.Completed ? "상담 완료" : visit.outcome == VisitOutcome.NextReservation ? "다음 예약으로 마무리" :
-                        visit.outcome == VisitOutcome.ClosingTime ? "마감 시간으로 마무리" : "미진행").Append('\n');
+                        visit.outcome == VisitOutcome.ClosingTime ? "마감 시간으로 마무리" : visit.outcome == VisitOutcome.ReservationEnd ? "예약 시간으로 마무리" : "미진행").Append('\n');
             if (record.visits.Length == 0) text.Append("예약된 상담 없음\n");
             text.Append("\n작전·기록\n새 데이터 ").Append(record.newData.Length).Append("건  /  상담 메모 ").Append(record.notesWritten)
                 .Append("건\n확인한 메일 ").Append(record.mailRead).Append("건  /  Thread 수행 완료 ").Append(record.completedThreadTasks).Append("건\n");

@@ -5,7 +5,7 @@ using System.Linq;
 namespace Codetective.Operations
 {
     public enum VisitPhase { Waiting, Arriving, Talking, Closing, Departing, Finished }
-    public enum VisitOutcome { None, Completed, NextReservation, ClosingTime, Missed }
+    public enum VisitOutcome { None, Completed, NextReservation, ClosingTime, Missed, ReservationEnd }
 
     [Serializable] public sealed class PatientAppointment
     {
@@ -57,7 +57,8 @@ namespace Codetective.Operations
         private readonly HashSet<int> heardConsultationLines = new HashSet<int>();
         private ClinicDayState clinicDay;
         private int legacyDialogueCount;
-        public bool HasClinicSchedule => clinicPlans.Count > 0;
+        private bool legacyDialogueCaptured;
+        public bool HasClinicSchedule => clinicPlans.Count > 0 || reservationRequests.Count > 0;
         public string DaySubtitle => clinicDay?.subtitle ?? "상담과 작전 사이";
         public IEnumerable<AppointmentProgress> DailyAppointments => (clinicDay?.appointments ?? Array.Empty<AppointmentProgress>()).Select(a => a.Copy());
         private AppointmentProgress ActiveVisit => clinicDay?.appointments.FirstOrDefault(a => a.phase != VisitPhase.Waiting && a.phase != VisitPhase.Finished);
@@ -75,7 +76,8 @@ namespace Codetective.Operations
                 if (active.phase == VisitPhase.Arriving) return definition.greeting;
                 if (active.phase == VisitPhase.Departing) return active.patientName + " 님이 퇴실합니다.";
                 return active.outcome == VisitOutcome.NextReservation ? "다음 예약 손님이 계셔서 오늘 상담은 여기까지 하겠습니다." :
-                    active.outcome == VisitOutcome.ClosingTime ? "오늘 상담 시간이 끝나서 여기까지 하겠습니다. 다음에 이어서 말씀 나눌게요." : definition.farewell;
+                    active.outcome == VisitOutcome.ClosingTime ? "오늘 상담 시간이 끝나서 여기까지 하겠습니다. 다음에 이어서 말씀 나눌게요." :
+                    active.outcome == VisitOutcome.ReservationEnd ? "예약된 상담 시간이 끝나서 오늘은 여기까지 하겠습니다." : definition.farewell;
             }
         }
         public static string TimeOfDay(double minute) => $"{(int)minute / 60:00}:{(int)minute % 60:00}";
@@ -84,28 +86,33 @@ namespace Codetective.Operations
         {
             if (plan == null || plan.day < 0 || clinicPlans.ContainsKey(plan.day)) throw new CommandException("상담 일정의 날짜가 유효하지 않거나 중복됩니다.");
             ClinicDayPlan copy = plan.Copy();
-            if (copy.appointments.Any(a => !CommandParser.IsIdentifier(a.id) || string.IsNullOrWhiteSpace(a.profileId) || a.startMinute < 540 || a.startMinute >= 1080 ||
-                (a.endMinute != 0 && (a.endMinute <= a.startMinute || a.endMinute > 1080)) || a.dialogue.Any(l => l == null)) ||
-                copy.appointments.Select(a => a.id).Distinct().Count() != copy.appointments.Length || copy.appointments.Select(a => a.startMinute).Distinct().Count() != copy.appointments.Length)
+            if (copy.appointments.Select(a => a.id).Distinct().Count() != copy.appointments.Length || copy.appointments.Select(a => a.startMinute).Distinct().Count() != copy.appointments.Length)
                 throw new CommandException("상담 예약의 ID/시간/대사를 확인하세요. 같은 시간에 두 명을 예약할 수 없습니다.");
-            foreach (PatientAppointment a in copy.appointments) { a.onArrival.Validate(); a.onCompleted.Validate(); a.onTimeLimit.Validate(); }
-            if (!HasClinicSchedule) legacyDialogueCount = Consultation.Count;
+            foreach (PatientAppointment a in copy.appointments) ValidateAppointment(a);
             clinicPlans.Add(copy.day, copy);
             foreach (PatientAppointment a in copy.appointments)
+                RegisterAppointment(copy.day + ":" + a.id, a);
+        }
+        private static void ValidateAppointment(PatientAppointment a)
+        {
+            if (a == null || !CommandParser.IsIdentifier(a.id) || string.IsNullOrWhiteSpace(a.profileId) || a.startMinute < 540 || a.startMinute >= 1080 ||
+                (a.endMinute != 0 && (a.endMinute <= a.startMinute || a.endMinute > 1080)) || a.dialogue == null || a.dialogue.Any(l => l == null))
+                throw new CommandException("상담 예약의 ID/시간/대사를 확인하세요.");
+            a.onArrival?.Validate(); a.onCompleted?.Validate(); a.onTimeLimit?.Validate();
+        }
+        private void RegisterAppointment(string id, PatientAppointment appointment)
+        {
+            if (!legacyDialogueCaptured) { legacyDialogueCount = Consultation.Count; legacyDialogueCaptured = true; }
+            PatientAppointment a = appointment.Copy(); appointmentDefinitions.Add(id, a); appointmentLines.Add(id, Consultation.Count);
+            foreach (ConsultationLine line in a.dialogue)
             {
-                string id = copy.day + ":" + a.id; appointmentDefinitions.Add(id, a); appointmentLines.Add(id, Consultation.Count);
-                foreach (ConsultationLine line in a.dialogue) { line.profileId = a.profileId; line.speaker = a.patientName; Consultation.Add(line); }
+                line.profileId = a.profileId; line.speaker = a.patientName; Consultation.Add(line);
             }
         }
         public void InitializeClinicDay()
         {
             if (!HasClinicSchedule || clinicDay?.day == Day) return;
-            ClinicDayPlan plan = clinicPlans.TryGetValue(Day, out ClinicDayPlan exact) ? exact : clinicPlans.TryGetValue(0, out ClinicDayPlan fallback) ? fallback : null;
-            PatientAppointment[] visits = plan?.appointments.Where(a => a.condition.Matches(this)).OrderBy(a => a.startMinute).ToArray() ?? Array.Empty<PatientAppointment>();
-            clinicDay = new ClinicDayState { day = Day, subtitle = plan?.subtitle ?? "상담과 작전 사이", appointments = visits.Select((a, i) => new AppointmentProgress {
-                id = plan.day + ":" + a.id, profileId = a.profileId, patientName = a.patientName, startMinute = a.startMinute,
-                endMinute = Math.Min(a.endMinute > 0 ? a.endMinute : 1080, i + 1 < visits.Length ? visits[i + 1].startMinute : 1080),
-                lineStart = appointmentLines[plan.day + ":" + a.id], lineCount = a.dialogue.Length }).ToArray() };
+            clinicDay = BuildClinicDay(Day);
             Revision++;
         }
         private ConsultationLine ScheduledConsultation => !AwaitingAssignment && !IsDayEnded && ActiveVisit?.phase == VisitPhase.Talking && ActiveVisit.cursor < ActiveVisit.lineCount ?
@@ -126,7 +133,7 @@ namespace Codetective.Operations
             if (active != null)
             {
                 if (active.phase == VisitPhase.Talking && Minute >= active.endMinute)
-                    CloseVisit(active.endMinute >= 1080 ? VisitOutcome.ClosingTime : VisitOutcome.NextReservation);
+                    CloseVisit(active.endMinute >= 1080 ? VisitOutcome.ClosingTime : NextAppointment?.startMinute <= Minute ? VisitOutcome.NextReservation : VisitOutcome.ReservationEnd);
                 return;
             }
             AppointmentProgress next = clinicDay.appointments.FirstOrDefault(a => a.phase == VisitPhase.Waiting && a.startMinute <= Minute);

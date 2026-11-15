@@ -113,6 +113,32 @@ namespace Codetective.Terminal.Tests.UI
             host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
             Assert.That(canvas.GetComponentsInChildren<Canvas>(true).Length, Is.EqualTo(1));
         }
+        [Test]
+        public void InquiryApprovalNavigatesToItsDateAndBackToTheOriginalMessage()
+        {
+            runtime.RegisterMail(new StoryMail { id = "booking", mailbox = Mailbox.Clinic, subject = "예약 문의", reservation = new ReservationRequest { day = 2,
+                appointment = new PatientAppointment { id = "visit", startMinute = 660, endMinute = 720 } }, choices = new[] {
+                new MailChoice { id = "yes", label = "예약 승인", result = MailChoiceResult.Approved, approvesReservation = true },
+                new MailChoice { id = "no", label = "예약 거절", result = MailChoiceResult.Declined } } });
+            terminal.SetInteractionEnabled(true); host.ShowPage("mail"); MailMonitorPage mail = host.CurrentPage.GetComponent<MailMonitorPage>();
+            mail.ShowMessage("booking"); Invoke(mail, "Choose", "yes"); Invoke(mail, "OpenSchedule");
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("schedule")); Assert.That(host.SelectedScheduleDay, Is.EqualTo(2));
+            ScheduleMonitorPage schedule = host.CurrentPage.GetComponent<ScheduleMonitorPage>();
+            Assert.That(Field<Text>(schedule, "detail").text, Does.Contain("11:00")); Assert.That(Field<Text>(schedule, "detail").text, Does.Contain("메일 승인"));
+            Invoke(schedule, "OpenSourceMail"); Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
+            Assert.That(Field<Text>(mail, "detail").text, Does.Contain("답변: 예약 승인")); Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(1));
+        }
+        [Test]
+        public void AHiddenOrInactiveMonitorCannotSubmitAMailChoice()
+        {
+            runtime.RegisterMail(new StoryMail { id = "choice", choices = new[] { new MailChoice { id = "answer", label = "답변" } } });
+            MailMonitorPage mail = root.GetComponentInChildren<MailMonitorPage>(true); mail.ShowMessage("choice");
+            Assert.That(runtime.IsMailRead("choice"), Is.False); runtime.ReadMail("choice"); Invoke(mail, "Choose", "answer");
+            Assert.That(runtime.SelectedMailChoice("choice"), Is.Null.Or.Empty);
+            host.ShowPage("kernel"); terminal.SetInteractionEnabled(true); Invoke(mail, "Choose", "answer");
+            Assert.That(runtime.SelectedMailChoice("choice"), Is.Null.Or.Empty);
+            host.ShowPage("mail"); Invoke(mail, "Choose", "answer"); Assert.That(runtime.SelectedMailChoice("choice"), Is.EqualTo("answer"));
+        }
         private static T Field<T>(object owner, string name) => (T)owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(owner);
         private static void SetField(object owner, string name, object value) => owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(owner, value);
         private static void Invoke(object owner, string name, params object[] arguments) => owner.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(owner, arguments);

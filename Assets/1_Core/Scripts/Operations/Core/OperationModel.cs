@@ -197,6 +197,7 @@ namespace Codetective.Operations
         public DayPresentationState dayPresentation;
         public DailyLedger dayLedger;
         public DailyRecord[] dailyRecords;
+        public ConfirmedReservation[] confirmedReservations;
     }
 
     [Serializable]

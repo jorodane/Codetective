@@ -25,6 +25,7 @@ namespace Codetective.Terminal
         private bool initialized;
         public MonitorPage CurrentPage { get; private set; }
         public string SelectedProfileId { get; set; } = "client";
+        public int SelectedScheduleDay { get; set; }
         public bool CanGoBack => navigation.CanGoBack;
         public bool CanGoForward => navigation.CanGoForward;
         public bool IsCompositionProtected

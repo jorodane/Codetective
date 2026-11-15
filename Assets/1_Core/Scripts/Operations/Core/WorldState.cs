@@ -110,7 +110,8 @@ namespace Codetective.Operations
                 facts = Facts.ToArray(), authorities = Authorities.ToArray(), recordedClues = RecordedClues.ToArray(),
                 consultationNotes = notes.Select(n => n.Copy()).ToArray(),
                 nextConsultationNoteId = nextNoteId,
-                mailProgress = mailProgress.Values.Select(m => new MailProgress { id = m.id, read = m.read, accepted = m.accepted }).ToArray(),
+                mailProgress = mailProgress.Values.Select(m => m.Copy()).ToArray(),
+                confirmedReservations = confirmedReservations.Values.Select(r => r.Copy()).ToArray(),
                 drawers = drawers.Select(d => new DrawerState { id = d.Key, open = d.Value }).ToArray(),
                 triggers = triggers.Select(t => new TriggerValue { id = t.Key, value = t.Value }).ToArray(),
                 quests = quests.Values.Select(q => q.Copy()).ToArray(),
@@ -182,7 +183,7 @@ namespace Codetective.Operations
             nextDataId = Math.Max(snapshot.nextDataId, data.Count == 0 ? 1 : data.Values.Max(s => s.id) + 1);
             protocols.Clear(); foreach (var pair in restoredProtocols) protocols.Add(pair.Key, pair.Value);
             Threads.Clear(); Threads.AddRange(restoredAgents);
-            RestoreClinic(snapshot); RestoreDailyRecord(snapshot);
+            RestoreReservations(snapshot.confirmedReservations); RestoreClinic(snapshot); RestoreDailyRecord(snapshot);
             Revision++;
         }
 

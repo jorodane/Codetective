@@ -26,12 +26,12 @@ namespace Codetective.Gameplay
             runtime.Language = commandLanguage;
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
             EntityAssetCompiler.Install(runtime, schemas, instances, additionalObjects);
-            foreach (StoryMailAsset item in mail) if (item != null) runtime.RegisterMail(item.message);
             runtime.StoryStartFact = storyStartFact;
             runtime.ApplyStoryEffects(initialStoryState);
             foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);
             runtime.DeliverNewspaper();
             foreach (ClinicDayPlanAsset item in clinicDays) if (item != null) runtime.RegisterClinicDay(item.plan);
+            foreach (StoryMailAsset item in mail) if (item != null) runtime.RegisterMail(item.message);
             runtime.InitializeClinicDay(); runtime.InitializeDailyRecord();
             runtime.CaptureScenarioEntityDefaults();
             return runtime;

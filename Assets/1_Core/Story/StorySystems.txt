@@ -88,3 +88,24 @@ MainScene / KernelSystems의 ClinicVisitPresentation에서 Patient Prefab, Entry
 마감 뒤 추가한 메모는 정산을 다시 열거나 다음 날로 넘어갈 때 반영한다.
 입실/상담/마무리/퇴실 단계와 이미 들은 진술, 정산 기준값, 시작 화면 확인 여부를 저장한다.
 예약 상담 테스트: ClinicScheduleTests. 시나리오/Unity JSON 연결 테스트: EntityAssetTests.
+
+메일 선택과 예약 문의
+Story Mail의 Choices 배열에 고정 ID, 표시 Label, Result(Selected / Approved / Declined)를 지정한다.
+Condition, Facts, Authorities, Effects로 각 선택의 공통 이야기 조건과 결과를 연결한다.
+Choices가 있는 메일에는 기존 Requires Acceptance를 사용하지 않는다. 기존 임무 메일의 수락 동작은 유지한다.
+메일을 읽은 뒤 한 번 답변할 수 있다. 선택한 응답과 표시 이름을 저장하며 같은 답변을 다시 실행해도 효과가 반복되지 않는다.
+이미 읽은 메일은 조건이 바뀌어도 수신 내역에 남는다.
+
+Reservation에 Day와 Patient Appointment를 설정하고 승인 선택지의 Approves Reservation을 켠다.
+승인 선택지는 Result=Approved여야 한다. 거절 선택지는 Result=Declined, Approves Reservation은 끈다.
+예약 시각이 지났거나 이미 확정된 예약과 겹치면 승인할 수 없다. 승인 불가 이유는 메일 본문에 표시된다.
+End Minute=0인 기존 상담은 다음 확정 예약까지 진행되므로 새 예약이 추가되면 상담 마감 시각도 조정된다.
+명시적인 종료 시각이 있는 예약 시간은 보호한다. 거절하거나 답변하지 않은 문의는 확정 일정에 추가하지 않는다.
+승인 당일의 예약도 추가할 수 있다. 현재 상담의 대사·진행 상태는 유지하고 다음 손님 시각만 갱신한다.
+메일 문의 대사는 기존 Clinic Day Plan 뒤에 등록하므로 새 문의를 추가해도 이전 저장의 대사 위치는 유지한다.
+
+모니터의 스케줄 페이지에서 이전 날 / 오늘 / 다음 날의 확정 예약과 진행 상태를 확인한다.
+문의 메일의 스케줄 버튼은 해당 예약 날짜로 이동한다. 스케줄의 문의 메일 버튼은 원문으로 돌아간다.
+당일 실제 입실, 상담 종료, 다음 예약까지 기다리기와 마감 정산은 승인한 예약까지 함께 사용한다.
+샘플 ClinicReservationInquiry.asset: DAY 2 11:00~12:00 보호자 상담 문의. 승인/거절에 따라 clinic.request.care_followup.* 트리거를 기록한다.
+예약 승인·거절·시간 충돌·저장·복사본 격리 테스트: MailReservationTests.

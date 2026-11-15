@@ -153,7 +153,7 @@ namespace Codetective.Operations
             var registry = new SchemaRegistry();
             foreach (EntitySchema schema in Schemas.All) registry.Register(schema);
             var copy = new KernelRuntime(registry) { DryRun = true, Language = Language, StoryStartFact = StoryStartFact };
-            foreach (StoryMail message in mail.Values) copy.RegisterMail(message);
+            foreach (StoryMail message in mail.Values) copy.mail.Add(message.id, message.Copy());
             foreach (NewsArticle article in news.Values) copy.RegisterNews(article);
             foreach (Entity original in entities.Values)
             {
@@ -167,6 +167,8 @@ namespace Codetective.Operations
             foreach (var definition in appointmentDefinitions) copy.appointmentDefinitions.Add(definition.Key, definition.Value.Copy());
             foreach (var offset in appointmentLines) copy.appointmentLines.Add(offset.Key, offset.Value);
             copy.legacyDialogueCount = legacyDialogueCount;
+            copy.legacyDialogueCaptured = legacyDialogueCaptured;
+            foreach (var request in reservationRequests) copy.reservationRequests.Add(request.Key, request.Value.Copy());
             copy.Consultation.AddRange(Consultation.Select(l => l.Copy()));
             copy.Restore(Capture());
             return copy;

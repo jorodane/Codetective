@@ -23,12 +23,20 @@ namespace Codetective.Operations
         public StoryCondition condition = new StoryCondition();
         public StoryEffects onRead = new StoryEffects();
         public StoryEffects onAccept = new StoryEffects();
+        public MailChoice[] choices = Array.Empty<MailChoice>();
+        public ReservationRequest reservation;
         public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, subject = subject, body = body, day = day,
             requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel,
             acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray(), condition = condition?.Copy() ?? new StoryCondition(),
-            onRead = onRead?.Copy() ?? new StoryEffects(), onAccept = onAccept?.Copy() ?? new StoryEffects() };
+            onRead = onRead?.Copy() ?? new StoryEffects(), onAccept = onAccept?.Copy() ?? new StoryEffects(),
+            choices = (choices ?? Array.Empty<MailChoice>()).Select(c => c.Copy()).ToArray(), reservation = reservation?.Copy() };
     }
-    [Serializable] public sealed class MailProgress { public string id; public bool read; public bool accepted; }
+    [Serializable] public sealed class MailProgress
+    {
+        public string id; public bool read; public bool accepted;
+        public string choiceId, choiceLabel; public MailChoiceResult choiceResult;
+        public MailProgress Copy() => (MailProgress)MemberwiseClone();
+    }
     [Serializable] public sealed class ConsultationNote
     {
         public int id;
@@ -56,12 +64,14 @@ namespace Codetective.Operations
         public int UnreadMailCount(Mailbox box) => Inbox(box).Count(m => !IsMailRead(m.id));
         public bool IsMailRead(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.read;
         public bool IsMailAccepted(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.accepted;
-        private bool MailAvailable(StoryMail message) => message.day <= Day && message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this);
+        private bool MailAvailable(StoryMail message) => message.day <= Day && (IsMailRead(message.id) || (message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this)));
         public void RegisterMail(StoryMail message)
         {
             if (message == null || string.IsNullOrWhiteSpace(message.id) || message.day < 1 || mail.ContainsKey(message.id))
                 throw new CommandException("메일 ID/도착일이 유효하지 않거나 중복됩니다.");
             message.onRead?.Validate(); message.onAccept?.Validate();
+            ValidateMailChoices(message);
+            if (message.reservation != null) RegisterReservation(message.id, message.reservation);
             mail.Add(message.id, message.Copy()); Revision++;
         }
         public StoryMail ReadMail(string id)
@@ -74,6 +84,7 @@ namespace Codetective.Operations
         public void AcceptMail(string id)
         {
             StoryMail message = RequireMail(id);
+            if (message.choices.Length > 0) throw new CommandException("메일의 선택지로 답변하세요.");
             if (!message.requiresAcceptance) throw new CommandException("수락할 작업이 없는 메일입니다.");
             if (!IsMailRead(id)) throw new CommandException("메일 내용을 먼저 확인하세요.");
             MailProgress state = mailProgress[id];
@@ -150,7 +161,9 @@ namespace Codetective.Operations
             nextNoteId = Math.Max(snapshot.nextConsultationNoteId, notes.Count == 0 ? 1 : notes.Max(n => n.id) + 1);
             mailProgress.Clear();
             foreach (MailProgress state in snapshot.mailProgress ?? Array.Empty<MailProgress>())
-                mailProgress.Add(state.id, new MailProgress { id = state.id, read = state.read || state.accepted, accepted = state.accepted });
+            {
+                MailProgress restored = state.Copy(); restored.read |= state.accepted || !string.IsNullOrEmpty(state.choiceId); mailProgress.Add(state.id, restored);
+            }
             if (snapshot.triggers == null && snapshot.quests == null)
                 foreach (StoryMail message in mail.Values)
                 {

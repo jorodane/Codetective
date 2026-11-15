@@ -76,6 +76,35 @@ namespace Codetective.Tests.Operations
         }
 
         [Test]
+        public void AuthoredInquiryChoicesCreateAReservationOnlyAfterApproval()
+        {
+            var scenario = Asset<KernelScenarioDefinition>(); var message = Asset<StoryMailAsset>();
+            message.message = new StoryMail { id = "request", reservation = new ReservationRequest { day = 2,
+                appointment = new PatientAppointment { id = "visit", startMinute = 660, endMinute = 720 } }, choices = new[] {
+                new MailChoice { id = "yes", label = "승인", result = MailChoiceResult.Approved, approvesReservation = true },
+                new MailChoice { id = "no", label = "거절", result = MailChoiceResult.Declined } } };
+            scenario.mail = new[] { message }; KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.ScheduleForDay(2), Is.Empty); runtime.ReadMail("request"); runtime.ChooseMail("request", "yes");
+            Assert.That(runtime.ScheduleForDay(2).Single().id, Is.EqualTo("mail:request"));
+            var restored = scenario.CreateRuntime(); restored.Restore(runtime.Capture());
+            Assert.That(restored.SelectedMailChoice("request"), Is.EqualTo("yes")); Assert.That(restored.ScheduleForDay(2).Single().startMinute, Is.EqualTo(660));
+        }
+
+        [Test]
+        public void AddingAnInquiryDoesNotMoveExistingDayPlanDialogueOffsetsInOldSaves()
+        {
+            var scenario = Asset<KernelScenarioDefinition>(); var plan = Asset<ClinicDayPlanAsset>();
+            plan.plan.appointments = new[] { new PatientAppointment { id = "original", startMinute = 540, dialogue = new[] { new ConsultationLine { sentence = "기존 대사" } } } };
+            scenario.clinicDays = new[] { plan }; KernelRuntime old = scenario.CreateRuntime(); old.Tick(1);
+            AppointmentProgress before = old.CurrentAppointment; old.AdvanceVisitPresentation(before.id, before.phase); KernelSnapshot saved = old.Capture();
+            var message = Asset<StoryMailAsset>(); message.message = new StoryMail { id = "added", reservation = new ReservationRequest { day = 2,
+                appointment = new PatientAppointment { id = "newVisit", startMinute = 600, dialogue = new[] { new ConsultationLine { sentence = "새 대사" } } } },
+                choices = new[] { new MailChoice { id = "approve", label = "승인", result = MailChoiceResult.Approved, approvesReservation = true } } };
+            scenario.mail = new[] { message }; KernelRuntime upgraded = scenario.CreateRuntime(); upgraded.Restore(saved);
+            Assert.That(upgraded.CurrentConsultation.sentence, Is.EqualTo("기존 대사")); Assert.That(upgraded.CurrentAppointment.lineStart, Is.EqualTo(before.lineStart));
+        }
+
+        [Test]
         public void AuthoredHierarchyInstantiatesInheritedFieldsAndTargetBoundFunctions()
         {
             var parent = Asset<EntitySchemaAsset>();
@@ -230,7 +259,7 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.AwaitingAssignment, Is.False);
             Assert.That(restored.NotesFor("client").Single().text, Is.EqualTo("직접 작성한 내용"));
             Assert.That(restored.IsDrawerOpen("desk.Drawer_1"), Is.True);
-            Assert.That(restored.Inbox(Mailbox.Clinic).Count(), Is.EqualTo(1));
+            Assert.That(restored.Inbox(Mailbox.Clinic).Count(), Is.EqualTo(2));
         }
 
         [Test]
@@ -281,6 +310,18 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.CurrentAppointment.profileId, Is.EqualTo("careerVisitor"));
             Assert.That(restored.VisibleProfileIds, Does.Contain("careerVisitor"));
             Assert.That(restored.VisibleProfileIds, Does.Not.Contain("careVisitor"));
+        }
+        [Test]
+        public void ShippedInquiryReplyAndCalendarRoundTripThroughUnityJson()
+        {
+            var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
+            KernelRuntime runtime = scenario.CreateRuntime(); runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro");
+            Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(2)); runtime.ReadMail("clinic-reservation-followup"); runtime.ChooseMail("clinic-reservation-followup", "approve");
+            var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
+            Assert.That(restored.SelectedMailChoice("clinic-reservation-followup"), Is.EqualTo("approve"));
+            Assert.That(restored.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 570, 660, 780 }));
+            Assert.That(restored.GetTrigger("clinic.request.care_followup.approved"), Is.True);
+            restored.ChooseMail("clinic-reservation-followup", "approve"); Assert.That(restored.ScheduleForDay(2).Count, Is.EqualTo(3));
         }
 #endif
     }
