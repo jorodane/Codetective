@@ -17,6 +17,7 @@ namespace Codetective.Gameplay
         public StoryMailAsset[] mail = Array.Empty<StoryMailAsset>();
         public NewspaperArticleAsset[] newspaper = Array.Empty<NewspaperArticleAsset>();
         public StoryEffects initialStoryState = new StoryEffects();
+        public ClinicDayPlanAsset[] clinicDays = Array.Empty<ClinicDayPlanAsset>();
         public string storyStartFact = "";
 
         public KernelRuntime CreateRuntime()
@@ -30,6 +31,9 @@ namespace Codetective.Gameplay
             runtime.ApplyStoryEffects(initialStoryState);
             foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);
             runtime.DeliverNewspaper();
+            foreach (ClinicDayPlanAsset item in clinicDays) if (item != null) runtime.RegisterClinicDay(item.plan);
+            runtime.InitializeClinicDay(); runtime.InitializeDailyRecord();
+            runtime.CaptureScenarioEntityDefaults();
             return runtime;
         }
     }

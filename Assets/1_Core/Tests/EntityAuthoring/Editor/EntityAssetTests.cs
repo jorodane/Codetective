@@ -49,6 +49,33 @@ namespace Codetective.Tests.Operations
         }
 
         [Test]
+        public void ScenarioInstallsDayTitlesAndConditionalBookingsFromAssets()
+        {
+            var scenario = Asset<KernelScenarioDefinition>(); var day = Asset<ClinicDayPlanAsset>();
+            day.plan = new ClinicDayPlan { day = 1, subtitle = "첫 상담", appointments = new[] {
+                new PatientAppointment { id = "first", startMinute = 600, dialogue = new[] { new ConsultationLine { sentence = "안녕하세요." } } },
+                new PatientAppointment { id = "hidden", startMinute = 660, condition = new StoryCondition { triggersOn = new[] { "invited" } } } } };
+            scenario.clinicDays = new[] { day }; KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.DaySubtitle, Is.EqualTo("첫 상담")); Assert.That(runtime.DailyAppointments.Count(), Is.EqualTo(1));
+            runtime.WaitForNextAppointment(); AppointmentProgress visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase);
+            Assert.That(runtime.CurrentConsultation.sentence, Is.EqualTo("안녕하세요."));
+            runtime.SetTrigger("invited", true); Assert.That(runtime.DailyAppointments.Count(), Is.EqualTo(1)); // Today's frozen reservations remain stable.
+        }
+
+        [Test]
+        public void OlderSavesRetainTheirWorldAndReceiveNewScenarioOwnedProfiles()
+        {
+            KernelSnapshot old = ClinicScenario.Create().Capture();
+            var scenario = Asset<KernelScenarioDefinition>(); var type = Asset<EntitySchemaAsset>(); type.schemaId = "Visitor"; type.builtinParent = "Person";
+            var person = Asset<EntityInstanceAsset>(); person.schema = type; person.instanceId = "newVisitor"; person.displayName = "새 예약자"; person.exposeRoot = false;
+            person.access.story.triggersOn = new[] { "clinic.met.newVisitor" }; scenario.instances = new[] { person };
+            KernelRuntime runtime = scenario.CreateRuntime(); runtime.Restore(old);
+            Assert.That(runtime.Entity("newVisitor"), Is.Not.Null); Assert.That(runtime.Entity("client"), Is.Not.Null);
+            Assert.That(runtime.VisibleProfileIds, Does.Not.Contain("newVisitor")); runtime.SetTrigger("clinic.met.newVisitor", true);
+            Assert.That(runtime.VisibleProfileIds, Does.Contain("newVisitor"));
+        }
+
+        [Test]
         public void AuthoredHierarchyInstantiatesInheritedFieldsAndTargetBoundFunctions()
         {
             var parent = Asset<EntitySchemaAsset>();
@@ -224,8 +251,36 @@ namespace Codetective.Tests.Operations
             restored.Entity("client").SetFunctionAccess("askAboutFoundation", PlayerAccess.Inherit);
             Assert.That(restored.Execute("상담손님.재단에대하여()").Success, Is.True);
             restored.Facts.Add("testimony_crosschecked"); restored.ReadMail("kernel-followup"); restored.AcceptMail("kernel-followup");
-            restored.Tick(540); restored.NextDay();
+            while (!restored.IsDayEnded)
+            {
+                AppointmentProgress visit = restored.CurrentAppointment;
+                if (restored.IsClinicTransitioning) restored.AdvanceVisitPresentation(visit.id, visit.phase);
+                else if (visit?.phase == VisitPhase.Talking) restored.FinishConsultation();
+                else if (restored.CanWaitForNextAppointment) restored.WaitForNextAppointment();
+                else restored.WaitUntilClosing();
+            }
+            restored.NextDay();
             Assert.That(restored.NewspaperArticles(2).First().id, Is.EqualTo("investigation-followup"));
+        }
+
+        [Test]
+        public void ShippedSchedulesAndMidVisitStateRoundTripThroughUnityJson()
+        {
+            var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
+            KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.DaySubtitle, Is.EqualTo("문이 열리는 시간"));
+            Assert.That(runtime.DailyAppointments.Select(a => a.startMinute), Is.EqualTo(new[] { 540, 660, 840 }));
+            runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro"); runtime.MarkDayIntroSeen();
+            runtime.Tick(1); AppointmentProgress visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase);
+            runtime.RecordClue(runtime.ConsultationIndex); runtime.Tick(120);
+            Assert.That(runtime.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing));
+            var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
+            Assert.That(restored.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing)); Assert.That(restored.Minute, Is.EqualTo(660));
+            Assert.That(restored.DayIntroSeen, Is.True);
+            while (restored.IsClinicTransitioning) { visit = restored.CurrentAppointment; restored.AdvanceVisitPresentation(visit.id, visit.phase); }
+            Assert.That(restored.CurrentAppointment.profileId, Is.EqualTo("careerVisitor"));
+            Assert.That(restored.VisibleProfileIds, Does.Contain("careerVisitor"));
+            Assert.That(restored.VisibleProfileIds, Does.Not.Contain("careVisitor"));
         }
 #endif
     }

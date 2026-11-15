@@ -8,6 +8,8 @@ namespace Codetective.Operations
     {
         public SchemaRegistry Schemas { get; }
         public IReadOnlyDictionary<string, Entity> Entities => entities;
+        private EntitySnapshot[] scenarioEntityDefaults = Array.Empty<EntitySnapshot>();
+        public void CaptureScenarioEntityDefaults() => scenarioEntityDefaults = Capture().entities;
         public KernelRuntime(SchemaRegistry schemas = null) { Schemas = schemas ?? BuiltinSchemas.Create(); }
 
         /// <summary>System/designer API only. No constructor or allocator is registered in the command language.</summary>
@@ -161,7 +163,11 @@ namespace Codetective.Operations
                 copy.entities.Add(clone.Id, clone);
             }
             foreach (var root in roots) copy.roots.Add(root.Key, copy.entities[root.Value.Id]);
-            copy.Consultation.AddRange(Consultation);
+            foreach (var plan in clinicPlans) copy.clinicPlans.Add(plan.Key, plan.Value.Copy());
+            foreach (var definition in appointmentDefinitions) copy.appointmentDefinitions.Add(definition.Key, definition.Value.Copy());
+            foreach (var offset in appointmentLines) copy.appointmentLines.Add(offset.Key, offset.Value);
+            copy.legacyDialogueCount = legacyDialogueCount;
+            copy.Consultation.AddRange(Consultation.Select(l => l.Copy()));
             copy.Restore(Capture());
             return copy;
         }
@@ -178,6 +184,8 @@ namespace Codetective.Operations
         private void RestoreEntities(EntitySnapshot[] savedEntities)
         {
             if (savedEntities == null) return; // Version 1 saves made before schemas retain the scenario defaults.
+            var savedIds = new HashSet<string>(savedEntities.Select(e => e.id), StringComparer.Ordinal);
+            savedEntities = savedEntities.Concat(scenarioEntityDefaults.Where(e => !savedIds.Contains(e.id))).ToArray();
             var restored = new Dictionary<string, Entity>(StringComparer.Ordinal);
             foreach (EntitySnapshot saved in savedEntities)
             {

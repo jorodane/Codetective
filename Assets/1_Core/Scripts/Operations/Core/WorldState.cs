@@ -14,14 +14,17 @@ namespace Codetective.Operations
         public bool CoffeeReceived { get; private set; }
         public int ConsultationIndex { get; private set; }
         public double ResponseMinutes { get; private set; }
-        public ConsultationLine CurrentConsultation => !AwaitingAssignment && ConsultationIndex < Consultation.Count ? Consultation[ConsultationIndex] : null;
+        public ConsultationLine CurrentConsultation => HasClinicSchedule ? ScheduledConsultation : !AwaitingAssignment && ConsultationIndex < Consultation.Count ? Consultation[ConsultationIndex] : null;
         public string ClockText => $"DAY {Day:00}  {(int)Minute / 60:00}:{(int)Minute % 60:00}";
         public event Action<int> DayStarted;
 
         public void Tick(double minutes)
         {
             if (AwaitingAssignment || IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
-            double used = Math.Min(minutes, 1080 - Minute);
+            InitializeDailyRecord(); SyncClinicClock();
+            if (IsClinicTransitioning) return;
+            double used = Math.Min(minutes, Math.Min(1080 - Minute, NextClinicBoundary - Minute));
+            if (used <= 0) return;
             budget = 1024; depth = 0;
             foreach (ThreadAgent agent in Threads.ToArray()) TickAgent(agent, used);
             if (CurrentConsultation != null)
@@ -34,6 +37,7 @@ namespace Codetective.Operations
             if (Exposure >= 1 && Facts.Add("enemy_at_clinic")) Report("상담소 위치가 노출되었습니다. 지휘소 방어 권한을 확인하세요.");
             double previousMinute = Math.Floor(Minute);
             Minute += used;
+            SyncClinicClock();
             if (Math.Floor(Minute) != previousMinute) Revision++;
             if (Minute >= 1080)
             {
@@ -46,10 +50,13 @@ namespace Codetective.Operations
         public void NextDay()
         {
             if (!IsDayEnded) throw new CommandException("18시 이후 다음 날로 진행할 수 있습니다.");
+            FinalizeDay();
             Day++;
             Minute = 540;
             IsDayEnded = false;
             ResponseMinutes = 0;
+            dayPresentation = new DayPresentationState { day = Day };
+            InitializeClinicDay(); InitializeDailyRecord();
             DeliverNewspaper();
             Report("DAY " + Day + " — 09:00 업무 시작. 현장 상황이 이어집니다.");
             NarrativeUpdated();
@@ -69,7 +76,7 @@ namespace Codetective.Operations
         {
             if (index < 0 || index >= Consultation.Count) throw new CommandException("상담 기록을 찾을 수 없습니다.");
             ConsultationLine line = Consultation[index];
-            if (index > ConsultationIndex) throw new CommandException("아직 듣지 않은 진술입니다.");
+            if (HasClinicSchedule ? !heardConsultationLines.Contains(index) : index > ConsultationIndex) throw new CommandException("아직 듣지 않은 진술입니다.");
             Datum value = Datum.Ref(line.kind, line.fact, line.keyword, line.sentence);
             if (!RecordedClues.Contains(line.fact))
             {
@@ -85,6 +92,7 @@ namespace Codetective.Operations
         public void Reply()
         {
             if (IsDayEnded) throw new CommandException("오늘의 상담 시간이 끝났습니다.");
+            if (HasClinicSchedule) { ReplyToAppointment(); return; }
             if (CurrentConsultation == null) return;
             ResponseMinutes = 0;
             ConsultationIndex++;
@@ -107,7 +115,10 @@ namespace Codetective.Operations
                 triggers = triggers.Select(t => new TriggerValue { id = t.Key, value = t.Value }).ToArray(),
                 quests = quests.Values.Select(q => q.Copy()).ToArray(),
                 newspapers = editions.Values.Select(e => e.Copy()).ToArray(),
-                data = data.Values.Select(CloneSlot).ToArray(), protocols = protocols.Values.Select(p => p.Source).ToArray(),
+                clinicDay = clinicDay?.Copy(), heardConsultationLines = heardConsultationLines.ToArray(),
+                dayPresentation = new DayPresentationState { day = dayPresentation.day, introduced = dayPresentation.introduced },
+                dayLedger = CopyLedger(dayLedger), dailyRecords = dailyRecords.Values.Select(r => r.Copy()).ToArray(),
+                data = data.Values.Select(CloneSlot).ToArray(), nextDataId = nextDataId, protocols = protocols.Values.Select(p => p.Source).ToArray(),
                 entities = entities.Values.Select(e => new EntitySnapshot
                 {
                     id = e.Id, label = e.Label, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
@@ -168,9 +179,10 @@ namespace Codetective.Operations
                 DataSlot restored = CloneSlot(slot); restored.value = NormalizeReference(restored.value);
                 data.Add(restored.name, restored);
             }
-            nextDataId = data.Count == 0 ? 1 : data.Values.Max(s => s.id) + 1;
+            nextDataId = Math.Max(snapshot.nextDataId, data.Count == 0 ? 1 : data.Values.Max(s => s.id) + 1);
             protocols.Clear(); foreach (var pair in restoredProtocols) protocols.Add(pair.Key, pair.Value);
             Threads.Clear(); Threads.AddRange(restoredAgents);
+            RestoreClinic(snapshot); RestoreDailyRecord(snapshot);
             Revision++;
         }
 

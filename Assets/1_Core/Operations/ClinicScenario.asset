@@ -22,6 +22,8 @@ MonoBehaviour:
   instances:
   - {fileID: 11400000, guid: 388e213be3823da040e33922be25f145, type: 2}
   - {fileID: 11400000, guid: 811778796e1091895ded67bc789d1a6a, type: 2}
+  - {fileID: 11400000, guid: fc8c87359769e1867da7b781df419a8b, type: 2}
+  - {fileID: 11400000, guid: 30b4e45445c190ce2d3af11c0d44f283, type: 2}
   additionalObjects: []
   mail:
   - {fileID: 11400000, guid: 657437bbd3ff730a5f0e3b9666c1f08e, type: 2}
@@ -32,3 +34,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: fbf5ae086b65e6810237bb457cd0a20d, type: 2}
   - {fileID: 11400000, guid: 1ebd659b713a49d9a01ecc2e03eafe17, type: 2}
   storyStartFact: kernel_assignment_accepted
+  clinicDays:
+  - {fileID: 11400000, guid: fbabd46d32a2c4000573b374f4f5bb5f, type: 2}
+  - {fileID: 11400000, guid: e56e98e7265481fc0278cb67681bbfa4, type: 2}

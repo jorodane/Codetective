@@ -1,0 +1,103 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 9a04e9ac657fff97300310c6045180a8
+    type: 3
+  m_Name: DefaultDay
+  m_EditorClassIdentifier: ''
+  plan:
+    day: 0
+    subtitle: 이어지는 이야기
+    appointments:
+    - id: morning
+      profileId: client
+      patientName: 오전 상담 손님
+      startMinute: 570
+      endMinute: 0
+      greeting: 안녕하세요. 예약하고 왔습니다.
+      farewell: 오늘 말씀해 주셔서 감사합니다. 다음 상담에서 이어가겠습니다.
+      dialogue:
+      - profileId: client
+        speaker: 상담 손님
+        sentence: 회사 지하실에서 밤마다 이상한 기계음이 들려요.
+        keyword: 지하실 야간 소음
+        fact: basement_noise
+        dataName: basementNoise
+        kind: 6
+      - profileId: client
+        speaker: 상담 손님
+        sentence: 누군가 야간 출입 기록을 감추려는 것 같아요.
+        keyword: 야간 출입 기록
+        fact: entry_record_mentioned
+        dataName: entryRecordClue
+        kind: 15
+      condition:
+        triggersOn: []
+        triggersOff: []
+        quests: []
+      onArrival:
+        triggers: []
+        quests: []
+      onCompleted:
+        triggers:
+        - id: clinic.completed.morning
+          value: 1
+        quests: []
+      onTimeLimit:
+        triggers:
+        - id: clinic.time_limit.morning
+          value: 1
+        quests: []
+    - id: career
+      profileId: careerVisitor
+      patientName: 취업 상담 손님
+      startMinute: 780
+      endMinute: 0
+      greeting: 안녕하세요. 예약하고 왔습니다.
+      farewell: 오늘 말씀해 주셔서 감사합니다. 다음 상담에서 이어가겠습니다.
+      dialogue:
+      - profileId: client
+        speaker: 상담 손님
+        sentence: 일자리를 찾는 게 쉽지 않았는데 NSF 커리어 센터에서 연락이 왔어요.
+        keyword: NSF 커리어 센터
+        fact: nsf_career_center
+        dataName: careerCenterClue
+        kind: 15
+      - profileId: client
+        speaker: 상담 손님
+        sentence: 취업하고 나서도 센터에서 자주 연락을 줘요. 잘 적응하고 있는지 물어보더라고요.
+        keyword: 취업 후 지속 상담
+        fact: career_followup
+        dataName: careerFollowupClue
+        kind: 15
+      condition:
+        triggersOn: []
+        triggersOff: []
+        quests: []
+      onArrival:
+        triggers: []
+        quests: []
+      onCompleted:
+        triggers:
+        - id: clinic.completed.career
+          value: 1
+        quests: []
+      onTimeLimit:
+        triggers:
+        - id: clinic.time_limit.career
+          value: 1
+        quests: []

@@ -35,6 +35,7 @@ namespace Codetective.Gameplay
         public DialoguePresentationDefinition DialoguePresentation => dialoguePresentation;
         public ItemCarryController Carry { get; private set; }
         public bool IsDateTransitioning { get; private set; }
+        public bool IsVisitPresenting { get; private set; }
         public string SelectedProfileId
         {
             get => terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.SelectedProfileId ?? selectedProfile;
@@ -42,10 +43,12 @@ namespace Codetective.Gameplay
         }
         private string selectedProfile = "client";
         private DeskNewspaper newspaper;
+        private ClinicVisitPresentation visits;
+        private int summaryShownDay;
         private readonly List<SlidingDrawer> drawers = new List<SlidingDrawer>();
         public IReadOnlyList<SlidingDrawer> Drawers => drawers;
         public bool CanOperateDrawers => inspection != null && inspection.Mode == InspectionMode.Inspecting && CurrentView == "drawer" &&
-            !IsViewTransitioning && !inspection.ModalInputBlocked;
+            !IsViewTransitioning && !inspection.ModalInputBlocked && !IsDateTransitioning && !IsVisitPresenting;
         public string SavePath => Path.Combine(Application.persistentDataPath, "Codetective", "daily-autosave.json");
         public string Feedback { get; private set; } = "Kernel 작전망 연결";
         private KernelGameUI ui;
@@ -102,17 +105,24 @@ namespace Codetective.Gameplay
             if (Runtime.Facts.Contains("turnOffLights")) SetLightsOff();
             inspection.BackHandler = ui.Back;
             inspection.PointerBlocked = ui.BlocksPointer;
+            visits = GetComponent<ClinicVisitPresentation>() ?? gameObject.AddComponent<ClinicVisitPresentation>(); visits.Initialize(Runtime);
+            if (Runtime.CurrentAppointment != null) SelectedProfileId = Runtime.CurrentAppointment.profileId;
             Runtime.RetrySceneActions();
+            if (!Runtime.IsDayEnded && !Runtime.DayIntroSeen) StartCoroutine(IntroduceDay());
         }
 
         private void Update()
         {
             if (!IsDateTransitioning) Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
+            if (!IsDateTransitioning && Runtime.IsClinicTransitioning && !IsVisitPresenting) StartCoroutine(PresentVisits());
+            if (Runtime.IsDayEnded && !Runtime.IsClinicTransitioning && !IsDateTransitioning && !IsVisitPresenting && summaryShownDay != Runtime.Day &&
+                !ui.IsCompositionProtected && !(terminalRoot?.GetComponentInChildren<TerminalController>(true)?.IsCompositionProtected ?? false))
+                ShowDaySummary();
             if (narrativeDirty && Time.unscaledTime >= narrativeSaveAt) { narrativeDirty = false; SaveNow(); }
             foreach (SlidingDrawer drawer in drawers) drawer.SetInteractionEnabled(CanOperateDrawers);
             // Keep the close monitor and profile views readable while retaining the held item and E action.
             Carry?.SetPresentationVisible(CurrentView != "monitor" && CurrentView != "profile");
-            if (pendingView != null && !views.IsTransitioning)
+            if (pendingView != null && !views.IsTransitioning && !IsDateTransitioning && !IsVisitPresenting)
             {
                 ui.ShowContext(pendingView);
                 pendingView = null;
@@ -141,7 +151,7 @@ namespace Codetective.Gameplay
         }
         public void ShowMonitorPage(string pageId)
         {
-            if (inspection.Mode == InspectionMode.Menu) return;
+            if (inspection.Mode == InspectionMode.Menu || IsVisitPresenting || IsDateTransitioning) return;
             terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.ShowPage(pageId);
             ShowMonitor();
         }
@@ -160,14 +170,56 @@ namespace Codetective.Gameplay
         }
         public void UseHeldItem()
         {
-            if (!IsDateTransitioning && inspection.Mode != InspectionMode.Menu && !IsViewTransitioning)
+            if (!IsDateTransitioning && !IsVisitPresenting && inspection.Mode != InspectionMode.Menu && !IsViewTransitioning)
                 Carry.TryUse(inspection.TextInputFocused);
         }
         public void PutDownItem() { if (!IsDateTransitioning && !inspection.TextInputFocused) Carry.PutDown(); }
         public void BeginNextDay()
         {
             if (!Runtime.IsDayEnded) { Feedback = "18시 이후 다음 날로 진행할 수 있습니다."; return; }
-            if (!IsDateTransitioning && inspection.Mode != InspectionMode.Menu) StartCoroutine(ChangeDate());
+            if (!IsDateTransitioning && !IsVisitPresenting && !Runtime.IsClinicTransitioning && inspection.Mode != InspectionMode.Menu) StartCoroutine(ChangeDate());
+        }
+        public void ShowDaySummary()
+        {
+            if (!Runtime.IsDayEnded) { Feedback = "18시 이후 업무 정산을 확인할 수 있습니다."; return; }
+            if (Runtime.IsClinicTransitioning || IsDateTransitioning || IsVisitPresenting || inspection.Mode == InspectionMode.Menu) return;
+            DailyRecord record = Runtime.FinalizeDay(); SaveNow(); ui.ShowDaySummary(record); summaryShownDay = Runtime.Day;
+        }
+        public void CloseDaySummary() => ui.CloseDaySummary();
+        private IEnumerator PresentVisits()
+        {
+            IsVisitPresenting = true; inspection.NavigationBlocked = true; ui.HideContext();
+            while (Runtime.IsClinicTransitioning)
+            {
+                AppointmentProgress visit = Runtime.CurrentAppointment;
+                if (visit.phase == VisitPhase.Arriving) SelectedProfileId = visit.profileId;
+                yield return visits.Play(Runtime, visit); SaveNow();
+            }
+            inspection.NavigationBlocked = false; IsVisitPresenting = false;
+        }
+        public void WaitForNextAppointment()
+        {
+            if ((Runtime.CanWaitForNextAppointment || Runtime.CanWaitUntilClosing) && !IsDateTransitioning && !IsVisitPresenting && inspection.Mode != InspectionMode.Menu) StartCoroutine(WaitForReservation());
+        }
+        private IEnumerator WaitForReservation()
+        {
+            IsDateTransitioning = true; inspection.NavigationBlocked = true; ui.HideContext();
+            bool closing = Runtime.NextAppointment == null;
+            string subtitle = KernelRuntime.TimeOfDay(Runtime.NextAppointment?.startMinute ?? 1080) + (closing ? " 업무 마감" : " 다음 예약");
+            yield return ui.FadeDate(0, 1, 0.25f, "기다리는 중", subtitle);
+            if (closing) Runtime.WaitUntilClosing(); else Runtime.WaitForNextAppointment(); SaveNow();
+            yield return ui.FadeDate(1, 0, 0.35f, "기다리는 중", subtitle);
+            inspection.NavigationBlocked = false; IsDateTransitioning = false;
+        }
+        private IEnumerator IntroduceDay()
+        {
+            IsDateTransitioning = true; inspection.NavigationBlocked = true; ui.HideContext();
+            string label = "DAY " + Runtime.Day;
+            string subtitle = Runtime.DaySubtitle + "\n09:00  업무 시작";
+            yield return ui.FadeDate(1, 1, 1.8f, label, subtitle);
+            yield return ui.FadeDate(1, 0, 0.6f, label, subtitle);
+            Runtime.MarkDayIntroSeen(); SaveNow();
+            inspection.NavigationBlocked = false; IsDateTransitioning = false;
         }
         private IEnumerator ChangeDate()
         {
@@ -176,9 +228,7 @@ namespace Codetective.Gameplay
             yield return ui.FadeDate(0, 1, 0.45f, "");
             Runtime.NextDay(); newspaper.Refresh(Runtime); SaveNow();
             inspection.ReturnToOverview();
-            yield return ui.FadeDate(1, 1, 1.2f, "DAY " + Runtime.Day.ToString("D2") + "\n09:00  업무 시작");
-            yield return ui.FadeDate(1, 0, 0.6f, "DAY " + Runtime.Day.ToString("D2") + "\n09:00  업무 시작");
-            inspection.NavigationBlocked = false; IsDateTransitioning = false;
+            yield return IntroduceDay();
         }
         private void InitializeDrawers()
         {

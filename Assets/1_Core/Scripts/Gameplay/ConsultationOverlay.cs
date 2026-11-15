@@ -20,6 +20,7 @@ namespace Codetective.Gameplay
         private string positionedView;
         private int nextAcknowledgement;
         private float readyAt;
+        private bool showingSequence;
         public void Initialize(KernelGameController game, InspectionController inspection, Transform parent, Font font, DialoguePresentationDefinition presentation)
         {
             this.game = game; this.inspection = inspection; this.presentation = presentation;
@@ -66,8 +67,21 @@ namespace Codetective.Gameplay
         private void Refresh()
         {
             ConsultationLine line = game.Runtime.CurrentConsultation;
-            bool visible = line != null && !game.Runtime.IsDayEnded && inspection.Mode != InspectionMode.Menu;
+            AppointmentProgress visit = game.Runtime.CurrentAppointment;
+            bool sequence = game.Runtime.IsClinicTransitioning;
+            bool visible = (line != null || sequence) && !game.IsDateTransitioning && inspection.Mode != InspectionMode.Menu;
             bubble.gameObject.SetActive(visible); if (!visible) return;
+            clue.gameObject.SetActive(!sequence && !string.IsNullOrWhiteSpace(line?.keyword));
+            hmm.gameObject.SetActive(!sequence); ah.gameObject.SetActive(!sequence);
+            if (sequence)
+            {
+                showingSequence = true;
+                speaker.text = visit.phase == VisitPhase.Closing ? "Kernel" : visit.patientName;
+                sentence.text = game.Runtime.VisitPresentationText; main.interactable = false;
+                feedback.text = visit.phase == VisitPhase.Arriving ? "입실 중" : visit.phase == VisitPhase.Departing ? "퇴실 중" : "상담 마무리";
+                return;
+            }
+            if (showingSequence) { showingSequence = false; feedback.text = "말풍선을 눌러 응답"; }
             speaker.text = line.speaker; sentence.text = line.sentence;
             clue.GetComponentInChildren<Text>().text = "● " + line.keyword + (game.Runtime.RecordedClues.Contains(line.fact) ? "  [기록됨]" : "");
             bool ready = Time.unscaledTime >= readyAt && !game.IsViewTransitioning;

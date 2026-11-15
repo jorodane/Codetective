@@ -157,6 +157,7 @@ namespace Codetective.Operations
 
         private void FinishAgent(ThreadAgent agent, Datum value)
         {
+            if (dayLedger != null) dayLedger.completedThreadTasks++;
             agent.Frames.Clear();
             agent.State = AgentState.Ready;
             agent.Report = value.Copy();

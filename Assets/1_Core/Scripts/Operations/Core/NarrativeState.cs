@@ -124,7 +124,7 @@ namespace Codetective.Operations
                 }
             text.Append("\n기록한 단서\n");
             bool any = false;
-            foreach (ConsultationLine line in Consultation.Where(l => ProfileOf(l) == profileId && RecordedClues.Contains(l.fact)))
+            foreach (ConsultationLine line in Consultation.Where(l => ProfileOf(l) == profileId && RecordedClues.Contains(l.fact)).GroupBy(l => l.fact).Select(g => g.First()))
             { text.Append("● ").Append(line.keyword).Append('\n').Append(line.sentence).Append("\n\n"); any = true; }
             if (!any) text.Append("아직 기록한 단서가 없습니다.\n\n");
             if (includeNotes)

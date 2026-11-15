@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 853e59987727c5f7b5bcfca9f67b7954
+    type: 3
+  m_Name: CareerVisitor
+  m_EditorClassIdentifier: ''
+  instanceId: careerVisitor
+  displayName: 취업 상담 예약자
+  schema:
+    fileID: 11400000
+    guid: 09ca0e95c08abe8acb6f923b87f773cf
+    type: 2
+  exposeRoot: 0
+  aliases: []
+  names: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn:
+      - clinic.met.careerVisitor
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields: []
+  functions: []
+  disabledVariables: []
+  disabledFunctions: []
+  initialValues:
+  - field: description
+    value:
+      kind: 3
+      id: ''
+      label: 취업 지원과 직장 적응에 관해 상담을 예약한 손님.
+      text: 취업 지원과 직장 적응에 관해 상담을 예약한 손님.
+      number: 0
+      schemaId: ''
+    reference:
+      fileID: 0
+  children: []

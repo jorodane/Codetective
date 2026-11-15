@@ -49,6 +49,12 @@ namespace Codetective.Gameplay
         private GameObject nextDayButton, dateRoot;
         private CanvasGroup dateFade;
         private Text dateLabel;
+        private Text dateSubtitle;
+        private ClinicDayOverlay clinicDay;
+        private CanvasGroup interfaceInteraction;
+        public bool SummaryVisible => clinicDay != null && clinicDay.SummaryVisible;
+        public bool IsCompositionProtected => (protocolSource is CompletingInputField source && source.isFocused && source.IsCompositionProtected) ||
+            (arguments is CompletingInputField args && args.isFocused && args.IsCompositionProtected);
 
         public void Initialize(KernelGameController game, InspectionController inspection, Font font)
         {
@@ -57,6 +63,7 @@ namespace Codetective.Gameplay
             draftArguments = game.Runtime.ExampleArguments;
             root = new GameObject("KernelInterface", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 100;
+            interfaceInteraction = root.AddComponent<CanvasGroup>();
             var scale = root.GetComponent<CanvasScaler>(); scale.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scale.referenceResolution = new Vector2(1280, 720); scale.matchWidthOrHeight = 0.5f;
             raycaster = root.GetComponent<GraphicRaycaster>();
@@ -79,14 +86,16 @@ namespace Codetective.Gameplay
             dialogue.Initialize(game, inspection, root.transform, font, game.DialoguePresentation);
             BuildDrawerControls();
             BuildItemControls();
-            nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 다음 날", game.BeginNextDay).gameObject;
+            nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
             BuildDateTransition();
+            clinicDay = gameObject.AddComponent<ClinicDayOverlay>(); clinicDay.Initialize(game, inspection, root.transform, font);
         }
 
         private void Update()
         {
             if (game == null || root == null) return;
+            interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting;
             drawerBar.gameObject.SetActive(game.CanOperateDrawers && modal == null);
             HoldableItem held = game.Carry.HeldItem;
             heldBar.gameObject.SetActive(held != null && modal == null && inspection.Mode != InspectionMode.Menu && !game.IsDateTransitioning);
@@ -124,11 +133,12 @@ namespace Codetective.Gameplay
             BuildContext();
         }
 
-        public void HideContext() { context = null; CloseModal(); HidePanel(); }
+        public void HideContext() { context = null; CloseModal(); HidePanel(); if (clinicDay != null) clinicDay.HideSummary(); }
 
         public bool Back()
         {
             if (game.IsDateTransitioning) return true;
+            if (SummaryVisible) { game.CloseDaySummary(); return true; }
             if (modal == null) return false;
             if (modal == "protocol" && protocolSource != null && ((ProtocolInputField)protocolSource).IsCompositionProtected) return true;
             CloseModal();
@@ -139,7 +149,7 @@ namespace Codetective.Gameplay
 
         private void OpenModal(string name)
         {
-            if (inspection.Mode == InspectionMode.Menu || game.IsDateTransitioning) return;
+            if (inspection.Mode == InspectionMode.Menu || game.IsDateTransitioning || game.IsVisitPresenting || SummaryVisible) return;
             SaveDraft();
             modal = name;
             inspection.ModalInputBlocked = true;
@@ -192,7 +202,7 @@ namespace Codetective.Gameplay
                 case "clock":
                     heading.text = "업무 시간 / 날짜 기록";
                     AddButton(new Vector2(20, -428), new Vector2(245, 44), "현재 기록 저장", game.SaveNow);
-                    AddButton(new Vector2(285, -428), new Vector2(245, 44), "다음 날 (18시 이후)", game.BeginNextDay);
+                    AddButton(new Vector2(285, -428), new Vector2(245, 44), "업무 정산 (18시 이후)", game.ShowDaySummary);
                     break;
                 case "drawer": HidePanel(); return;
                 case "gramophone": heading.text = "통신 / Thread 보고"; break;
@@ -257,18 +267,23 @@ namespace Codetective.Gameplay
             RectTransform black = Box("Blackout", dateRoot.transform, Vector2.zero, Vector2.zero, Vector2.zero);
             black.anchorMin = Vector2.zero; black.anchorMax = Vector2.one; black.offsetMin = black.offsetMax = Vector2.zero;
             black.GetComponent<Image>().color = Color.black;
-            dateLabel = Label(black, Vector2.zero, new Vector2(900, 180), "", 42);
+            dateLabel = Label(black, new Vector2(0, 44), new Vector2(1000, 160), "", 92);
             dateLabel.rectTransform.anchorMin = dateLabel.rectTransform.anchorMax = dateLabel.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             dateLabel.alignment = TextAnchor.MiddleCenter;
+            dateSubtitle = Label(black, new Vector2(0, -76), new Vector2(1080, 100), "", 30);
+            dateSubtitle.rectTransform.anchorMin = dateSubtitle.rectTransform.anchorMax = dateSubtitle.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            dateSubtitle.alignment = TextAnchor.MiddleCenter;
             dateFade = dateRoot.GetComponent<CanvasGroup>(); dateFade.alpha = 0; dateRoot.SetActive(false);
         }
-        public IEnumerator FadeDate(float from, float to, float duration, string label)
+        public IEnumerator FadeDate(float from, float to, float duration, string label, string subtitle = "")
         {
-            dateRoot.SetActive(true); dateLabel.text = label;
+            dateRoot.SetActive(true); dateLabel.text = label; dateSubtitle.text = subtitle;
             for (float elapsed = 0; elapsed < duration; elapsed += Time.unscaledDeltaTime)
             { dateFade.alpha = Mathf.Lerp(from, to, Mathf.Clamp01(elapsed / duration)); yield return null; }
             dateFade.alpha = to; if (to == 0) dateRoot.SetActive(false);
         }
+        public void ShowDaySummary(DailyRecord record) { HideContext(); clinicDay.ShowSummary(record); inspection.ModalInputBlocked = true; }
+        public void CloseDaySummary() { clinicDay.HideSummary(); inspection.ModalInputBlocked = false; }
 
         private void RefreshBody()
         {
