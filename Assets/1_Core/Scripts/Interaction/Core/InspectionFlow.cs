@@ -1,12 +1,13 @@
 namespace Codetective.Interaction
 {
     public enum InspectionMode { Overview, Inspecting, Menu }
-    public enum EscapeAction { ReturnToOverview, OpenMenu, CloseMenu }
+    public enum EscapeAction { OpenMenu, CloseMenu }
 
     /// <summary>One Escape press produces exactly one navigation action.</summary>
     public sealed class InspectionFlow
     {
         public InspectionMode Mode { get; private set; } = InspectionMode.Overview;
+        private InspectionMode beforeMenu = InspectionMode.Overview;
 
         public bool Inspect()
         {
@@ -26,7 +27,7 @@ namespace Codetective.Interaction
         {
             if (Mode != InspectionMode.Menu)
                 return false;
-            Mode = InspectionMode.Overview;
+            Mode = beforeMenu;
             return true;
         }
 
@@ -34,13 +35,11 @@ namespace Codetective.Interaction
         {
             switch (Mode)
             {
-                case InspectionMode.Inspecting:
-                    Mode = InspectionMode.Overview;
-                    return EscapeAction.ReturnToOverview;
                 case InspectionMode.Menu:
-                    Mode = InspectionMode.Overview;
+                    Mode = beforeMenu;
                     return EscapeAction.CloseMenu;
                 default:
+                    beforeMenu = Mode;
                     Mode = InspectionMode.Menu;
                     return EscapeAction.OpenMenu;
             }

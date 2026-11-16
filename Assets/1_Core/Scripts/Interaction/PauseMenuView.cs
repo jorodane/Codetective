@@ -57,7 +57,7 @@ namespace Codetective.Interaction
             RectTransform panel = Rect("Panel", backdrop, Vector2.zero, new Vector2(480, 300));
             panel.gameObject.AddComponent<Image>().color = new Color(0.035f, 0.07f, 0.055f, 1f);
             Label("Title", panel, new Vector2(0, 86), new Vector2(420, 60), "일시 정지", 36);
-            Label("Hint", panel, new Vector2(0, 20), new Vector2(420, 60), "ESC를 누르면 전체 보기로 돌아갑니다.", 20);
+            Label("Hint", panel, new Vector2(0, 20), new Vector2(420, 60), "ESC 계속하기 · Q 전체 보기\n1 터미널  2 상담  3 프로필  4 서랍  5 축음기", 20);
 
             RectTransform button = Rect("Resume", panel, new Vector2(0, -76), new Vector2(300, 56));
             var image = button.gameObject.AddComponent<Image>();

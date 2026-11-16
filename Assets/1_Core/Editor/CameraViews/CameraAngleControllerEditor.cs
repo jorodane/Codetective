@@ -18,8 +18,8 @@ namespace Codetective.EditorTools
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox("프리셋의 위치·회전은 Angle Origin 기준입니다. 비어 있으면 월드 좌표를 사용합니다.\n" +
                 (inspection != null ?
-                    "대상을 클릭하면 확대하고 ESC로 전체 보기에 돌아갑니다. 전체 보기에서 ESC는 메뉴를 엽니다.\n" +
-                    "F1~F12는 Inspection Controller의 Enable Angle Shortcuts에서 켜고 끕니다." :
+                    "다른 앵글에서도 대상을 클릭해 이동합니다. Q는 전체 보기, ESC는 메뉴입니다.\n" +
+                    "1 터미널 / 2 상담 / 3 프로필 / 4 서랍 / 5 축음기 (입력 중 제외). F1~F12도 지원합니다." :
                     "재생 중 F1~F12로 목록 순서대로 전환합니다. 단축키는 Camera Angle Shortcuts를 끄면 비활성화됩니다."),
                 MessageType.Info);
 

@@ -20,6 +20,8 @@ namespace Codetective.Interaction
         [SerializeField] private LayerMask inspectionLayers = ~0;
         [Tooltip("Optional prototype shortcuts, routed through the same navigation as object clicks.")]
         [SerializeField] private bool enableAngleShortcuts = true;
+        [SerializeField] private string[] numberAngles = { "monitor", "counsel", "profile", "drawer", "gramophone" };
+        [SerializeField] private string[] terminalAngles = { "monitor", "counsel", "gramophone" };
 
         private readonly InspectionFlow flow = new InspectionFlow();
         private CameraAngleController views;
@@ -36,7 +38,12 @@ namespace Codetective.Interaction
         public event Action OverviewEntered;
         public Func<bool> BackHandler { get; set; }
         public Func<Vector2, bool> PointerBlocked { get; set; }
-        public bool ModalInputBlocked { get; set; }
+        private bool modalInputBlocked;
+        public bool ModalInputBlocked
+        {
+            get => modalInputBlocked;
+            set { modalInputBlocked = value; if (value && activeTerminal != null) activeTerminal.SetInteractionEnabled(false); }
+        }
         private bool navigationBlocked;
         public bool NavigationBlocked
         {
@@ -93,19 +100,29 @@ namespace Codetective.Interaction
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             {
-                // Let the IME cancel/commit its composition before treating Escape as navigation.
-                if (activeTerminal == null || !activeTerminal.InteractionEnabled || !activeTerminal.IsCompositionProtected)
-                {
-                    if (BackHandler != null && BackHandler()) return;
-                    HandleEscape();
-                }
+                HandleEscape();
                 return;
             }
             if (flow.Mode == InspectionMode.Menu)
                 return;
+            if (keyboard != null && keyboard.qKey.wasPressedThisFrame && !TextInputFocused)
+            {
+                BackHandler?.Invoke();
+                if (!ModalInputBlocked) ReturnToOverview();
+                return;
+            }
             if (ModalInputBlocked) return;
 
-            if (enableAngleShortcuts && keyboard != null && views.AngleSet != null)
+            if (enableAngleShortcuts && keyboard != null && !TextInputFocused)
+            {
+                Key[] digits = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5 };
+                Key[] numpad = { Key.Numpad1, Key.Numpad2, Key.Numpad3, Key.Numpad4, Key.Numpad5 };
+                for (int i = 0; i < digits.Length; i++)
+                    if (keyboard[digits[i]].wasPressedThisFrame || keyboard[numpad[i]].wasPressedThisFrame)
+                    { TryInspectNumber(i + 1); return; }
+            }
+
+            if (enableAngleShortcuts && keyboard != null && views.AngleSet != null && !TextInputFocused)
             {
                 for (int i = 0; i < Mathf.Min(12, views.AngleSet.Count); i++)
                 {
@@ -117,12 +134,10 @@ namespace Codetective.Interaction
             }
 
             Mouse mouse = Mouse.current;
-            if (flow.Mode == InspectionMode.Overview && mouse != null && mouse.leftButton.wasPressedThisFrame)
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
                 if (!InteractAtScreenPoint(mouse.position.ReadValue())) InspectAtScreenPoint(mouse.position.ReadValue());
             }
-            else if (flow.Mode == InspectionMode.Inspecting && mouse != null && mouse.leftButton.wasPressedThisFrame)
-                InteractAtScreenPoint(mouse.position.ReadValue());
 #endif
         }
 
@@ -131,47 +146,71 @@ namespace Codetective.Interaction
             // The click that starts the zoom must not also activate a terminal control.
             bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked && !NavigationBlocked;
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
-                activeTerminal.SetInteractionEnabled(ready);
+                activeTerminal.SetInteractionEnabled(ready, views.ActiveAngle?.Id == "monitor");
 #if ENABLE_INPUT_SYSTEM
             // Run after EventSystem so clicking an input and pressing E together cannot use an object.
-            if (NavigationBlocked || flow.Mode == InspectionMode.Menu || views.IsTransitioning || ModalInputBlocked || Carry == null) return;
+            if (Carry == null) return;
+            if (NavigationBlocked || flow.Mode == InspectionMode.Menu || views.IsTransitioning || ModalInputBlocked)
+            { Carry.HidePlacementPreview(); return; }
+            if (Carry.IsPlacing && Mouse.current != null)
+                Carry.UpdatePlacement(Mouse.current.position.ReadValue(), PointerBlocked != null && PointerBlocked(Mouse.current.position.ReadValue()));
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame) Carry.TryUse(TextInputFocused);
-            if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame && !TextInputFocused) Carry.PutDown();
+            if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame && !TextInputFocused)
+            { if (Carry.IsPlacing) Carry.CancelPlacement(); else Carry.PutDown(); }
 #endif
         }
 
         public void InspectAtScreenPoint(Vector2 point)
         {
-            if (flow.Mode != InspectionMode.Overview || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
+            if (flow.Mode == InspectionMode.Menu || views.IsTransitioning || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
                 return;
             Ray ray = views.ControlledCamera.ScreenPointToRay(point);
-            if (Physics.Raycast(ray, out RaycastHit hit, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide))
+            RaycastHit[] hits = Physics.RaycastAll(ray, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            foreach (RaycastHit hit in hits)
             {
                 InspectionTarget target = hit.collider.GetComponentInParent<InspectionTarget>();
                 if (target != null && target.isActiveAndEnabled)
-                    InspectTarget(target);
+                { InspectTarget(target); return; }
+                // Drawer/item action volumes may sit in front of the camera-angle hotspot.
+                if (!hit.collider.isTrigger && hit.collider.GetComponentInParent<InspectionActionTarget>() == null) return;
             }
         }
 
         public void InspectTarget(InspectionTarget target)
         {
             if (target != null && target.isActiveAndEnabled)
-                InspectAngle(target.Angle, target.Terminal);
+                InspectAngle(target.Angle, target.Terminal ?? (target.Angle != null ? FindTerminalFor(target.Angle) : null));
         }
 
         public bool InteractAtScreenPoint(Vector2 point)
         {
             if (flow.Mode == InspectionMode.Menu || NavigationBlocked || views.IsTransitioning || ModalInputBlocked ||
                 (PointerBlocked != null && PointerBlocked(point))) return false;
+            if (TextInputFocused) TextInputFocus.ReleaseAll();
+            if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
             RaycastHit[] hits = Physics.RaycastAll(views.ControlledCamera.ScreenPointToRay(point), clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            SlidingDrawer openDrawer = null;
             foreach (RaycastHit hit in hits)
             {
+                if (hit.collider.GetComponent<ItemPlacementSurface>() != null) continue;
                 InspectionActionTarget action = hit.collider.GetComponentInParent<InspectionActionTarget>();
+                // An open drawer's coarse collider must not swallow clicks on its stored contents.
+                if (openDrawer != null)
+                {
+                    if (action is HoldableItem stored && stored.Storage != null && stored.Storage.GetComponentInParent<SlidingDrawer>() == openDrawer && stored.CanInteract(views.ActiveAngle?.Id))
+                    { stored.Interact(); return true; }
+                    if (hit.collider.GetComponentInParent<SlidingDrawer>() == openDrawer) continue;
+                    openDrawer.Interact(); return true;
+                }
+                if (action is SlidingDrawer drawer && drawer.IsOpen && drawer.CanInteract(views.ActiveAngle?.Id))
+                { openDrawer = drawer; continue; }
                 if (action != null && action.CanInteract(views.ActiveAngle?.Id)) { action.Interact(); return true; }
                 // Coarse inspection volumes select an angle; they must not obstruct its detailed controls.
                 if (hit.collider.GetComponentInParent<InspectionTarget>() == null && !hit.collider.isTrigger) return false;
             }
+            if (openDrawer != null) { openDrawer.Interact(); return true; }
             return false;
         }
 
@@ -183,6 +222,15 @@ namespace Codetective.Interaction
                 InspectAngle(angle, FindTerminalFor(angle));
         }
 
+        public bool TryInspectNumber(int number)
+        {
+            if (TextInputFocused || ModalInputBlocked || NavigationBlocked || flow.Mode == InspectionMode.Menu ||
+                views.AngleSet == null || number < 1 || number > numberAngles.Length) return false;
+            int index = views.AngleSet.FindId(numberAngles[number - 1]);
+            if (index < 0) return false;
+            InspectAngle(views.AngleSet.Get(index)); return true;
+        }
+
         private void InspectAngle(CameraAnglePreset angle, TerminalController targetTerminal)
         {
             if (flow.Mode == InspectionMode.Menu || NavigationBlocked || angle == null || views.AngleSet == null)
@@ -192,6 +240,7 @@ namespace Codetective.Interaction
             if (!views.TryGoToIndex(views.AngleSet.IndexOf(angle)))
                 return;
 
+            Carry?.CancelPlacement();
             DisableTerminal();
             activeTerminal = targetTerminal;
             if (activeTerminal != null)
@@ -202,6 +251,7 @@ namespace Codetective.Interaction
 
         private TerminalController FindTerminalFor(CameraAnglePreset angle)
         {
+            if (terminal != null && Array.Exists(terminalAngles, id => string.Equals(id, angle.Id, StringComparison.OrdinalIgnoreCase))) return terminal;
             foreach (var target in FindObjectsOfType<InspectionTarget>())
                 if (target.Angle == angle)
                     return target.Terminal;
@@ -212,6 +262,7 @@ namespace Codetective.Interaction
         {
             if (flow.Mode == InspectionMode.Menu || !RequestOverview())
                 return;
+            Carry?.CancelPlacement();
             DisableTerminal();
             flow.ReturnToOverview();
             OverviewEntered?.Invoke();
@@ -226,17 +277,12 @@ namespace Codetective.Interaction
         public void HandleEscape()
         {
             if (NavigationBlocked) return;
-            if (flow.Mode == InspectionMode.Inspecting && !RequestOverview())
-                return;
-
             switch (flow.Escape())
             {
-                case EscapeAction.ReturnToOverview:
-                    DisableTerminal();
-                    OverviewEntered?.Invoke();
-                    break;
                 case EscapeAction.OpenMenu:
-                    DisableTerminal();
+                    TextInputFocus.ReleaseAll();
+                    if (activeTerminal != null) activeTerminal.SetInteractionEnabled(false);
+                    Carry?.CancelPlacement();
                     previousTimeScale = Time.timeScale;
                     previousBlendPause = views.PauseTransitions;
                     ownsPause = true;

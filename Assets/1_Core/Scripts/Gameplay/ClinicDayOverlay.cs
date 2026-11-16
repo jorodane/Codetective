@@ -35,7 +35,7 @@ namespace Codetective.Gameplay
             recordText.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             ScrollRect scroll = viewport.gameObject.AddComponent<ScrollRect>(); scroll.content = recordText.rectTransform; scroll.viewport = viewport;
             scroll.horizontal = false; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 26;
-            OverlayWidgets.Button(summary, font, new Vector2(28, -522), new Vector2(424, 48), "닫고 기록 정리 / ESC", () => game.CloseDaySummary());
+            OverlayWidgets.Button(summary, font, new Vector2(28, -522), new Vector2(424, 48), "닫고 기록 정리", () => game.CloseDaySummary());
             OverlayWidgets.Button(summary, font, new Vector2(488, -522), new Vector2(424, 48), "다음 날 시작", game.BeginNextDay);
             summary.gameObject.SetActive(false);
         }

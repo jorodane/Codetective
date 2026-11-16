@@ -77,3 +77,13 @@ MonoBehaviour:
     size:
       x: 600
       y: 248
+  - angleId: gramophone
+    anchor:
+      x: 0
+      y: 0
+    offset:
+      x: 18
+      y: 18
+    size:
+      x: 480
+      y: 226

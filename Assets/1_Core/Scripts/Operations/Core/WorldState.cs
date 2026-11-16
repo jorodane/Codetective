@@ -113,6 +113,7 @@ namespace Codetective.Operations
                 mailProgress = mailProgress.Values.Select(m => m.Copy()).ToArray(),
                 confirmedReservations = confirmedReservations.Values.Select(r => r.Copy()).ToArray(),
                 drawers = drawers.Select(d => new DrawerState { id = d.Key, open = d.Value }).ToArray(),
+                storedItems = StoredItems.ToArray(),
                 triggers = triggers.Select(t => new TriggerValue { id = t.Key, value = t.Value }).ToArray(),
                 quests = quests.Values.Select(q => q.Copy()).ToArray(),
                 newspapers = editions.Values.Select(e => e.Copy()).ToArray(),
@@ -173,6 +174,7 @@ namespace Codetective.Operations
             Authorities.Clear(); Authorities.UnionWith(snapshot.authorities ?? Array.Empty<string>());
             RecordedClues.Clear(); RecordedClues.UnionWith(snapshot.recordedClues ?? Array.Empty<string>());
             RestoreNarrative(snapshot);
+            RestoreItemStorage(snapshot.storedItems);
             RestoreNewspapers(snapshot.newspapers);
             data.Clear();
             foreach (DataSlot slot in snapshot.data ?? Array.Empty<DataSlot>())

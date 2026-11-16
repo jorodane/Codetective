@@ -28,12 +28,15 @@ namespace Codetective.Gameplay
         [SerializeField] private Font font;
         [SerializeField] private DialoguePresentationDefinition dialoguePresentation;
         [SerializeField] private Transform newspaperAnchor;
+        [SerializeField] private Transform profilePaperAnchor;
 
         public KernelRuntime Runtime { get; private set; }
         public string CurrentView { get; private set; } = "overview";
         public bool IsViewTransitioning => views != null && views.IsTransitioning;
         public DialoguePresentationDefinition DialoguePresentation => dialoguePresentation;
         public ItemCarryController Carry { get; private set; }
+        public MonitorPageHost Monitor => terminalRoot?.GetComponentInChildren<MonitorPageHost>(true);
+        public PaperDocument NewspaperDocument => newspaper?.Document;
         public bool IsDateTransitioning { get; private set; }
         public bool IsVisitPresenting { get; private set; }
         public string SelectedProfileId
@@ -43,6 +46,11 @@ namespace Codetective.Gameplay
         }
         private string selectedProfile = "client";
         private DeskNewspaper newspaper;
+        private PaperDocument profileDocument;
+        private int paperRevision = -1;
+        private string printedProfile;
+        private bool pendingPlacement;
+        private readonly List<ItemPlacementSurface> storageSurfaces = new List<ItemPlacementSurface>();
         private ClinicVisitPresentation visits;
         private int summaryShownDay;
         private readonly List<SlidingDrawer> drawers = new List<SlidingDrawer>();
@@ -102,8 +110,14 @@ namespace Codetective.Gameplay
             InitializeDrawers();
             Carry = GetComponent<ItemCarryController>() ?? gameObject.AddComponent<ItemCarryController>();
             Carry.Initialize(views.ControlledCamera.transform); Carry.Used += UseItem; inspection.Carry = Carry;
+            Carry.ManipulationAllowed = () => !IsDateTransitioning && !IsVisitPresenting && !IsViewTransitioning &&
+                inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !inspection.TextInputFocused;
+            Carry.PickedUp += PickedUpItem; Carry.Placed += StoredItem;
             newspaper = gameObject.AddComponent<DeskNewspaper>();
             newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry); newspaper.Refresh(Runtime);
+            newspaper.Document.AreaClicked += ReadPrintedArea;
+            InitializeProfilePaper();
+            RestoreStoredItems();
             ui.Initialize(this, inspection, font);
             sceneLights = FindObjectsOfType<Light>();
             initialLights = Array.ConvertAll(sceneLights, light => light.enabled);
@@ -126,13 +140,16 @@ namespace Codetective.Gameplay
                 ShowDaySummary();
             if (narrativeDirty && Time.unscaledTime >= narrativeSaveAt) { narrativeDirty = false; SaveNow(); }
             foreach (SlidingDrawer drawer in drawers) drawer.SetInteractionEnabled(CanOperateDrawers);
-            // Keep the close monitor and profile views readable while retaining the held item and E action.
-            Carry?.SetPresentationVisible(CurrentView != "monitor" && CurrentView != "profile");
+            if (profileDocument != null && (paperRevision != Runtime.Revision || printedProfile != SelectedProfileId))
+            { RefreshProfilePaper(); newspaper.Refresh(Runtime); paperRevision = Runtime.Revision; }
             if (pendingView != null && !views.IsTransitioning && !IsDateTransitioning && !IsVisitPresenting)
             {
                 ui.ShowContext(pendingView);
                 pendingView = null;
             }
+            if (pendingPlacement && (CurrentView != "drawer" || inspection.Mode == InspectionMode.Menu || Carry.HeldItem == null)) pendingPlacement = false;
+            if (pendingPlacement && !IsViewTransitioning && !IsDateTransitioning && !IsVisitPresenting)
+            { pendingPlacement = false; Carry.BeginPlacement(); }
             // Both meshes turn clockwise around local +Z. The hour mesh's zero is 09:00;
             // the minute mesh's zero is :00. Fractional minutes also advance the hour hand.
             if (clockHour != null) clockHour.localRotation = hourBasis * Quaternion.AngleAxis((float)((Runtime.Minute * 0.5 + 90) % 360), Vector3.forward);
@@ -148,8 +165,8 @@ namespace Codetective.Gameplay
             return Quaternion.Euler(tilt);
         }
 
-        private void EnterView(CameraAnglePreset angle) { CurrentView = angle.Id; pendingView = angle.Id; ui.HideContext(); }
-        private void LeaveView() { CurrentView = "overview"; pendingView = null; ui.HideContext(); }
+        private void EnterView(CameraAnglePreset angle) { CurrentView = angle.Id; pendingView = angle.Id; if (angle.Id != "drawer") pendingPlacement = false; ui.HideContext(); }
+        private void LeaveView() { CurrentView = "overview"; pendingView = null; pendingPlacement = false; ui.HideContext(); }
         public void ShowMonitor()
         {
             int index = views.AngleSet.FindId("monitor");
@@ -163,16 +180,69 @@ namespace Codetective.Gameplay
         }
         private void UseItem(HoldableItem item)
         {
-            if (item.Use == HeldItemUse.Newspaper)
+            PaperDocument document = item.GetComponent<PaperDocument>();
+            if (document != null) ui.ShowDocument(document, 0);
+        }
+        private void PickedUpItem(HoldableItem item)
+        {
+            Runtime.SetItemStorage(item.Id, null);
+            if (item.Use == HeldItemUse.Newspaper) { Runtime.ReadNewspaper(); newspaper.Refresh(Runtime); }
+        }
+        private void StoredItem(HoldableItem item) => Runtime.SetItemStorage(item.Id, item.Storage?.Id);
+        private void ReadPrintedArea(PaperDocument document, int index)
+        {
+            if (inspection.Mode == InspectionMode.Menu || inspection.ModalInputBlocked || IsViewTransitioning || IsDateTransitioning || IsVisitPresenting) return;
+            if (document.Item.Use == HeldItemUse.Newspaper && !document.Item.IsHeld) Carry.TryPickup(document.Item);
+            else ui.ShowDocument(document, index);
+        }
+        private void InitializeProfilePaper()
+        {
+            Transform anchor = profilePaperAnchor;
+            if (anchor == null) anchor = FindObjectsOfType<InspectionTarget>().FirstOrDefault(t => t.Angle != null && t.Angle.Id == "profile")?.transform;
+            var paper = new GameObject("PatientProfilePaper"); paper.transform.SetParent(transform, false);
+            Vector3 position = anchor != null ? anchor.position + Vector3.up * 0.008f : new Vector3(-0.76f, 0.918f, -2.312f);
+            foreach (Transform stack in FindObjectsOfType<Transform>().Where(t => t.name.StartsWith("Paper_Stack", StringComparison.Ordinal)))
+                foreach (Renderer renderer in stack.GetComponentsInChildren<Renderer>())
+                    if (Vector2.Distance(new Vector2(renderer.bounds.center.x, renderer.bounds.center.z), new Vector2(position.x, position.z)) < 0.32f)
+                        position.y = Mathf.Max(position.y, renderer.bounds.max.y + 0.004f);
+            paper.transform.position = position;
+            HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("desk.profile", "인물 프로필", HeldItemUse.Profile, SelectedProfileId);
+            profileDocument = paper.AddComponent<PaperDocument>();
+            profileDocument.Initialize(item, Carry, views.ControlledCamera, font, new Vector2(0.27f, 0.35f)); Carry.Register(item);
+            profileDocument.AreaClicked += ReadPrintedArea; profileDocument.ChangeProfile += ChangePrintedProfile;
+            RefreshProfilePaper();
+        }
+        private void ChangePrintedProfile(int direction)
+        {
+            if (!Carry.CanManipulate) return;
+            string[] profiles = Runtime.VisibleProfileIds.ToArray(); if (profiles.Length == 0) return;
+            int current = Math.Max(0, Array.IndexOf(profiles, SelectedProfileId));
+            SelectedProfileId = profiles[(current + direction + profiles.Length) % profiles.Length]; RefreshProfilePaper();
+        }
+        private void RefreshProfilePaper()
+        {
+            if (!Runtime.VisibleProfileIds.Contains(SelectedProfileId)) SelectedProfileId = Runtime.VisibleProfileIds.FirstOrDefault();
+            printedProfile = SelectedProfileId;
+            string label = (printedProfile != null ? Runtime.Entity(printedProfile)?.Label : null) ?? printedProfile ?? "미등록";
+            profileDocument.Item.Configure("desk.profile", label + " / 프로필", HeldItemUse.Profile, printedProfile);
+            profileDocument.SetContent("인물 프로필 / " + label, new[] { new PaperSection { title = "신원 · 기록한 단서 · 상담 기록",
+                text = printedProfile != null ? Runtime.ProfileSummary(printedProfile) : "열람 가능한 프로필이 없습니다." } });
+        }
+        private void RestoreStoredItems()
+        {
+            foreach (StoredItemState state in Runtime.StoredItems)
             {
-                Runtime.ReadNewspaper(); newspaper.Refresh(Runtime); ui.ShowNewspaper();
+                HoldableItem item = state.itemId == newspaper.Item.Id ? newspaper.Item : state.itemId == profileDocument.Item.Id ? profileDocument.Item : null;
+                ItemPlacementSurface surface = storageSurfaces.FirstOrDefault(s => s.Id == state.containerId);
+                if (item != null && surface != null) Carry.RestoreStorage(item, surface);
             }
-            else if (item.Use == HeldItemUse.Profile && Runtime.VisibleProfileIds.Contains(item.ProfileId))
-            {
-                SelectedProfileId = item.ProfileId;
-                int index = views.AngleSet.FindId("profile");
-                if (index >= 0) inspection.InspectAngle(views.AngleSet.Get(index));
-            }
+        }
+        public void BeginItemPlacement()
+        {
+            if (IsDateTransitioning || IsVisitPresenting || inspection.Mode == InspectionMode.Menu || inspection.TextInputFocused || Carry.HeldItem == null) return;
+            int index = views.AngleSet.FindId("drawer"); if (index < 0) return;
+            ui.Back(); inspection.InspectAngle(views.AngleSet.Get(index));
+            if (views.IsTransitioning) pendingPlacement = true; else Carry.BeginPlacement();
         }
         public void UseHeldItem()
         {
@@ -232,6 +302,7 @@ namespace Codetective.Gameplay
             IsDateTransitioning = true; inspection.NavigationBlocked = true;
             ui.HideContext(); Carry.PutDown();
             yield return ui.FadeDate(0, 1, 0.45f, "");
+            Carry.ReturnToDesk(newspaper.Item); Runtime.SetItemStorage(newspaper.Item.Id, null);
             Runtime.NextDay(); newspaper.Refresh(Runtime); SaveNow();
             inspection.ReturnToOverview();
             yield return IntroduceDay();
@@ -243,6 +314,27 @@ namespace Codetective.Gameplay
             {
                 SlidingDrawer drawer = child.GetComponent<SlidingDrawer>() ?? child.gameObject.AddComponent<SlidingDrawer>();
                 drawer.Initialize(Runtime, "desk." + child.name); drawers.Add(drawer);
+                var storage = new GameObject("DrawerInterior"); storage.transform.SetParent(child, false);
+                ItemPlacementSurface surface = storage.AddComponent<ItemPlacementSurface>();
+                Bounds local = new Bounds(Vector3.zero, new Vector3(0.4f, 0.14f, 0.4f)); bool found = false;
+                foreach (Renderer renderer in child.GetComponentsInChildren<Renderer>())
+                {
+                    Bounds world = renderer.bounds;
+                    for (int x = -1; x <= 1; x += 2) for (int y = -1; y <= 1; y += 2) for (int z = -1; z <= 1; z += 2)
+                    {
+                        Vector3 corner = child.InverseTransformPoint(world.center + Vector3.Scale(world.extents, new Vector3(x, y, z)));
+                        if (!found) { local = new Bounds(corner, Vector3.zero); found = true; } else local.Encapsulate(corner);
+                    }
+                }
+                Vector3 scale = child.lossyScale;
+                Vector3 size = new Vector3(Mathf.Max(0.01f, local.size.x - 0.04f / Mathf.Abs(scale.x)), Mathf.Max(0.01f, local.size.y - 0.025f / Mathf.Abs(scale.y)), Mathf.Max(0.01f, local.size.z - 0.06f / Mathf.Abs(scale.z)));
+                surface.Initialize(drawer.Id, drawer, new Bounds(local.center + Vector3.up * 0.008f, size)); storageSurfaces.Add(surface);
+                if (!child.GetComponentsInChildren<Collider>().Any(c => !c.isTrigger))
+                {
+                    BoxCollider front = child.gameObject.AddComponent<BoxCollider>(); front.isTrigger = true;
+                    front.center = new Vector3(local.center.x, local.center.y, local.max.z);
+                    front.size = new Vector3(local.size.x, local.size.y, 0.025f / Mathf.Abs(scale.z));
+                }
             }
         }
         public void ToggleDrawer(int index)
@@ -375,7 +467,8 @@ namespace Codetective.Gameplay
             StopAllCoroutines();
             if (sceneLights != null && initialLights != null) for (int i = 0; i < Math.Min(sceneLights.Length, initialLights.Length); i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;
-            if (Carry != null) { Carry.PutDown(); Carry.Used -= UseItem; }
+            if (Carry != null) { Carry.PutDown(); Carry.Used -= UseItem; Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; }
+            if (profileDocument != null) Destroy(profileDocument.gameObject);
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.NavigationBlocked = false; }
             if (Runtime != null)
             {

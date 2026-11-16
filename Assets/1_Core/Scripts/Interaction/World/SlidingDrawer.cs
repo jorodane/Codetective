@@ -16,6 +16,7 @@ namespace Codetective.Interaction
         private bool interactionEnabled;
         public string Id => drawerId;
         public bool IsOpen => runtime != null && runtime.IsDrawerOpen(drawerId);
+        public bool CanStore => interactionEnabled && IsOpen && amount >= 0.99f;
         public void Initialize(KernelRuntime value, string id)
         {
             if (runtime == null) closedPosition = transform.localPosition;

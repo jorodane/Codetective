@@ -84,12 +84,12 @@ namespace Codetective.Gameplay
             if (showingSequence) { showingSequence = false; feedback.text = "말풍선을 눌러 응답"; }
             speaker.text = line.speaker; sentence.text = line.sentence;
             clue.GetComponentInChildren<Text>().text = "● " + line.keyword + (game.Runtime.RecordedClues.Contains(line.fact) ? "  [기록됨]" : "");
-            bool ready = Time.unscaledTime >= readyAt && !game.IsViewTransitioning;
+            bool ready = Time.unscaledTime >= readyAt && !game.IsViewTransitioning && !inspection.ModalInputBlocked;
             main.interactable = hmm.interactable = ah.interactable = clue.interactable = ready;
         }
         private void Acknowledge(int index)
         {
-            if (Time.unscaledTime < readyAt || game.IsViewTransitioning || inspection.Mode == InspectionMode.Menu || game.Runtime.IsDayEnded || game.Runtime.CurrentConsultation == null) return;
+            if (Time.unscaledTime < readyAt || game.IsViewTransitioning || inspection.ModalInputBlocked || inspection.Mode == InspectionMode.Menu || game.Runtime.IsDayEnded || game.Runtime.CurrentConsultation == null) return;
             AudioClip clip = presentation != null && index < presentation.acknowledgements.Length ? presentation.acknowledgements[index] : null;
             if (clip != null) audioSource.PlayOneShot(clip);
             readyAt = Time.unscaledTime + Mathf.Max(0.25f, clip != null ? clip.length : 0);
@@ -97,6 +97,7 @@ namespace Codetective.Gameplay
         }
         private void CollectClue()
         {
+            if (inspection.ModalInputBlocked || inspection.Mode == InspectionMode.Menu) return;
             try { game.Runtime.RecordClue(game.Runtime.ConsultationIndex); feedback.text = "프로필에 단서를 기록했습니다."; }
             catch (CommandException error) { feedback.text = error.Message; }
         }

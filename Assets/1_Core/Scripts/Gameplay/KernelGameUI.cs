@@ -42,10 +42,13 @@ namespace Codetective.Gameplay
         private string draftArguments;
         private RectTransform drawerBar;
         private Button[] drawerButtons;
-        private Text mailBadge;
+        private RectTransform suspicionFill;
+        private Image suspicionImage;
         private RectTransform heldBar, newspaperReader;
         private Text heldLabel, newspaperHeading, newspaperBody;
-        private Button useHeld, putDown;
+        private Button useHeld, putDown, storeHeld;
+        private PaperDocument openedDocument;
+        private int documentSection;
         private GameObject nextDayButton, dateRoot;
         private CanvasGroup dateFade;
         private Text dateLabel;
@@ -67,25 +70,28 @@ namespace Codetective.Gameplay
             var scale = root.GetComponent<CanvasScaler>(); scale.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scale.referenceResolution = new Vector2(1280, 720); scale.matchWidthOrHeight = 0.5f;
             raycaster = root.GetComponent<GraphicRaycaster>();
-            RectTransform hud = Box("KernelHUD", root.transform, new Vector2(16, -12), new Vector2(950, 42), new Vector2(0, 1));
+            RectTransform hud = Box("KernelHUD", root.transform, new Vector2(16, -12), new Vector2(550, 42), new Vector2(0, 1));
+            hud.GetComponent<Image>().raycastTarget = false;
             clock = Label(hud, new Vector2(10, -4), new Vector2(270, 34), "", 18);
-            Button(hud, new Vector2(285, -4), new Vector2(110, 34), "모니터", () => { HideContext(); game.ShowMonitor(); });
-            Button(hud, new Vector2(403, -4), new Vector2(110, 34), "데이터", () => OpenModal("data"));
-            Button(hud, new Vector2(521, -4), new Vector2(110, 34), "Thread", () => OpenModal("threads"));
-            Button(hud, new Vector2(639, -4), new Vector2(140, 34), "프로토콜", () => OpenModal("protocol"));
-            languageLabel = Button(hud, new Vector2(787, -4), new Vector2(152, 34), "", ToggleLanguage).GetComponentInChildren<Text>();
-            RefreshLanguageLabel();
+            Label(hud, new Vector2(286, -4), new Vector2(80, 34), "의심도", 18);
+            RectTransform gauge = Box("SuspicionGauge", hud, new Vector2(368, -14), new Vector2(164, 14), new Vector2(0, 1));
+            gauge.GetComponent<Image>().raycastTarget = false;
+            suspicionFill = Box("Fill", gauge, Vector2.zero, Vector2.zero, Vector2.zero);
+            suspicionFill.anchorMax = Vector2.one; suspicionFill.offsetMin = suspicionFill.offsetMax = Vector2.zero;
+            suspicionImage = suspicionFill.GetComponent<Image>(); suspicionImage.raycastTarget = false;
             panel = Box("Context", root.transform, new Vector2(-18, -74), new Vector2(570, 620), new Vector2(1, 1));
-            heading = Label(panel, new Vector2(20, -16), new Vector2(530, 42), "", 26);
+            heading = Label(panel, new Vector2(20, -16), new Vector2(460, 42), "", 26);
+            Button(panel, new Vector2(492, -14), new Vector2(58, 40), "닫기", () => { if (!Back()) HidePanel(); });
             body = ScrollText(panel, new Vector2(20, -72), new Vector2(530, 330));
             feedback = Label(panel, new Vector2(20, -552), new Vector2(530, 54), "", 17);
             panel.gameObject.SetActive(false);
-            RectTransform mailNotice = Box("MailNotice", root.transform, new Vector2(-16, -12), new Vector2(220, 42), new Vector2(1, 1));
-            mailBadge = Button(mailNotice, new Vector2(6, -4), new Vector2(208, 34), "메일함", () => game.ShowMonitorPage("mail")).GetComponentInChildren<Text>();
+            BuildOperationsPage();
             var dialogue = GetComponent<ConsultationOverlay>() ?? gameObject.AddComponent<ConsultationOverlay>();
             dialogue.Initialize(game, inspection, root.transform, font, game.DialoguePresentation);
             BuildDrawerControls();
             BuildItemControls();
+            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1100, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 보기 · ESC 메뉴  (입력 중 제외)", 14);
+            shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
             BuildDateTransition();
@@ -95,25 +101,28 @@ namespace Codetective.Gameplay
         private void Update()
         {
             if (game == null || root == null) return;
-            interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting;
+            interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && inspection.Mode != InspectionMode.Menu;
             drawerBar.gameObject.SetActive(game.CanOperateDrawers && modal == null);
             HoldableItem held = game.Carry.HeldItem;
             heldBar.gameObject.SetActive(held != null && modal == null && inspection.Mode != InspectionMode.Menu && !game.IsDateTransitioning);
             if (held != null)
             {
-                heldLabel.text = held.DisplayName + "  ·  E 사용  ·  우클릭 놓기";
+                heldLabel.text = game.Carry.IsPlacing ? game.Carry.PlacementHint : held.DisplayName + "  ·  인쇄 영역 클릭 / E 확대";
                 heldBar.anchoredPosition = new Vector2(0, game.CanOperateDrawers ? 104 : 16);
                 useHeld.interactable = !inspection.TextInputFocused && !game.IsViewTransitioning;
                 putDown.interactable = !inspection.TextInputFocused;
+                storeHeld.interactable = !inspection.TextInputFocused && !game.IsViewTransitioning;
+                storeHeld.GetComponentInChildren<Text>().text = game.Carry.IsPlacing ? "배치 취소" : "서랍에 넣기";
             }
             nextDayButton.SetActive(game.Runtime.IsDayEnded && !game.IsDateTransitioning && modal == null && inspection.Mode != InspectionMode.Menu);
             if (modal == "protocol" && protocolSource != null && protocolSource.isFocused) RefreshProtocolCompletions();
             if (Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + 0.2f;
             KernelRuntime r = game.Runtime;
-            clock.text = r.ClockText + "  의심 " + r.Suspicion.ToString("0");
-            int unread = r.UnreadMailCount(Mailbox.Kernel) + r.UnreadMailCount(Mailbox.Clinic);
-            mailBadge.text = unread > 0 ? "메일함 / 새 메일 " + unread : "메일함";
+            clock.text = r.ClockText;
+            float suspicion = Mathf.Clamp01((float)r.Suspicion / 100f);
+            suspicionFill.anchorMax = new Vector2(suspicion, 1);
+            suspicionImage.color = Color.Lerp(new Color(0.25f, 0.72f, 0.43f), new Color(1f, 0.38f, 0.12f), suspicion);
             for (int i = 0; i < drawerButtons.Length; i++) drawerButtons[i].GetComponentInChildren<Text>().text = (i + 1) + (game.Drawers[i].IsOpen ? " 닫기" : " 열기");
             if (panel.gameObject.activeSelf && modal != "protocol") RefreshBody();
         }
@@ -122,14 +131,14 @@ namespace Codetective.Gameplay
         {
             if (raycaster == null || EventSystem.current == null) return false;
             hits.Clear();
-            raycaster.Raycast(new PointerEventData(EventSystem.current) { position = point }, hits);
+            EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = point }, hits);
             return hits.Count > 0;
         }
 
         public void ShowContext(string id)
         {
             context = id;
-            if (id == "monitor" || id == "counsel" || id == "drawer") { HidePanel(); return; }
+            if (id == "monitor" || id == "counsel" || id == "drawer" || id == "profile" || id == "gramophone") { HidePanel(); return; }
             BuildContext();
         }
 
@@ -142,7 +151,7 @@ namespace Codetective.Gameplay
             if (modal == null) return false;
             if (modal == "protocol" && protocolSource != null && ((ProtocolInputField)protocolSource).IsCompositionProtected) return true;
             CloseModal();
-            if (context != null && context != "monitor") BuildContext();
+            if (context != null) ShowContext(context);
             else HidePanel();
             return true;
         }
@@ -155,7 +164,7 @@ namespace Codetective.Gameplay
             inspection.ModalInputBlocked = true;
             if (newspaperReader != null) newspaperReader.gameObject.SetActive(false);
             ClearControls();
-            if (name == "newspaper") { BuildNewspaperReader(); panel.gameObject.SetActive(false); return; }
+            if (name == "document") { BuildDocumentReader(); panel.gameObject.SetActive(false); return; }
             panel.gameObject.SetActive(true);
             if (name == "protocol") BuildProtocolEditor();
             else
@@ -179,6 +188,7 @@ namespace Codetective.Gameplay
         {
             SaveDraft();
             modal = null;
+            openedDocument = null;
             if (newspaperReader != null) newspaperReader.gameObject.SetActive(false);
             inspection.ModalInputBlocked = false;
             ClearSelection();
@@ -224,6 +234,22 @@ namespace Codetective.Gameplay
             }
             drawerBar.gameObject.SetActive(false);
         }
+        private void BuildOperationsPage()
+        {
+            MonitorPageHost host = game.Monitor; if (host == null) return;
+            host.Initialize();
+            RectTransform page = OverlayWidgets.Rect("OperationTools", host.transform, new Vector2(24, -140), new Vector2(1140, 590));
+            MonitorPage definition = page.gameObject.AddComponent<MonitorPage>(); definition.Configure("operations", "작전 도구");
+            OverlayWidgets.Label(page, font, new Vector2(20, -16), new Vector2(1080, 50), "데이터 · Thread · 프로토콜", 32);
+            OverlayWidgets.Button(page, font, new Vector2(20, -100), new Vector2(320, 70), "확보 데이터", () => OpenModal("data"));
+            OverlayWidgets.Button(page, font, new Vector2(370, -100), new Vector2(320, 70), "Thread 상태 / 배정", () => OpenModal("threads"));
+            OverlayWidgets.Button(page, font, new Vector2(720, -100), new Vector2(320, 70), "프로토콜 편집", () => OpenModal("protocol"));
+            languageLabel = OverlayWidgets.Button(page, font, new Vector2(20, -210), new Vector2(320, 60), "", ToggleLanguage).GetComponentInChildren<Text>();
+            RefreshLanguageLabel();
+            foreach (Graphic graphic in page.GetComponentsInChildren<Graphic>(true))
+                if (graphic.GetComponent<CrtMeshEffect>() == null) graphic.gameObject.AddComponent<CrtMeshEffect>();
+            host.Register(definition);
+        }
         private void ChangeProfile(int direction)
         {
             string[] profiles = game.Runtime.VisibleProfileIds.ToArray(); if (profiles.Length == 0) return;
@@ -232,33 +258,59 @@ namespace Codetective.Gameplay
         }
         private void BuildItemControls()
         {
-            heldBar = Box("HeldObject", root.transform, new Vector2(0, 16), new Vector2(760, 54), new Vector2(0.5f, 0));
-            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(480, 32), "", 18);
-            useHeld = Button(heldBar, new Vector2(504, -8), new Vector2(112, 38), "E 사용", game.UseHeldItem);
-            putDown = Button(heldBar, new Vector2(630, -8), new Vector2(112, 38), "놓기", game.PutDownItem);
+            heldBar = Box("HeldObject", root.transform, new Vector2(0, 16), new Vector2(1040, 54), new Vector2(0.5f, 0));
+            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(576, 32), "", 15);
+            useHeld = Button(heldBar, new Vector2(600, -8), new Vector2(116, 38), "E 확대", game.UseHeldItem);
+            putDown = Button(heldBar, new Vector2(728, -8), new Vector2(128, 38), "책상에 놓기", game.PutDownItem);
+            storeHeld = Button(heldBar, new Vector2(868, -8), new Vector2(156, 38), "서랍에 넣기", () =>
+            { if (game.Carry.IsPlacing) game.Carry.CancelPlacement(); else game.BeginItemPlacement(); });
             heldBar.gameObject.SetActive(false);
         }
-        public void ShowNewspaper() => OpenModal("newspaper");
-        private void BuildNewspaperReader()
+        public void ShowNewspaper() => ShowDocument(game.NewspaperDocument, 0);
+        public void ShowDocument(PaperDocument document, int index)
         {
-            if (newspaperReader == null)
-            {
-                newspaperReader = Box("NewspaperReader", root.transform, Vector2.zero, new Vector2(1000, 642), new Vector2(0.5f, 0.5f));
-                newspaperReader.GetComponent<Image>().color = new Color(0.85f, 0.82f, 0.69f);
-                newspaperHeading = Label(newspaperReader, new Vector2(30, -20), new Vector2(940, 70), "", 30);
-                newspaperHeading.color = new Color(0.12f, 0.11f, 0.08f);
-                newspaperBody = ScrollText(newspaperReader, new Vector2(30, -108), new Vector2(940, 448));
-                newspaperBody.transform.parent.GetComponent<Image>().color = new Color(0.80f, 0.77f, 0.64f);
-                newspaperBody.color = new Color(0.12f, 0.11f, 0.08f);
-                Button(newspaperReader, new Vector2(30, -584), new Vector2(450, 40), "닫고 계속 들기 / ESC", () => Back());
-                Button(newspaperReader, new Vector2(520, -584), new Vector2(450, 40), "책상에 놓기", () => { game.Carry.PutDown(); Back(); });
-            }
-            newspaperReader.gameObject.SetActive(true);
-            newspaperHeading.text = "CODETECTIVE DAILY  /  DAY " + game.Runtime.Day.ToString("D2") + "\n조간 · 사회 / 지역";
-            IReadOnlyList<NewsArticle> articles = game.Runtime.NewspaperArticles(game.Runtime.Day);
-            newspaperBody.text = articles.Count == 0 ? "오늘의 추가 보도는 없습니다." : string.Join("\n\n────────────────────────\n\n", articles.Select(a => a.headline + "\n\n" + a.body));
-            newspaperBody.transform.parent.GetComponent<ScrollRect>().verticalNormalizedPosition = 1;
+            if (document == null || document.Sections.Count == 0) return;
+            openedDocument = document; documentSection = Mathf.Clamp(index, 0, document.Sections.Count - 1); OpenModal("document");
         }
+        private void BuildDocumentReader()
+        {
+            if (openedDocument == null) return;
+            if (newspaperReader != null) { newspaperReader.gameObject.SetActive(false); Destroy(newspaperReader.gameObject); }
+            newspaperReader = Box("DocumentReader", root.transform, Vector2.zero, new Vector2(1000, 642), new Vector2(0.5f, 0.5f));
+            newspaperReader.GetComponent<Image>().color = new Color(0.85f, 0.82f, 0.69f);
+            newspaperHeading = Label(newspaperReader, new Vector2(30, -20), new Vector2(940, 70), "", 30);
+            newspaperHeading.color = new Color(0.12f, 0.11f, 0.08f);
+            newspaperBody = ScrollText(newspaperReader, new Vector2(30, -150), new Vector2(940, 402));
+            newspaperBody.transform.parent.GetComponent<Image>().color = new Color(0.80f, 0.77f, 0.64f);
+            newspaperBody.color = new Color(0.12f, 0.11f, 0.08f);
+            Button(newspaperReader, new Vector2(30, -102), new Vector2(180, 36), "이전 영역", () => ChangeDocumentSection(-1));
+            Button(newspaperReader, new Vector2(222, -102), new Vector2(180, 36), "다음 영역", () => ChangeDocumentSection(1));
+            Button(newspaperReader, new Vector2(30, -584), new Vector2(450, 40), "확대 보기 닫기", () => Back());
+            Button(newspaperReader, new Vector2(520, -584), new Vector2(450, 40), "책상에 놓기", () =>
+            { game.Carry.ReturnToDesk(openedDocument.Item); game.Runtime.SetItemStorage(openedDocument.Item.Id, null); Back(); });
+            newspaperReader.gameObject.SetActive(true);
+            PaperSection section = openedDocument.Sections[documentSection];
+            newspaperHeading.text = openedDocument.Title + "\n" + section.title;
+            newspaperBody.text = section.text;
+            ScrollRect scroll = newspaperBody.transform.parent.GetComponent<ScrollRect>();
+            RectTransform content = OverlayWidgets.Rect("ArticleAndClues", scroll.transform, Vector2.zero, new Vector2(928, 0));
+            newspaperBody.transform.SetParent(content, false);
+            newspaperBody.rectTransform.anchorMin = newspaperBody.rectTransform.anchorMax = newspaperBody.rectTransform.pivot = new Vector2(0, 1);
+            newspaperBody.rectTransform.anchoredPosition = Vector2.zero; newspaperBody.rectTransform.sizeDelta = new Vector2(928, 0);
+            Canvas.ForceUpdateCanvases(); float height = newspaperBody.preferredHeight + 20;
+            foreach (PaperClue clue in section.clues)
+            {
+                Button button = Button(content, new Vector2(0, -height), new Vector2(916, 40), "● " + clue.label + " / 단서 기록", () =>
+                {
+                    try { clue.collect?.Invoke(); newspaperHeading.text = openedDocument.Title + "\n단서를 기록했습니다: " + clue.label; }
+                    catch (CommandException error) { newspaperHeading.text = error.Message; }
+                });
+                button.GetComponentInChildren<Text>().color = new Color(1, 0.38f, 0.32f); height += 48;
+            }
+            content.sizeDelta = new Vector2(928, height); scroll.content = content; scroll.verticalNormalizedPosition = 1;
+        }
+        private void ChangeDocumentSection(int direction)
+        { documentSection = (documentSection + direction + openedDocument.Sections.Count) % openedDocument.Sections.Count; BuildDocumentReader(); }
         private void BuildDateTransition()
         {
             dateRoot = new GameObject("DateTransition", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(CanvasGroup));
@@ -313,8 +365,7 @@ namespace Codetective.Gameplay
             {
                 text.Append(r.ClockText).Append("\n\n업무 시간: 09:00 ~ 18:00\n18시에 날짜 기록이 자동 저장됩니다.\n진행 중인 Thread 작업도 이어집니다.\n\n")
                     .Append(r.IsDayEnded ? "오늘의 업무가 끝났습니다. 다음 날로 진행할 수 있습니다." : "업무 진행 중")
-                    .Append("\n\nKernel 의심도: ").Append(r.Suspicion.ToString("0"))
-                    .Append("\n위치 노출 진행: ").Append((r.Exposure * 100).ToString("0.0")).Append('%');
+                    .Append("\n\nKernel 의심도는 상단 게이지에서 확인할 수 있습니다.");
             }
             else text.Append("코드네임: Kernel\n신분: 개인 심리상담소 상담가\n\nThread와 신원은 상호 비공개입니다.\n\n작전 권한\n")
                 .Append(string.Join("\n", r.Authorities)).Append("\n\n지휘소 권한\n")
@@ -409,7 +460,7 @@ namespace Codetective.Gameplay
             if (draftArguments == null) draftArguments = game.Runtime.ExampleArguments;
             RefreshLanguageLabel();
             if (modal != null) OpenModal(modal);
-            else if (context != null && context != "monitor") BuildContext();
+            else if (context != null) ShowContext(context);
         }
 
         private void RefreshLanguageLabel() => languageLabel.text = game.Runtime.Language == CommandLocale.Korean ? "명령: 한국어" : "Code: English";
@@ -470,7 +521,8 @@ namespace Codetective.Gameplay
         {
             if (EventSystem.current == null || panel == null) return;
             GameObject selected = EventSystem.current.currentSelectedGameObject;
-            if (selected != null && selected.transform.IsChildOf(panel)) EventSystem.current.SetSelectedGameObject(null);
+            if (selected != null && (selected.transform.IsChildOf(panel) ||
+                (newspaperReader != null && selected.transform.IsChildOf(newspaperReader)))) EventSystem.current.SetSelectedGameObject(null);
         }
 
         private Button AddButton(Vector2 position, Vector2 size, string title, Action action)

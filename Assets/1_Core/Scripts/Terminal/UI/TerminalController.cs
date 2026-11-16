@@ -38,7 +38,7 @@ namespace Codetective.Terminal
             ApplyInputInteraction();
         }
 
-        public void SetInteractionEnabled(bool enabled)
+        public void SetInteractionEnabled(bool enabled, bool focusInput = true)
         {
             interactionEnabled = enabled;
             if (!enabled)
@@ -53,10 +53,10 @@ namespace Codetective.Terminal
                 group.interactable = enabled;
                 group.blocksRaycasts = enabled;
             }
-            ApplyInputInteraction();
+            ApplyInputInteraction(focusInput);
         }
 
-        private void ApplyInputInteraction()
+        private void ApplyInputInteraction(bool focusInput = true)
         {
             if (!AcceptsInput)
             {
@@ -67,7 +67,7 @@ namespace Codetective.Terminal
             }
             input.interactable = AcceptsInput;
             input.readOnly = !AcceptsInput;
-            if (AcceptsInput && input.gameObject.activeInHierarchy) input.FocusAtEnd();
+            if (focusInput && AcceptsInput && input.gameObject.activeInHierarchy) input.FocusAtEnd();
         }
 
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);

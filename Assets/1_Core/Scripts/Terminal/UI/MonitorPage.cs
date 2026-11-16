@@ -17,6 +17,7 @@ namespace Codetective.Terminal
         public string Title => string.IsNullOrWhiteSpace(title) ? pageId : title;
         public bool ShowInNavigation => showInNavigation;
         public bool TerminalPage => terminalPage;
+        public void Configure(string id, string label) { pageId = id; title = label; }
         internal void Show() { gameObject.SetActive(true); shown.Invoke(); }
         internal void Hide() { hidden.Invoke(); gameObject.SetActive(false); }
     }

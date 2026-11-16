@@ -189,6 +189,7 @@ namespace Codetective.Operations
         public int nextConsultationNoteId;
         public MailProgress[] mailProgress;
         public DrawerState[] drawers;
+        public StoredItemState[] storedItems;
         public TriggerValue[] triggers;
         public QuestProgress[] quests;
         public NewspaperEdition[] newspapers;

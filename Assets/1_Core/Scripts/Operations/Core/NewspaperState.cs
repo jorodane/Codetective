@@ -4,6 +4,14 @@ using System.Linq;
 
 namespace Codetective.Operations
 {
+    [Serializable] public sealed class NewspaperClue
+    {
+        public string id;
+        public string keyword;
+        public string fact;
+        public StoryEffects onCollect = new StoryEffects();
+        public NewspaperClue Copy() => new NewspaperClue { id = id, keyword = keyword, fact = fact, onCollect = onCollect?.Copy() ?? new StoryEffects() };
+    }
     [Serializable] public sealed class NewsArticle
     {
         public string id;
@@ -15,8 +23,10 @@ namespace Codetective.Operations
         public StoryCondition condition = new StoryCondition();
         public string[] readFacts = Array.Empty<string>();
         public StoryEffects onRead = new StoryEffects();
+        public NewspaperClue[] clues = Array.Empty<NewspaperClue>();
         public NewsArticle Copy() => new NewsArticle { id = id, headline = headline, body = body, firstDay = firstDay, lastDay = lastDay,
-            priority = priority, condition = condition?.Copy() ?? new StoryCondition(), readFacts = readFacts.ToArray(), onRead = onRead?.Copy() ?? new StoryEffects() };
+            priority = priority, condition = condition?.Copy() ?? new StoryCondition(), readFacts = readFacts.ToArray(), onRead = onRead?.Copy() ?? new StoryEffects(),
+            clues = (clues ?? Array.Empty<NewspaperClue>()).Select(c => c.Copy()).ToArray() };
     }
     [Serializable] public sealed class NewspaperEdition
     {
@@ -35,6 +45,13 @@ namespace Codetective.Operations
         {
             if (article == null || string.IsNullOrWhiteSpace(article.id) || article.firstDay < 1 || article.lastDay < article.firstDay || news.ContainsKey(article.id))
                 throw new CommandException("신문 기사 ID/발행일이 유효하지 않거나 중복됩니다.");
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (NewspaperClue clue in article.clues ?? Array.Empty<NewspaperClue>())
+            {
+                if (clue == null || string.IsNullOrWhiteSpace(clue.id) || string.IsNullOrWhiteSpace(clue.keyword) || !ids.Add(clue.id))
+                    throw new CommandException("신문 단서 ID와 표시 단어가 필요하며 기사 안에서 중복될 수 없습니다.");
+                clue.onCollect?.Validate();
+            }
             article.onRead?.Validate(); news.Add(article.id, article.Copy());
         }
         /// <summary>Freeze the morning edition. Later quest changes affect tomorrow's newspaper.</summary>
@@ -59,6 +76,18 @@ namespace Codetective.Operations
             SetTrigger("newspaper.read", true);
             SetTrigger("newspaper.day." + Day + ".read", true);
             Report("DAY " + Day + " 신문 확인 — 새로운 데이터와 권한을 확인하세요."); NarrativeUpdated();
+        }
+        public void RecordNewspaperClue(string articleId, string clueId)
+        {
+            DeliverNewspaper();
+            if (!editions[Day].articleIds.Contains(articleId) || !news.TryGetValue(articleId, out NewsArticle article))
+                throw new CommandException("오늘 발행된 기사에서만 단서를 기록할 수 있습니다.");
+            NewspaperClue clue = article.clues.FirstOrDefault(c => c.id == clueId) ?? throw new CommandException("기사의 단서를 찾을 수 없습니다.");
+            string key = "newspaper." + articleId + "." + clueId;
+            if (RecordedClues.Contains(key)) return;
+            if (!string.IsNullOrWhiteSpace(clue.fact)) Facts.Add(clue.fact);
+            ApplyStoryEffects(clue.onCollect); RecordedClues.Add(key); SetTrigger(key, true);
+            Revision++; NarrativeUpdated();
         }
         private void RestoreNewspapers(NewspaperEdition[] saved)
         {

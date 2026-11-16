@@ -1,0 +1,69 @@
+using Codetective.Interaction;
+using Codetective.Operations;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace Codetective.Tests.Interaction
+{
+    public sealed class ItemPlacementTests
+    {
+        [Test]
+        public void AClosedMovingOrTooSmallDrawerRejectsPlacement()
+        {
+            var root = new GameObject("Drawer"); var paper = new GameObject("Paper");
+            try
+            {
+                var runtime = new KernelRuntime();
+                SlidingDrawer drawer = root.AddComponent<SlidingDrawer>(); drawer.Initialize(runtime, "drawer"); drawer.SetInteractionEnabled(true);
+                ItemPlacementSurface surface = root.AddComponent<ItemPlacementSurface>(); surface.Initialize("drawer", drawer, new Bounds(Vector3.zero, new Vector3(0.4f, 0.1f, 0.4f)));
+                HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("paper", "신문", HeldItemUse.Newspaper);
+                Assert.That(surface.TryGetPosition(item, out _), Is.False);
+                drawer.Interact(); Assert.That(surface.TryGetPosition(item, out _), Is.False); // Still sliding open.
+                drawer.Initialize(runtime, "drawer"); Assert.That(surface.TryGetPosition(item, out _), Is.True);
+                surface.Initialize("drawer", drawer, new Bounds(Vector3.zero, new Vector3(0.1f, 0.1f, 0.1f)));
+                Assert.That(surface.TryGetPosition(item, out _), Is.False);
+            }
+            finally { Object.DestroyImmediate(paper); Object.DestroyImmediate(root); }
+        }
+        [Test]
+        public void DrawerContentsDoNotOverlapAndPickupFreesTheirOccupiedSpace()
+        {
+            var root = new GameObject("Carry"); var camera = new GameObject("Camera"); var drawer = new GameObject("Drawer");
+            var paper = new GameObject("Paper"); var second = new GameObject("Second");
+            try
+            {
+                ItemCarryController carry = root.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                HoldableItem a = paper.AddComponent<HoldableItem>(), b = second.AddComponent<HoldableItem>();
+                a.Configure("a", "신문", HeldItemUse.Newspaper); b.Configure("b", "신문", HeldItemUse.Newspaper);
+                carry.Register(a); carry.Register(b);
+                ItemPlacementSurface surface = drawer.AddComponent<ItemPlacementSurface>();
+                surface.Initialize("drawer", null, new Bounds(Vector3.zero, a.PlacementSize));
+                Assert.That(carry.RestoreStorage(a, surface), Is.True);
+                Assert.That(surface.TryGetPosition(b, out _), Is.False);
+                Assert.That(carry.TryPickup(a), Is.True); Assert.That(a.IsStored, Is.False);
+                Assert.That(surface.TryGetPosition(b, out _), Is.True);
+                carry.ManipulationAllowed = () => false;
+                Assert.That(carry.TryUse(false), Is.False); Assert.That(carry.BeginPlacement(), Is.False);
+            }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(paper); Object.DestroyImmediate(second); Object.DestroyImmediate(drawer); Object.DestroyImmediate(camera); }
+        }
+        [Test]
+        public void ScaledDrawersUseWorldDimensionsAndDoNotShrinkStoredObjects()
+        {
+            var root = new GameObject("Carry"); var camera = new GameObject("Camera"); var drawer = new GameObject("Drawer"); var paper = new GameObject("Paper");
+            try
+            {
+                drawer.transform.localScale = Vector3.one * 0.5f;
+                ItemCarryController carry = root.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("paper", "신문", HeldItemUse.Newspaper); carry.Register(item);
+                ItemPlacementSurface surface = drawer.AddComponent<ItemPlacementSurface>();
+                surface.Initialize("drawer", null, new Bounds(Vector3.zero, new Vector3(0.4f, 0.1f, 0.4f)));
+                Assert.That(surface.TryGetPosition(item, out _), Is.False); // Only 20cm wide in the world.
+                surface.Initialize("drawer", null, new Bounds(Vector3.zero, Vector3.one));
+                Assert.That(carry.RestoreStorage(item, surface), Is.True);
+                Assert.That(Vector3.Distance(item.transform.lossyScale, Vector3.one), Is.LessThan(0.001f));
+            }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(paper); Object.DestroyImmediate(drawer); Object.DestroyImmediate(camera); }
+        }
+    }
+}

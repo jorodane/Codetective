@@ -12,24 +12,23 @@ namespace Codetective.Tests.Interaction
         }
 
         [Test]
-        public void OneEscapeLeavesAnObjectWithoutOpeningTheMenu()
+        public void EscapeWhileInspectingOpensTheMenuImmediately()
         {
             var flow = new InspectionFlow();
             Assert.That(flow.Inspect(), Is.True);
-            Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.ReturnToOverview));
-            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Overview));
+            Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.OpenMenu));
+            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Menu));
         }
 
         [Test]
-        public void SeparateEscapesAreRequiredToExitAnObjectThenOpenTheMenu()
+        public void EscapeClosesTheMenuAndRestoresTheInspectedView()
         {
             var flow = new InspectionFlow();
             flow.Inspect();
-            Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.ReturnToOverview));
             Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.OpenMenu));
             Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Menu));
             Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.CloseMenu));
-            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Overview));
+            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Inspecting));
         }
 
         [Test]
@@ -51,14 +50,13 @@ namespace Codetective.Tests.Interaction
         }
 
         [Test]
-        public void ResumeReturnsToOverviewAndDoesNotReenterTheTerminal()
+        public void ResumePreservesTheViewThatOpenedTheMenu()
         {
             var flow = new InspectionFlow();
             flow.Inspect();
             flow.Escape();
-            flow.Escape();
             Assert.That(flow.Resume(), Is.True);
-            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Overview));
+            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Inspecting));
             Assert.That(flow.Resume(), Is.False);
         }
 
@@ -80,7 +78,7 @@ namespace Codetective.Tests.Interaction
             flow.Inspect();
             flow.Inspect();
             flow.Inspect();
-            Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.ReturnToOverview));
+            flow.ReturnToOverview();
             Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Overview));
         }
 

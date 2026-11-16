@@ -6,6 +6,12 @@ namespace Codetective.Terminal
 {
     public static class TextInputFocus
     {
+        public static void ReleaseAll()
+        {
+            foreach (InputField input in Object.FindObjectsOfType<InputField>())
+                if (input is CompletingInputField completing) completing.ReleaseFocus(); else input.DeactivateInputField();
+            if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
+        }
         public static bool IsActive
         {
             get

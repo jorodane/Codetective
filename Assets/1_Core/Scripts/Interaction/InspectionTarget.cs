@@ -16,5 +16,7 @@ namespace Codetective.Interaction
         public CameraAnglePreset Angle => closeUpAngle;
         public TerminalController Terminal => terminalRoot != null ?
             terminalRoot.GetComponentInChildren<TerminalController>(true) : null;
+
+        private void Awake() => GetComponent<BoxCollider>().isTrigger = true;
     }
 }
