@@ -24,7 +24,7 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void CounselAndGramophoneKeepTheTerminalInteractiveAndEscapeKeepsTheAngle()
         {
-            var root = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), typeof(PauseMenuView)); root.SetActive(false);
+            var root = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); root.SetActive(false);
             var canvas = new GameObject("Monitor", typeof(RectTransform), typeof(Canvas));
             var set = ScriptableObject.CreateInstance<CameraAngleSet>();
             var presets = new List<CameraAnglePreset>(); float oldTime = Time.timeScale;
@@ -56,7 +56,7 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void SelectedTextInputsPreventNumberNavigation()
         {
-            var root = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), typeof(PauseMenuView)); root.SetActive(false);
+            var root = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); root.SetActive(false);
             EventSystem previous = EventSystem.current; var events = new GameObject("Events", typeof(EventSystem));
             var field = new GameObject("Input", typeof(RectTransform), typeof(InputField));
             var set = ScriptableObject.CreateInstance<CameraAngleSet>(); var angle = ScriptableObject.CreateInstance<CameraAnglePreset>();
