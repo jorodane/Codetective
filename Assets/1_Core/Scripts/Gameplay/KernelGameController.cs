@@ -29,6 +29,10 @@ namespace Codetective.Gameplay
         [SerializeField] private DialoguePresentationDefinition dialoguePresentation;
         [SerializeField] private Transform newspaperAnchor;
         [SerializeField] private Transform profilePaperAnchor;
+        [Tooltip("Explicit paper stacks/surfaces supporting the profile sheet. No scene-wide name search.")]
+        [SerializeField] private Transform[] profilePaperSupports = Array.Empty<Transform>();
+        [Tooltip("Lights controlled by the headquarters light-off command.")]
+        [SerializeField] private Light[] sceneLights = Array.Empty<Light>();
 
         public KernelRuntime Runtime { get; private set; }
         public string CurrentView { get; private set; } = "overview";
@@ -68,7 +72,6 @@ namespace Codetective.Gameplay
         private TextMesh dayText;
         private string pendingView;
         private bool delivering;
-        private Light[] sceneLights;
         private bool[] initialLights;
         private const string CommandLanguagePreference = "Codetective.CommandLanguage";
         private bool narrativeDirty;
@@ -125,8 +128,7 @@ namespace Codetective.Gameplay
             newspaper.Document.AreaClicked += ReadPrintedArea;
             InitializeProfilePaper();
             RestoreStoredItems();
-            sceneLights = FindObjectsOfType<Light>();
-            initialLights = Array.ConvertAll(sceneLights, light => light.enabled);
+            initialLights = Array.ConvertAll(sceneLights, light => light != null && light.enabled);
             if (Runtime.Facts.Contains("turnOffLights")) SetLightsOff();
             visits = GetComponent<ClinicVisitPresentation>();
             if (visits == null) visits = gameObject.AddComponent<ClinicVisitPresentation>();
@@ -214,13 +216,20 @@ namespace Codetective.Gameplay
         private void InitializeProfilePaper()
         {
             Transform anchor = profilePaperAnchor;
-            if (anchor == null) anchor = FindObjectsOfType<InspectionTarget>().FirstOrDefault(t => t.Angle != null && t.Angle.Id == "profile")?.transform;
+            if (anchor == null)
+            {
+                InspectionTarget target = inspection.GetTarget("profile");
+                if (target != null) anchor = target.transform;
+            }
             var paper = new GameObject("PatientProfilePaper"); paper.transform.SetParent(transform, false);
             Vector3 position = anchor != null ? anchor.position + Vector3.up * 0.008f : new Vector3(-0.76f, 0.918f, -2.312f);
-            foreach (Transform stack in FindObjectsOfType<Transform>().Where(t => t.name.StartsWith("Paper_Stack", StringComparison.Ordinal)))
+            foreach (Transform stack in profilePaperSupports)
+            {
+                if (stack == null) continue;
                 foreach (Renderer renderer in stack.GetComponentsInChildren<Renderer>())
                     if (Vector2.Distance(new Vector2(renderer.bounds.center.x, renderer.bounds.center.z), new Vector2(position.x, position.z)) < 0.32f)
                         position.y = Mathf.Max(position.y, renderer.bounds.max.y + 0.004f);
+            }
             paper.transform.position = position;
             HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("desk.profile", "인물 프로필", HeldItemUse.Profile, SelectedProfileId);
             profileDocument = paper.AddComponent<PaperDocument>();

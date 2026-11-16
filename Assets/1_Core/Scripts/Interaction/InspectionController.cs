@@ -1,6 +1,7 @@
 using Codetective.CameraViews;
 using Codetective.Terminal;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -22,6 +23,9 @@ namespace Codetective.Interaction
         [SerializeField] private bool enableAngleShortcuts = true;
         [SerializeField] private string[] numberAngles = { "monitor", "counsel", "profile", "drawer", "gramophone" };
         [SerializeField] private string[] terminalAngles = { "monitor", "counsel", "gramophone" };
+        [Tooltip("Scene-authored angle targets. Runtime targets can call RegisterTarget / UnregisterTarget.")]
+        [SerializeField] private InspectionTarget[] inspectionTargets = Array.Empty<InspectionTarget>();
+        private readonly List<InspectionTarget> targets = new List<InspectionTarget>();
 
         private readonly InspectionFlow flow = new InspectionFlow();
         private CameraAngleController views;
@@ -63,6 +67,7 @@ namespace Codetective.Interaction
         {
             views = GetComponent<CameraAngleController>();
             menu = GetComponent<PauseMenuView>();
+            foreach (InspectionTarget target in inspectionTargets) RegisterTarget(target);
             terminal = terminalRoot != null ? terminalRoot.GetComponentInChildren<TerminalController>(true) : null;
             if (terminal != null)
                 terminal.SetInteractionEnabled(false);
@@ -253,9 +258,17 @@ namespace Codetective.Interaction
         private TerminalController FindTerminalFor(CameraAnglePreset angle)
         {
             if (terminal != null && Array.Exists(terminalAngles, id => string.Equals(id, angle.Id, StringComparison.OrdinalIgnoreCase))) return terminal;
-            foreach (var target in FindObjectsOfType<InspectionTarget>())
-                if (target.Angle == angle)
-                    return target.Terminal;
+            InspectionTarget target = GetTarget(angle.Id);
+            return target != null ? target.Terminal : null;
+        }
+        public void RegisterTarget(InspectionTarget target)
+        { if (target != null && !targets.Contains(target)) targets.Add(target); }
+        public void UnregisterTarget(InspectionTarget target) => targets.Remove(target);
+        public InspectionTarget GetTarget(string angleId)
+        {
+            foreach (InspectionTarget target in targets)
+                if (target != null && target.isActiveAndEnabled && target.Angle != null &&
+                    string.Equals(target.Angle.Id, angleId, StringComparison.OrdinalIgnoreCase)) return target;
             return null;
         }
 

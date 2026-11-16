@@ -13,6 +13,7 @@ namespace Codetective.Gameplay
         private readonly HashSet<EntityInstanceAsset> objects = new HashSet<EntityInstanceAsset>();
         private readonly Dictionary<EntitySchemaAsset, EntitySchema> compiled = new Dictionary<EntitySchemaAsset, EntitySchema>();
         private readonly HashSet<EntitySchemaAsset> visiting = new HashSet<EntitySchemaAsset>();
+        private readonly HashSet<EntityDefinition> legacyVisiting = new HashSet<EntityDefinition>();
 
         private EntityAssetCompiler(KernelRuntime runtime) { this.runtime = runtime; }
         public static void Install(KernelRuntime runtime, EntitySchemaAsset[] schemas, EntityInstanceAsset[] instances,
@@ -131,14 +132,24 @@ namespace Codetective.Gameplay
 
         private Entity Legacy(EntityDefinition definition, int depth)
         {
+            if (definition == null) throw new CommandException("하위 개체 정의가 비어 있습니다.");
             if (depth > 64) throw new CommandException("하위 개체 깊이(64)를 초과했습니다.");
-            var schema = new EntitySchema("Content_" + definition.code, definition.label, definition.kind, runtime.Schemas.ForKind(definition.kind));
-            foreach (ActionDefinition action in definition.actions) schema.Operations.Add(Function(action, schema.FindVariable).Compile());
-            runtime.Schemas.Register(schema);
-            var entity = new Entity(definition.code, definition.label, schema) { Aliases = definition.aliases, Names = definition.names,
-                Access = new AccessRule { Facts = definition.requiredFacts, Authorities = definition.requiredAuthorities, ForbiddenFacts = definition.forbiddenFacts } };
-            foreach (EntityDefinition child in definition.children) entity.Children.Add(child.code, Legacy(child, depth + 1));
-            return entity;
+            if (!legacyVisiting.Add(definition)) throw new CommandException("하위 개체 정의에 순환 참조가 있습니다: " + definition.code);
+            try
+            {
+                var schema = new EntitySchema("Content_" + definition.code, definition.label, definition.kind, runtime.Schemas.ForKind(definition.kind));
+                foreach (ActionDefinition action in definition.actions) schema.Operations.Add(Function(action, schema.FindVariable).Compile());
+                runtime.Schemas.Register(schema);
+                var entity = new Entity(definition.code, definition.label, schema) { Aliases = definition.aliases, Names = definition.names,
+                    Access = new AccessRule { Facts = definition.requiredFacts, Authorities = definition.requiredAuthorities, ForbiddenFacts = definition.forbiddenFacts } };
+                foreach (EntityDefinition child in definition.children)
+                {
+                    Entity instance = Legacy(child, depth + 1);
+                    entity.Children.Add(child.code, instance);
+                }
+                return entity;
+            }
+            finally { legacyVisiting.Remove(definition); }
         }
     }
 }

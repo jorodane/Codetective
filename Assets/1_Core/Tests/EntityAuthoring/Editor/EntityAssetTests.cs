@@ -179,6 +179,34 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.Entity("legacy").Schema.Parent.Id, Is.EqualTo("Item"));
         }
 
+        private static EntityDefinition DeepLegacyDefinition(int depth)
+        {
+            var node = new EntityDefinition { code = "node" + depth, label = "leaf", actions = new[] {
+                new ActionDefinition { code = "check", result = Datum.Text("deep result"), story = new StoryCondition {
+                    quests = new[] { new QuestRequirement { id = "deep.case", minimumStage = 20, status = QuestStatus.Active } } } } } };
+            for (int i = depth - 1; i >= 0; i--) node = new EntityDefinition { code = "node" + i, label = "branch", children = new[] { node } };
+            return node;
+        }
+
+        [Test]
+        public void DeepAdditionalObjectsRetainActionsAndQuestConditions()
+        {
+            var scenario = Asset<KernelScenarioDefinition>(); scenario.additionalObjects = new[] { DeepLegacyDefinition(12) };
+            KernelRuntime runtime = scenario.CreateRuntime();
+            string command = string.Join(".", Enumerable.Range(0, 13).Select(i => "node" + i)) + ".check()";
+            Assert.That(runtime.Execute(command).Success, Is.False);
+            runtime.SetQuestStage("deep.case", 20, QuestStatus.Active);
+            Assert.That(runtime.Execute(command).Value.text, Is.EqualTo("deep result"));
+        }
+
+        [Test]
+        public void CyclicAdditionalObjectDefinitionsAreRejectedBeforeRecursing()
+        {
+            var root = new EntityDefinition { code = "cycle", label = "cycle" }; root.children = new[] { root };
+            Assert.That(() => EntityAssetCompiler.Install(new KernelRuntime(), null, null, new[] { root }),
+                Throws.TypeOf<CommandException>().With.Message.Contains("순환"));
+        }
+
         [Test]
         public void InstanceAssetsDeclarePersonalFieldsAndConversationFunctionsIndependently()
         {
@@ -220,6 +248,17 @@ namespace Codetective.Tests.Operations
         }
 
 #if UNITY_EDITOR
+        [Test]
+        public void DeepAdditionalObjectChildrenRoundTripThroughUnitySerialization()
+        {
+            var scenario = Asset<KernelScenarioDefinition>(); scenario.additionalObjects = new[] { DeepLegacyDefinition(12) };
+            var restored = Asset<KernelScenarioDefinition>();
+            EditorJsonUtility.FromJsonOverwrite(EditorJsonUtility.ToJson(scenario), restored);
+            KernelRuntime runtime = restored.CreateRuntime(); runtime.SetQuestStage("deep.case", 20, QuestStatus.Active);
+            string command = string.Join(".", Enumerable.Range(0, 13).Select(i => "node" + i)) + ".check()";
+            Assert.That(runtime.Execute(command).Value.text, Is.EqualTo("deep result"));
+        }
+
         [Test]
         public void ShippedScenarioAssetsLoadInheritedMembersAndRoundTripThroughUnityJson()
         {

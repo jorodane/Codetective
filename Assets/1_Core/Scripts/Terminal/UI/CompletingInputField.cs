@@ -49,6 +49,7 @@ namespace Codetective.Terminal
 
         public override void OnSelect(BaseEventData eventData)
         {
+            TextInputFocus.Register(this);
             imeInput = ScopedImeInput.Acquire(this, imeSession);
             base.OnSelect(eventData);
         }
@@ -56,6 +57,7 @@ namespace Codetective.Terminal
         protected override void OnEnable()
         {
             base.OnEnable();
+            TextInputFocus.Register(this);
             if (textComponent != null) textComponent.canvasRenderer.SetAlpha(1f);
             Canvas.preWillRenderCanvases += DrawInlinePreview;
         }
@@ -328,6 +330,7 @@ namespace Codetective.Terminal
 
         protected override void OnDisable()
         {
+            TextInputFocus.Unregister(this);
             Canvas.preWillRenderCanvases -= DrawInlinePreview;
             submission.Cancel(); pendingCompletion = null; preview = null;
             EndImeSession();
@@ -337,6 +340,7 @@ namespace Codetective.Terminal
 
         protected override void OnDestroy()
         {
+            TextInputFocus.Unregister(this);
             if (ghost != null) DestroyPreview(ghost.gameObject);
             ((IDisposable)previewLayout).Dispose();
             base.OnDestroy();

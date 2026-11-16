@@ -49,7 +49,7 @@ namespace Codetective.Gameplay
         public string[] requiredAuthorities = Array.Empty<string>();
         public string[] forbiddenFacts = Array.Empty<string>();
         public ActionDefinition[] actions = Array.Empty<ActionDefinition>();
-        public EntityDefinition[] children = Array.Empty<EntityDefinition>();
+        [SerializeReference] public EntityDefinition[] children = Array.Empty<EntityDefinition>();
     }
     [Serializable] public sealed class InputDefinition
     {

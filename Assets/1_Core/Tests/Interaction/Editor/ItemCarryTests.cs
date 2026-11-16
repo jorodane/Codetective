@@ -7,6 +7,20 @@ namespace Codetective.Tests.Interaction
     public sealed class ItemCarryTests
     {
         [Test]
+        public void SceneItemsBecomeInteractableOnlyAfterExplicitRegistration()
+        {
+            var system = new GameObject("Carry"); var camera = new GameObject("Camera"); var paper = new GameObject("Paper");
+            try
+            {
+                HoldableItem item = paper.AddComponent<HoldableItem>();
+                ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                Assert.That(item.CanInteract(null), Is.False);
+                carry.Register(item); Assert.That(item.CanInteract(null), Is.True);
+                Assert.That(carry.TryPickup(item), Is.True);
+            }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(paper); Object.DestroyImmediate(camera); }
+        }
+        [Test]
         public void PickupDisablesPhysicsAndPutDownRestoresTheAuthoredPoseAndColliderStates()
         {
             var desk = new GameObject("Desk"); var camera = new GameObject("Camera"); var system = new GameObject("Carry");

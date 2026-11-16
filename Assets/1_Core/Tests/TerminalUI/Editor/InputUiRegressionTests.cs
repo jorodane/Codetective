@@ -80,6 +80,17 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void RegisteredInputRemainsProtectedAndReleasesAfterSelectionIsLost()
+        {
+            typeof(EventSystem).GetField("m_CurrentSelected", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(events, null);
+            Assert.That(field.isFocused, Is.True);
+            Assert.That(TextInputFocus.IsActive, Is.True);
+            TextInputFocus.ReleaseAll();
+            Assert.That(field.isFocused, Is.False);
+            Assert.That(TextInputFocus.IsActive, Is.False);
+        }
+
+        [Test]
         public void EmptyArrowBrowsingStaysOpenAcrossActualControllerWorldRefreshes()
         {
             var host = new GameObject("Controller"); host.transform.SetParent(root.transform); host.SetActive(false);

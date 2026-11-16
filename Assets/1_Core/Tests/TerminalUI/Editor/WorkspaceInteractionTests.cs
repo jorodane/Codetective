@@ -41,6 +41,12 @@ namespace Codetective.Terminal.Tests.UI
                 Set(inspection, "overviewAngle", presets[0]); Set(inspection, "terminalRoot", monitor.transform); Call(inspection, "Awake");
                 Component target = hotspot.AddComponent(FindType("Codetective.Interaction.InspectionTarget"));
                 Set(target, "closeUpAngle", presets[1]); Set(target, "terminalRoot", monitor.transform);
+                Assert.That(Call(inspection, "GetTarget", "monitor"), Is.Null);
+                Call(inspection, "RegisterTarget", target);
+                Assert.That(Call(inspection, "GetTarget", "MONITOR"), Is.SameAs(target));
+                Call(inspection, "UnregisterTarget", target);
+                Assert.That(Call(inspection, "GetTarget", "monitor"), Is.Null);
+                Call(inspection, "RegisterTarget", target);
                 foreach (int index in new[] { 2, 5 })
                 {
                     Call(inspection, "InspectAngle", presets[index]); Call(inspection, "LateUpdate");

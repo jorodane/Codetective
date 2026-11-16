@@ -5199,6 +5199,14 @@ MonoBehaviour:
   - monitor
   - counsel
   - gramophone
+  inspectionTargets:
+  - {fileID: 17712047}
+  - {fileID: 387702991}
+  - {fileID: 922546357}
+  - {fileID: 942849807}
+  - {fileID: 1216147797}
+  - {fileID: 1744334639}
+  - {fileID: 1971720972}
 --- !u!114 &1503248949
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7280,6 +7288,7 @@ GameObject:
   - component: {fileID: 2000000101}
   - component: {fileID: 2000000102}
   - component: {fileID: 2000000103}
+  - component: {fileID: 2000000104}
   - component: {fileID: 2000000140}
   m_Layer: 0
   m_Name: KernelSystems
@@ -7335,6 +7344,15 @@ MonoBehaviour:
   dialoguePresentation: {fileID: 11400000, guid: 294f87ed3f348b61b63714caa50069e6, type: 2}
   newspaperAnchor: {fileID: 2000000131}
   profilePaperAnchor: {fileID: 2000000181}
+  profilePaperSupports:
+  - {fileID: 414868070}
+  - {fileID: 1560031245}
+  - {fileID: 350070053}
+  sceneLights:
+  - {fileID: 114083513}
+  - {fileID: 321446934}
+  - {fileID: 1245893557}
+  - {fileID: 1287328584}
 --- !u!114 &2000000103
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7424,6 +7442,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 2000000101}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2000000104
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ac769d0caffce9be959c4b2c300d3ab, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  hand: {fileID: 0}
+  sceneItems: []
 --- !u!114 &2000000140
 MonoBehaviour:
   m_ObjectHideFlags: 0

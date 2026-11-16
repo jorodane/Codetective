@@ -8,6 +8,8 @@ namespace Codetective.Interaction
     public sealed class ItemCarryController : MonoBehaviour
     {
         [SerializeField] private Transform hand;
+        [Tooltip("Preplaced holdable items. Spawned items register explicitly with Register.")]
+        [SerializeField] private HoldableItem[] sceneItems = Array.Empty<HoldableItem>();
         public HoldableItem HeldItem { get; private set; }
         public event Action<HoldableItem> Used;
         public event Action<HoldableItem> PickedUp;
@@ -23,9 +25,9 @@ namespace Codetective.Interaction
         public void Initialize(Transform camera)
         {
             hand = camera;
-            foreach (HoldableItem item in FindObjectsOfType<HoldableItem>(true)) item.Register(this);
+            foreach (HoldableItem item in sceneItems) Register(item);
         }
-        public void Register(HoldableItem item) => item.Register(this);
+        public void Register(HoldableItem item) { if (item != null) item.Register(this); }
         public void SetPresentationVisible(bool visible) { if (HeldItem != null) HeldItem.SetPresentationVisible(visible); }
         public bool TryPickup(HoldableItem item)
         {
