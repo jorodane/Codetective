@@ -78,5 +78,43 @@ namespace Codetective.Terminal.Tests
             Assert.That(navigation.Current, Is.EqualTo("clinic"));
             Assert.That(navigation.CanGoBack, Is.False);
         }
+
+        [Test]
+        public void TabCyclingFollowsRegistrationOrderAndWrapsBothWays()
+        {
+            PageNavigation navigation = Navigation(); navigation.Navigate("clinic");
+            navigation.CycleTab(1); Assert.That(navigation.Current, Is.EqualTo("kernel"));
+            navigation.CycleTab(1); Assert.That(navigation.Current, Is.EqualTo("clinic-records"));
+            navigation.Navigate("custom"); navigation.CycleTab(1); Assert.That(navigation.Current, Is.EqualTo("clinic"));
+            navigation.CycleTab(-1); Assert.That(navigation.Current, Is.EqualTo("custom"));
+        }
+        [Test]
+        public void HiddenPagesRemainReachableWithoutAppearingInTheTabCycle()
+        {
+            var navigation = new PageNavigation();
+            navigation.Register("first"); navigation.Register("detail", false); navigation.Register("last");
+            navigation.Navigate("first"); navigation.CycleTab(1); Assert.That(navigation.Current, Is.EqualTo("last"));
+            navigation.Navigate("detail"); navigation.CycleTab(1); Assert.That(navigation.Current, Is.EqualTo("first"));
+            navigation.Navigate("detail"); navigation.CycleTab(-1); Assert.That(navigation.Current, Is.EqualTo("last"));
+        }
+        [Test]
+        public void EmptySingleAndUnselectedTabListsDoNotCreateDuplicateHistory()
+        {
+            var navigation = new PageNavigation(); int changes = 0; navigation.Changed += _ => changes++;
+            Assert.That(navigation.CycleTab(1), Is.False);
+            navigation.Register("only"); Assert.That(navigation.CycleTab(-1), Is.True);
+            Assert.That(navigation.Current, Is.EqualTo("only"));
+            Assert.That(navigation.CycleTab(1), Is.False); Assert.That(navigation.CycleTab(0), Is.False);
+            Assert.That(changes, Is.EqualTo(1)); Assert.That(navigation.CanGoBack, Is.False);
+        }
+        [Test]
+        public void CyclingRetainsPageHistoryAndIncludesNewVisibleTabs()
+        {
+            PageNavigation navigation = Navigation(); navigation.Navigate("clinic"); navigation.CycleTab(1);
+            navigation.Back(); Assert.That(navigation.Current, Is.EqualTo("clinic"));
+            navigation.Forward(); Assert.That(navigation.Current, Is.EqualTo("kernel"));
+            navigation.Register("new-tab"); navigation.Navigate("custom"); navigation.CycleTab(1);
+            Assert.That(navigation.Current, Is.EqualTo("new-tab"));
+        }
     }
 }

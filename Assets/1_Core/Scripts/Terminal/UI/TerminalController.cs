@@ -38,7 +38,7 @@ namespace Codetective.Terminal
             ApplyInputInteraction();
         }
 
-        public void SetInteractionEnabled(bool enabled, bool focusInput = true)
+        public void SetInteractionEnabled(bool enabled)
         {
             interactionEnabled = enabled;
             if (!enabled)
@@ -53,10 +53,10 @@ namespace Codetective.Terminal
                 group.interactable = enabled;
                 group.blocksRaycasts = enabled;
             }
-            ApplyInputInteraction(focusInput);
+            ApplyInputInteraction();
         }
 
-        private void ApplyInputInteraction(bool focusInput = true)
+        private void ApplyInputInteraction()
         {
             if (!AcceptsInput)
             {
@@ -67,7 +67,6 @@ namespace Codetective.Terminal
             }
             input.interactable = AcceptsInput;
             input.readOnly = !AcceptsInput;
-            if (focusInput && AcceptsInput && input.gameObject.activeInHierarchy) input.FocusAtEnd();
         }
 
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);
@@ -123,7 +122,8 @@ namespace Codetective.Terminal
 
             history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
                            "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
-                           "Tab / Enter / Space 자동완성 확정 · 다음 Enter 실행\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
+                           "입력창 클릭 후 명령 입력 · 입력 중 Tab / Enter / Space 자동완성 확정 · 다음 Enter 실행\n" +
+                           "입력하지 않을 때 Tab 다음 페이지 / Shift+Tab 이전 페이지\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
             transcript.text = history.Text;
             RefreshMemory();
             completionPanel.SetActive(false);

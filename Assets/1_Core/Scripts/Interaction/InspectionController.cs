@@ -147,7 +147,7 @@ namespace Codetective.Interaction
             // The click that starts the zoom must not also activate a terminal control.
             bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked && !NavigationBlocked;
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
-                activeTerminal.SetInteractionEnabled(ready, views.ActiveAngle?.Id == "monitor");
+                activeTerminal.SetInteractionEnabled(ready);
 #if ENABLE_INPUT_SYSTEM
             // Run after EventSystem so clicking an input and pressing E together cannot use an object.
             if (Carry == null) return;

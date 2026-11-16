@@ -4,6 +4,9 @@ using Codetective.Operations;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Codetective.Terminal
 {
@@ -42,6 +45,15 @@ namespace Codetective.Terminal
         private Font Font => heading != null && heading.font != null ? heading.font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
         private void Awake() => Initialize();
+        private void LateUpdate()
+        {
+#if ENABLE_INPUT_SYSTEM
+            // EventSystem has already selected any clicked input. Never steal its Tab/completion key.
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.tabKey.wasPressedThisFrame)
+                TryCycleTab(keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed ? -1 : 1);
+#endif
+        }
         public void Initialize()
         {
             if (initialized || navigationRoot == null) return;
@@ -67,7 +79,7 @@ namespace Codetective.Terminal
             foreach (MonitorPage other in pages.Values)
                 if (page.transform.IsChildOf(other.transform) || other.transform.IsChildOf(page.transform))
                     throw new ArgumentException("페이지 루트끼리는 중첩할 수 없습니다.");
-            navigation.Register(page.Id);
+            navigation.Register(page.Id, page.ShowInNavigation);
             pages.Add(page.Id, page);
             page.gameObject.SetActive(false);
             InitializeContent(page);
@@ -89,6 +101,14 @@ namespace Codetective.Terminal
         public void ShowPage(string id) => TryNavigate(id);
         public void GoBack() => navigation.Back();
         public void GoForward() => navigation.Forward();
+        public bool TryCycleTab(int direction)
+        {
+            if (!initialized || !isActiveAndEnabled || terminal == null || !terminal.InteractionEnabled ||
+                TextInputFocus.IsActive || IsCompositionProtected || terminal.IsCompositionProtected) return false;
+            if (!navigation.CycleTab(direction)) return false;
+            if (tabs.TryGetValue(CurrentPage.Id, out Button tab)) tab.Select();
+            return true;
+        }
 
         private void Display(string id)
         {

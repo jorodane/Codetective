@@ -51,6 +51,54 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(root.GetComponentsInChildren<MonitorPage>(true).Count(p => p.gameObject.activeSelf), Is.EqualTo(1));
             Assert.That(terminal.isActiveAndEnabled, Is.True);
         }
+
+        [Test]
+        public void EnteringStartingAndReenablingTheConsoleNeverSelectsItsInput()
+        {
+            WithEventSystem(events =>
+            {
+                host.ShowPage("kernel"); terminal.SetInteractionEnabled(true);
+                Assert.That(events.currentSelectedGameObject, Is.Not.SameAs(input.gameObject));
+                Assert.That(input.isFocused, Is.False);
+                input.SetTextWithoutNotify("save draft"); Invoke(terminal, "Start");
+                Assert.That(events.currentSelectedGameObject, Is.Not.SameAs(input.gameObject));
+                host.ShowPage("clinic"); host.ShowPage("kernel");
+                Assert.That(events.currentSelectedGameObject, Is.Not.SameAs(input.gameObject));
+                terminal.SetInteractionEnabled(false); terminal.SetInteractionEnabled(true);
+                Assert.That(events.currentSelectedGameObject, Is.Not.SameAs(input.gameObject));
+                Assert.That(input.text, Is.EqualTo("save draft"));
+            });
+        }
+        [Test]
+        public void KeyboardPageCyclingWrapsVisibleTabsWithoutFocusingTheConsole()
+        {
+            WithEventSystem(events =>
+            {
+                Assert.That(host.TryCycleTab(1), Is.False); // Disabled monitor.
+                terminal.SetInteractionEnabled(true);
+                string[] order = root.GetComponentsInChildren<MonitorPage>(true).Where(p => p.ShowInNavigation).Select(p => p.Id).ToArray();
+                host.ShowPage(order.Last()); Assert.That(host.TryCycleTab(1), Is.True);
+                Assert.That(host.CurrentPage.Id, Is.EqualTo(order.First()));
+                Assert.That(host.TryCycleTab(-1), Is.True); Assert.That(host.CurrentPage.Id, Is.EqualTo(order.Last()));
+                Assert.That(input.isFocused, Is.False);
+                Assert.That(events.currentSelectedGameObject, Is.Not.SameAs(input.gameObject));
+            });
+        }
+        [Test]
+        public void SelectedCommandAndNoteInputsKeepTabForEditing()
+        {
+            WithEventSystem(events =>
+            {
+                terminal.SetInteractionEnabled(true); host.ShowPage("kernel");
+                events.SetSelectedGameObject(input.gameObject);
+                Assert.That(host.TryCycleTab(1), Is.False); Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel"));
+                Assert.That(events.currentSelectedGameObject, Is.SameAs(input.gameObject));
+                host.ShowPage("clinic-records"); InputField note = host.CurrentPage.GetComponentInChildren<InputField>(true);
+                events.SetSelectedGameObject(note.gameObject);
+                Assert.That(host.TryCycleTab(-1), Is.False); Assert.That(host.CurrentPage.Id, Is.EqualTo("clinic-records"));
+                Assert.That(events.currentSelectedGameObject, Is.SameAs(note.gameObject));
+            });
+        }
         [Test]
         public void HiddenConsoleReceivesReportsAndRejectsPendingSubmissions()
         {
@@ -138,6 +186,12 @@ namespace Codetective.Terminal.Tests.UI
             host.ShowPage("kernel"); terminal.SetInteractionEnabled(true); Invoke(mail, "Choose", "answer");
             Assert.That(runtime.SelectedMailChoice("choice"), Is.Null.Or.Empty);
             host.ShowPage("mail"); Invoke(mail, "Choose", "answer"); Assert.That(runtime.SelectedMailChoice("choice"), Is.EqualTo("answer"));
+        }
+        private static void WithEventSystem(Action<EventSystem> check)
+        {
+            EventSystem previous = EventSystem.current; var root = new GameObject("Page navigation events", typeof(EventSystem));
+            try { EventSystem.current = root.GetComponent<EventSystem>(); check(EventSystem.current); }
+            finally { Object.DestroyImmediate(root); EventSystem.current = previous; }
         }
         private static T Field<T>(object owner, string name) => (T)owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(owner);
         private static void SetField(object owner, string name, object value) => owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(owner, value);

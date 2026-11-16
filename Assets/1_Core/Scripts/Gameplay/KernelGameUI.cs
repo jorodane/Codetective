@@ -94,7 +94,7 @@ namespace Codetective.Gameplay
             dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation);
             BuildDrawerControls();
             BuildItemControls();
-            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1100, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 보기 · ESC 메뉴  (입력 중 제외)", 14);
+            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 (입력 중 제외) · ESC 메뉴", 14);
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
