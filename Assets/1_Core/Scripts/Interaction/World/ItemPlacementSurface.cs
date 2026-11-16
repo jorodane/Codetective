@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Codetective.Interaction
 {
     /// <summary>A drawer's usable interior, in drawer-local metres. Contents follow its slide.</summary>
-    [DisallowMultipleComponent]
+    [DisallowMultipleComponent, RequireComponent(typeof(BoxCollider))]
     public sealed class ItemPlacementSurface : MonoBehaviour
     {
         [SerializeField] private Vector3 center;
@@ -16,7 +16,9 @@ namespace Codetective.Interaction
         public void Initialize(string id, SlidingDrawer owner, Bounds interior)
         {
             Id = id; drawer = owner; center = interior.center; size = interior.size;
-            var collider = gameObject.GetComponent<BoxCollider>() ?? gameObject.AddComponent<BoxCollider>();
+            // Unity's missing-component wrappers compare equal to null without being CLR null.
+            var collider = GetComponent<BoxCollider>();
+            if (collider == null) collider = gameObject.AddComponent<BoxCollider>();
             collider.center = center; collider.size = size; collider.isTrigger = true;
         }
         public bool TryGetPosition(HoldableItem item, out Vector3 position, bool requireOpen = true)

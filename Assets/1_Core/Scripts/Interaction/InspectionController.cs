@@ -34,6 +34,7 @@ namespace Codetective.Interaction
         private bool started;
 
         public InspectionMode Mode => flow.Mode;
+        public bool CanInspectByPointer => flow.CanInspectByPointer(views != null ? views.ActiveAngle?.Id : null);
         public event Action<CameraAnglePreset> AngleEntered;
         public event Action OverviewEntered;
         public Func<bool> BackHandler { get; set; }
@@ -162,7 +163,7 @@ namespace Codetective.Interaction
 
         public void InspectAtScreenPoint(Vector2 point)
         {
-            if (flow.Mode == InspectionMode.Menu || views.IsTransitioning || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
+            if (!CanInspectByPointer || views.IsTransitioning || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
                 return;
             Ray ray = views.ControlledCamera.ScreenPointToRay(point);
             RaycastHit[] hits = Physics.RaycastAll(ray, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
@@ -179,7 +180,7 @@ namespace Codetective.Interaction
 
         public void InspectTarget(InspectionTarget target)
         {
-            if (target != null && target.isActiveAndEnabled)
+            if (CanInspectByPointer && target != null && target.isActiveAndEnabled)
                 InspectAngle(target.Angle, target.Terminal ?? (target.Angle != null ? FindTerminalFor(target.Angle) : null));
         }
 

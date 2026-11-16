@@ -28,6 +28,7 @@ namespace Codetective.Terminal.Tests.UI
             var canvas = new GameObject("Monitor", typeof(RectTransform), typeof(Canvas));
             var set = ScriptableObject.CreateInstance<CameraAngleSet>();
             var presets = new List<CameraAnglePreset>(); float oldTime = Time.timeScale;
+            var hotspot = new GameObject("MonitorHotspot");
             try
             {
                 foreach (string id in new[] { "overview", "monitor", "counsel", "profile", "drawer", "gramophone" })
@@ -38,9 +39,14 @@ namespace Codetective.Terminal.Tests.UI
                 TerminalController terminal = monitor.GetComponent<TerminalController>();
                 Component inspection = root.AddComponent(FindType("Codetective.Interaction.InspectionController"));
                 Set(inspection, "overviewAngle", presets[0]); Set(inspection, "terminalRoot", monitor.transform); Call(inspection, "Awake");
+                Component target = hotspot.AddComponent(FindType("Codetective.Interaction.InspectionTarget"));
+                Set(target, "closeUpAngle", presets[1]); Set(target, "terminalRoot", monitor.transform);
                 foreach (int index in new[] { 2, 5 })
                 {
                     Call(inspection, "InspectAngle", presets[index]); Call(inspection, "LateUpdate");
+                    Assert.That(terminal.InteractionEnabled, Is.True);
+                    Call(inspection, "InspectTarget", target);
+                    Assert.That(views.ActiveAngle, Is.SameAs(presets[index]), "Clicking the monitor must keep the working angle.");
                     Assert.That(terminal.InteractionEnabled, Is.True);
                     Call(inspection, "HandleEscape");
                     Assert.That(views.ActiveAngle, Is.SameAs(presets[index])); Assert.That(terminal.InteractionEnabled, Is.False);
@@ -48,9 +54,29 @@ namespace Codetective.Terminal.Tests.UI
                     Assert.That(views.ActiveAngle, Is.SameAs(presets[index])); Assert.That(terminal.InteractionEnabled, Is.True);
                 }
                 Assert.That(Call(inspection, "TryInspectNumber", 4), Is.True); Assert.That(views.ActiveAngle.Id, Is.EqualTo("drawer"));
+                Call(inspection, "InspectTarget", target); Assert.That(views.ActiveAngle.Id, Is.EqualTo("monitor"));
                 Call(inspection, "ReturnToOverview"); Assert.That(views.ActiveAngle.Id, Is.EqualTo("overview"));
             }
-            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(canvas); Object.DestroyImmediate(set); foreach (var angle in presets) Object.DestroyImmediate(angle); Time.timeScale = oldTime; }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(canvas); Object.DestroyImmediate(hotspot); Object.DestroyImmediate(set); foreach (var angle in presets) Object.DestroyImmediate(angle); Time.timeScale = oldTime; }
+        }
+
+        [Test]
+        public void ViewEventsBeforeOverlayInitializationDoNotAccessUnboundReferences()
+        {
+            var root = new GameObject("Uninitialized overlay"); root.SetActive(false);
+            var angle = ScriptableObject.CreateInstance<CameraAnglePreset>(); Set(angle, "angleId", "counsel");
+            try
+            {
+                Component game = root.AddComponent(FindType("Codetective.Gameplay.KernelGameController"));
+                Component overlay = root.GetComponent(FindType("Codetective.Gameplay.KernelGameUI")); Set(game, "ui", overlay);
+                Assert.That(() => Call(game, "EnterView", angle), Throws.Nothing);
+                Assert.That(() => Call(overlay, "ShowContext", "counsel"), Throws.Nothing);
+                Assert.That(() => Call(overlay, "HideContext"), Throws.Nothing);
+                Assert.That(Call(overlay, "Back"), Is.False);
+                Assert.That(overlay.GetType().GetProperty("IsInitialized").GetValue(overlay), Is.False);
+                Assert.That(() => Call(game, "LeaveView"), Throws.Nothing);
+            }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(angle); }
         }
 
         [Test]

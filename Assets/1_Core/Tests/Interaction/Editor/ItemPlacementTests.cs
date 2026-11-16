@@ -8,6 +8,23 @@ namespace Codetective.Tests.Interaction
     public sealed class ItemPlacementTests
     {
         [Test]
+        public void ANewDrawerInteriorCreatesAndReusesItsCollider()
+        {
+            var root = new GameObject("DrawerInterior");
+            try
+            {
+                var surface = root.AddComponent<ItemPlacementSurface>();
+                Bounds interior = new Bounds(new Vector3(1, 2, 3), new Vector3(0.4f, 0.1f, 0.4f));
+                Assert.That(() => surface.Initialize("drawer", null, interior), Throws.Nothing);
+                BoxCollider collider = root.GetComponent<BoxCollider>();
+                Assert.That(collider, Is.Not.Null); Assert.That(collider.isTrigger, Is.True);
+                Assert.That(collider.center, Is.EqualTo(interior.center)); Assert.That(collider.size, Is.EqualTo(interior.size));
+                surface.Initialize("drawer", null, interior);
+                Assert.That(root.GetComponents<BoxCollider>().Length, Is.EqualTo(1));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+        [Test]
         public void AClosedMovingOrTooSmallDrawerRejectsPlacement()
         {
             var root = new GameObject("Drawer"); var paper = new GameObject("Paper");

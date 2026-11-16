@@ -9,6 +9,9 @@ namespace Codetective.Interaction
         public InspectionMode Mode { get; private set; } = InspectionMode.Overview;
         private InspectionMode beforeMenu = InspectionMode.Overview;
 
+        public bool CanInspectByPointer(string currentAngleId) => Mode == InspectionMode.Overview ||
+            (Mode == InspectionMode.Inspecting && string.Equals(currentAngleId, "drawer", System.StringComparison.OrdinalIgnoreCase));
+
         public bool Inspect()
         {
             if (Mode == InspectionMode.Menu)

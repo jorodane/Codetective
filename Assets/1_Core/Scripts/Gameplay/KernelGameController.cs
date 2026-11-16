@@ -74,6 +74,7 @@ namespace Codetective.Gameplay
         private bool narrativeDirty;
         private float narrativeSaveAt;
         private bool initialized;
+        private bool presentationInitialized;
         private bool sceneBasisCaptured;
 
         private void Awake()
@@ -105,34 +106,40 @@ namespace Codetective.Gameplay
         private void Start()
         {
             if (!initialized) { enabled = false; return; }
-            CreateCoffeeCopy();
-            CreateCalendarText();
-            InitializeDrawers();
-            Carry = GetComponent<ItemCarryController>() ?? gameObject.AddComponent<ItemCarryController>();
+            Carry = GetComponent<ItemCarryController>();
+            if (Carry == null) Carry = gameObject.AddComponent<ItemCarryController>();
             Carry.Initialize(views.ControlledCamera.transform); Carry.Used += UseItem; inspection.Carry = Carry;
             Carry.ManipulationAllowed = () => !IsDateTransitioning && !IsVisitPresenting && !IsViewTransitioning &&
                 inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !inspection.TextInputFocused;
             Carry.PickedUp += PickedUpItem; Carry.Placed += StoredItem;
+            // Bind and build the overlay before optional desk/paper presentation can fail or emit view events.
+            ui.Initialize(this, inspection, font);
+            inspection.BackHandler = ui.Back;
+            inspection.PointerBlocked = ui.BlocksPointer;
+            CreateCoffeeCopy();
+            CreateCalendarText();
+            InitializeDrawers();
+            ui.RefreshDrawerControls();
             newspaper = gameObject.AddComponent<DeskNewspaper>();
             newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry); newspaper.Refresh(Runtime);
             newspaper.Document.AreaClicked += ReadPrintedArea;
             InitializeProfilePaper();
             RestoreStoredItems();
-            ui.Initialize(this, inspection, font);
             sceneLights = FindObjectsOfType<Light>();
             initialLights = Array.ConvertAll(sceneLights, light => light.enabled);
             if (Runtime.Facts.Contains("turnOffLights")) SetLightsOff();
-            inspection.BackHandler = ui.Back;
-            inspection.PointerBlocked = ui.BlocksPointer;
-            visits = GetComponent<ClinicVisitPresentation>() ?? gameObject.AddComponent<ClinicVisitPresentation>(); visits.Initialize(Runtime);
+            visits = GetComponent<ClinicVisitPresentation>();
+            if (visits == null) visits = gameObject.AddComponent<ClinicVisitPresentation>();
+            visits.Initialize(Runtime);
             if (Runtime.CurrentAppointment != null) SelectedProfileId = Runtime.CurrentAppointment.profileId;
+            presentationInitialized = true;
             Runtime.RetrySceneActions();
             if (!Runtime.IsDayEnded && !Runtime.DayIntroSeen) StartCoroutine(IntroduceDay());
         }
 
         private void Update()
         {
-            if (!initialized) return;
+            if (!presentationInitialized) return;
             if (!IsDateTransitioning) Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
             if (!IsDateTransitioning && Runtime.IsClinicTransitioning && !IsVisitPresenting) StartCoroutine(PresentVisits());
             if (Runtime.IsDayEnded && !Runtime.IsClinicTransitioning && !IsDateTransitioning && !IsVisitPresenting && summaryShownDay != Runtime.Day &&
@@ -165,8 +172,17 @@ namespace Codetective.Gameplay
             return Quaternion.Euler(tilt);
         }
 
-        private void EnterView(CameraAnglePreset angle) { CurrentView = angle.Id; pendingView = angle.Id; if (angle.Id != "drawer") pendingPlacement = false; ui.HideContext(); }
-        private void LeaveView() { CurrentView = "overview"; pendingView = null; pendingPlacement = false; ui.HideContext(); }
+        private void EnterView(CameraAnglePreset angle)
+        {
+            CurrentView = angle.Id; pendingView = angle.Id;
+            if (angle.Id != "drawer") pendingPlacement = false;
+            if (ui != null) ui.HideContext();
+        }
+        private void LeaveView()
+        {
+            CurrentView = "overview"; pendingView = null; pendingPlacement = false;
+            if (ui != null) ui.HideContext();
+        }
         public void ShowMonitor()
         {
             int index = views.AngleSet.FindId("monitor");
@@ -312,7 +328,8 @@ namespace Codetective.Gameplay
             if (deskSurface == null) return;
             foreach (Transform child in deskSurface.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("Desk_big_Drawer_", StringComparison.Ordinal)).OrderBy(t => t.name, StringComparer.Ordinal))
             {
-                SlidingDrawer drawer = child.GetComponent<SlidingDrawer>() ?? child.gameObject.AddComponent<SlidingDrawer>();
+                SlidingDrawer drawer = child.GetComponent<SlidingDrawer>();
+                if (drawer == null) drawer = child.gameObject.AddComponent<SlidingDrawer>();
                 drawer.Initialize(Runtime, "desk." + child.name); drawers.Add(drawer);
                 var storage = new GameObject("DrawerInterior"); storage.transform.SetParent(child, false);
                 ItemPlacementSurface surface = storage.AddComponent<ItemPlacementSurface>();

@@ -55,13 +55,16 @@ namespace Codetective.Gameplay
         private Text dateSubtitle;
         private ClinicDayOverlay clinicDay;
         private CanvasGroup interfaceInteraction;
+        public bool IsInitialized { get; private set; }
         public bool SummaryVisible => clinicDay != null && clinicDay.SummaryVisible;
         public bool IsCompositionProtected => (protocolSource is CompletingInputField source && source.isFocused && source.IsCompositionProtected) ||
             (arguments is CompletingInputField args && args.isFocused && args.IsCompositionProtected);
 
         public void Initialize(KernelGameController game, InspectionController inspection, Font font)
         {
-            this.game = game; this.inspection = inspection; this.font = font;
+            if (IsInitialized) return;
+            this.game = game; this.inspection = inspection;
+            this.font = font != null ? font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             draft = game.Runtime.ExampleProtocol;
             draftArguments = game.Runtime.ExampleArguments;
             root = new GameObject("KernelInterface", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -86,8 +89,9 @@ namespace Codetective.Gameplay
             feedback = Label(panel, new Vector2(20, -552), new Vector2(530, 54), "", 17);
             panel.gameObject.SetActive(false);
             BuildOperationsPage();
-            var dialogue = GetComponent<ConsultationOverlay>() ?? gameObject.AddComponent<ConsultationOverlay>();
-            dialogue.Initialize(game, inspection, root.transform, font, game.DialoguePresentation);
+            var dialogue = GetComponent<ConsultationOverlay>();
+            if (dialogue == null) dialogue = gameObject.AddComponent<ConsultationOverlay>();
+            dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation);
             BuildDrawerControls();
             BuildItemControls();
             Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1100, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 보기 · ESC 메뉴  (입력 중 제외)", 14);
@@ -95,12 +99,14 @@ namespace Codetective.Gameplay
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
             BuildDateTransition();
-            clinicDay = gameObject.AddComponent<ClinicDayOverlay>(); clinicDay.Initialize(game, inspection, root.transform, font);
+            clinicDay = gameObject.AddComponent<ClinicDayOverlay>(); clinicDay.Initialize(game, inspection, root.transform, this.font);
+            IsInitialized = true;
+            if (context != null) ShowContext(context);
         }
 
         private void Update()
         {
-            if (game == null || root == null) return;
+            if (!IsInitialized) return;
             interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && inspection.Mode != InspectionMode.Menu;
             drawerBar.gameObject.SetActive(game.CanOperateDrawers && modal == null);
             HoldableItem held = game.Carry.HeldItem;
@@ -138,6 +144,7 @@ namespace Codetective.Gameplay
         public void ShowContext(string id)
         {
             context = id;
+            if (!IsInitialized) return;
             if (id == "monitor" || id == "counsel" || id == "drawer" || id == "profile" || id == "gramophone") { HidePanel(); return; }
             BuildContext();
         }
@@ -146,6 +153,7 @@ namespace Codetective.Gameplay
 
         public bool Back()
         {
+            if (!IsInitialized) return false;
             if (game.IsDateTransitioning) return true;
             if (SummaryVisible) { game.CloseDaySummary(); return true; }
             if (modal == null) return false;
@@ -158,6 +166,7 @@ namespace Codetective.Gameplay
 
         private void OpenModal(string name)
         {
+            if (!IsInitialized) return;
             if (inspection.Mode == InspectionMode.Menu || game.IsDateTransitioning || game.IsVisitPresenting || SummaryVisible) return;
             SaveDraft();
             modal = name;
@@ -190,7 +199,7 @@ namespace Codetective.Gameplay
             modal = null;
             openedDocument = null;
             if (newspaperReader != null) newspaperReader.gameObject.SetActive(false);
-            inspection.ModalInputBlocked = false;
+            if (inspection != null) inspection.ModalInputBlocked = false;
             ClearSelection();
         }
 
@@ -233,6 +242,11 @@ namespace Codetective.Gameplay
                 drawerButtons[i] = Button(drawerBar, new Vector2(12 + i * 122, -34), new Vector2(114, 34), "", () => game.ToggleDrawer(index));
             }
             drawerBar.gameObject.SetActive(false);
+        }
+        public void RefreshDrawerControls()
+        {
+            if (!IsInitialized || drawerButtons.Length == game.Drawers.Count) return;
+            drawerBar.gameObject.SetActive(false); Destroy(drawerBar.gameObject); BuildDrawerControls();
         }
         private void BuildOperationsPage()
         {
@@ -514,7 +528,7 @@ namespace Codetective.Gameplay
             foreach (GameObject item in controls) { item.SetActive(false); Destroy(item); }
             controls.Clear(); protocolSource = null; arguments = null;
             suggestionButtons.Clear(); suggestions = Array.Empty<Completion>(); protocolSuggestions = null;
-            feedback.text = "";
+            if (feedback != null) feedback.text = "";
         }
         private void HidePanel() { if (panel != null) { ClearControls(); panel.gameObject.SetActive(false); } }
         private void ClearSelection()
@@ -589,6 +603,6 @@ namespace Codetective.Gameplay
             return text;
         }
 
-        private void OnDestroy() { if (root != null) Destroy(root); if (dateRoot != null) Destroy(dateRoot); }
+        private void OnDestroy() { IsInitialized = false; if (root != null) Destroy(root); if (dateRoot != null) Destroy(dateRoot); }
     }
 }

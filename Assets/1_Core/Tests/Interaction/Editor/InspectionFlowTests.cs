@@ -11,6 +11,37 @@ namespace Codetective.Tests.Interaction
             Assert.That(new InspectionFlow().Mode, Is.EqualTo(InspectionMode.Overview));
         }
 
+        [TestCase(null)]
+        [TestCase("monitor")]
+        [TestCase("drawer")]
+        public void OverviewAllowsObjectClicks(string currentAngle)
+        {
+            Assert.That(new InspectionFlow().CanInspectByPointer(currentAngle), Is.True);
+        }
+
+        [TestCase("drawer", true)]
+        [TestCase("DRAWER", true)]
+        [TestCase("counsel", false)]
+        [TestCase("gramophone", false)]
+        [TestCase("monitor", false)]
+        [TestCase("profile", false)]
+        [TestCase("clock", false)]
+        [TestCase("portrait", false)]
+        [TestCase(null, false)]
+        public void OnlyDrawerInspectionAllowsClicksToChangeAngles(string currentAngle, bool allowed)
+        {
+            var flow = new InspectionFlow(); flow.Inspect();
+            Assert.That(flow.CanInspectByPointer(currentAngle), Is.EqualTo(allowed));
+        }
+
+        [Test]
+        public void MenuBlocksDrawerClickNavigationUntilResumed()
+        {
+            var flow = new InspectionFlow(); flow.Inspect(); flow.Escape();
+            Assert.That(flow.CanInspectByPointer("drawer"), Is.False);
+            flow.Resume(); Assert.That(flow.CanInspectByPointer("drawer"), Is.True);
+        }
+
         [Test]
         public void EscapeWhileInspectingOpensTheMenuImmediately()
         {
