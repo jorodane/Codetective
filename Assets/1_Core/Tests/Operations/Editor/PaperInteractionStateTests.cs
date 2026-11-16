@@ -48,6 +48,32 @@ namespace Codetective.Tests.Operations
             Assert.That(r.StoredItems.Count, Is.EqualTo(2));
         }
         [Test]
+        public void FreePlacementCoordinatesSurviveReloadAndMovingWithinTheSameSurface()
+        {
+            KernelRuntime runtime = World();
+            var position = new StoredItemState { itemId = "coffee", containerId = "desk.top", hasPosition = true, x = 0.25f, y = 0.04f, z = -0.3f };
+            runtime.SetItemStorage(position); position.x = 99;
+            Assert.That(runtime.StoredItems.Single().x, Is.EqualTo(0.25f));
+            position.x = -0.1f; runtime.SetItemStorage(position);
+            KernelSnapshot snapshot = runtime.Capture(); KernelRuntime restored = World(); restored.Restore(snapshot);
+            snapshot.storedItems[0].x = 88;
+            StoredItemState saved = restored.StoredItems.Single();
+            Assert.That(saved.hasPosition, Is.True); Assert.That(saved.x, Is.EqualTo(-0.1f));
+            Assert.That(saved.y, Is.EqualTo(0.04f)); Assert.That(saved.z, Is.EqualTo(-0.3f));
+            runtime.SetItemStorage("paper", "old-drawer");
+            Assert.That(runtime.StoredItems.Single(s => s.itemId == "paper").hasPosition, Is.False);
+        }
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        public void InvalidPlacementCoordinatesAreRejectedWhenSavingAndLoading(float coordinate)
+        {
+            KernelRuntime runtime = World();
+            var position = new StoredItemState { itemId = "paper", containerId = "desk.top", hasPosition = true, x = coordinate };
+            Assert.That(() => runtime.SetItemStorage(position), Throws.TypeOf<CommandException>());
+            KernelSnapshot snapshot = runtime.Capture(); snapshot.storedItems = new[] { position };
+            Assert.That(() => runtime.Restore(snapshot), Throws.TypeOf<CommandException>());
+        }
+        [Test]
         public void LegacySavesHaveNoStoredItemsAndDuplicateRecordsAreRejected()
         {
             KernelRuntime r = World(); KernelSnapshot saved = r.Capture(); saved.storedItems = null;

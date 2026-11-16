@@ -9,10 +9,12 @@ namespace Codetective.Gameplay
     public sealed class DeskNewspaper : MonoBehaviour
     {
         private GameObject paper;
+        private NewspaperArticleAsset[] layouts;
         public HoldableItem Item { get; private set; }
         public PaperDocument Document { get; private set; }
-        public void Initialize(Transform anchor, Transform desk, Font font, ItemCarryController carry)
+        public void Initialize(Transform anchor, Transform desk, Font font, ItemCarryController carry, NewspaperArticleAsset[] articles = null)
         {
+            layouts = articles ?? System.Array.Empty<NewspaperArticleAsset>();
             paper = new GameObject("DailyNewspaper"); paper.transform.SetParent(transform, false);
             Vector3 position = anchor != null ? anchor.position : new Vector3(-0.15f, 0.91f, -2.66f);
             if (desk != null)
@@ -24,7 +26,7 @@ namespace Codetective.Gameplay
             Item = paper.AddComponent<HoldableItem>();
             Item.Configure("desk.newspaper", "오늘의 신문", HeldItemUse.Newspaper);
             Document = paper.AddComponent<PaperDocument>();
-            Document.Initialize(Item, carry, Camera.main, font, new Vector2(0.44f, 0.28f)); carry.Register(Item);
+            Document.Initialize(Item, carry, carry.ViewCamera, font, new Vector2(0.44f, 0.28f)); carry.Register(Item);
         }
         public void Refresh(KernelRuntime runtime)
         {
@@ -32,6 +34,7 @@ namespace Codetective.Gameplay
             PaperSection[] sections = runtime.NewspaperArticles(runtime.Day).Select(article => new PaperSection
             {
                 title = article.headline, text = article.body,
+                layout = layouts.FirstOrDefault(asset => asset != null && asset.article.id == article.id)?.layout,
                 clues = article.clues.Select(clue => new PaperClue { label = clue.keyword,
                     collect = () => runtime.RecordNewspaperClue(article.id, clue.id) }).ToArray()
             }).ToArray();

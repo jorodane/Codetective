@@ -69,7 +69,8 @@ namespace Codetective.Gameplay
             ConsultationLine line = game.Runtime.CurrentConsultation;
             AppointmentProgress visit = game.Runtime.CurrentAppointment;
             bool sequence = game.Runtime.IsClinicTransitioning;
-            bool visible = (line != null || sequence) && !game.IsDateTransitioning && inspection.Mode != InspectionMode.Menu;
+            bool visible = (line != null || sequence) && !game.IsDateTransitioning && inspection.Mode != InspectionMode.Menu &&
+                !inspection.ModalInputBlocked && (game.Carry == null || game.Carry.HeldItem == null);
             bubble.gameObject.SetActive(visible); if (!visible) return;
             clue.gameObject.SetActive(!sequence && !string.IsNullOrWhiteSpace(line?.keyword));
             hmm.gameObject.SetActive(!sequence); ah.gameObject.SetActive(!sequence);

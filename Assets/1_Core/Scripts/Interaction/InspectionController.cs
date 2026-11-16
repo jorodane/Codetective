@@ -150,25 +150,24 @@ namespace Codetective.Interaction
         private void LateUpdate()
         {
             // The click that starts the zoom must not also activate a terminal control.
-            bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked && !NavigationBlocked;
+            bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked && !NavigationBlocked &&
+                (Carry == null || Carry.HeldItem == null);
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
                 activeTerminal.SetInteractionEnabled(ready);
 #if ENABLE_INPUT_SYSTEM
-            // Run after EventSystem so clicking an input and pressing E together cannot use an object.
             if (Carry == null) return;
             if (NavigationBlocked || flow.Mode == InspectionMode.Menu || views.IsTransitioning || ModalInputBlocked)
             { Carry.HidePlacementPreview(); return; }
             if (Carry.IsPlacing && Mouse.current != null)
                 Carry.UpdatePlacement(Mouse.current.position.ReadValue(), PointerBlocked != null && PointerBlocked(Mouse.current.position.ReadValue()));
-            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame) Carry.TryUse(TextInputFocused);
             if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame && !TextInputFocused)
-            { if (Carry.IsPlacing) Carry.CancelPlacement(); else Carry.PutDown(); }
+            { if (Carry.IsPlacing) Carry.CancelPlacement(); }
 #endif
         }
 
         public void InspectAtScreenPoint(Vector2 point)
         {
-            if (!CanInspectByPointer || views.IsTransitioning || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
+            if (!CanInspectByPointer || (Carry != null && Carry.IsExamining) || views.IsTransitioning || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
                 return;
             Ray ray = views.ControlledCamera.ScreenPointToRay(point);
             RaycastHit[] hits = Physics.RaycastAll(ray, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
@@ -193,30 +192,27 @@ namespace Codetective.Interaction
         {
             if (flow.Mode == InspectionMode.Menu || NavigationBlocked || views.IsTransitioning || ModalInputBlocked ||
                 (PointerBlocked != null && PointerBlocked(point))) return false;
+            if (Carry != null && Carry.IsExamining) return true;
             if (TextInputFocused) TextInputFocus.ReleaseAll();
-            if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
             RaycastHit[] hits = Physics.RaycastAll(views.ControlledCamera.ScreenPointToRay(point), clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-            SlidingDrawer openDrawer = null;
             foreach (RaycastHit hit in hits)
             {
-                if (hit.collider.GetComponent<ItemPlacementSurface>() != null) continue;
-                InspectionActionTarget action = hit.collider.GetComponentInParent<InspectionActionTarget>();
-                // An open drawer's coarse collider must not swallow clicks on its stored contents.
-                if (openDrawer != null)
+                if (hit.collider.GetComponent<ItemPlacementSurface>() != null)
                 {
-                    if (action is HoldableItem stored && stored.Storage != null && stored.Storage.GetComponentInParent<SlidingDrawer>() == openDrawer && stored.CanInteract(views.ActiveAngle?.Id))
-                    { stored.Interact(); return true; }
-                    if (hit.collider.GetComponentInParent<SlidingDrawer>() == openDrawer) continue;
-                    openDrawer.Interact(); return true;
+                    if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
+                    continue;
                 }
-                if (action is SlidingDrawer drawer && drawer.IsOpen && drawer.CanInteract(views.ActiveAngle?.Id))
-                { openDrawer = drawer; continue; }
+                InspectionActionTarget action = hit.collider.GetComponentInParent<InspectionActionTarget>();
+                if (action is DrawerFrontTarget front && front.CanInteract(views.ActiveAngle?.Id)) { front.Interact(); return true; }
+                // Prefab body colliders must not turn the entire open tray into a close button.
+                if (action is SlidingDrawer) continue;
+                if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
                 if (action != null && action.CanInteract(views.ActiveAngle?.Id)) { action.Interact(); return true; }
                 // Coarse inspection volumes select an angle; they must not obstruct its detailed controls.
                 if (hit.collider.GetComponentInParent<InspectionTarget>() == null && !hit.collider.isTrigger) return false;
             }
-            if (openDrawer != null) { openDrawer.Interact(); return true; }
+            if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
             return false;
         }
 
@@ -246,7 +242,6 @@ namespace Codetective.Interaction
             if (!views.TryGoToIndex(views.AngleSet.IndexOf(angle)))
                 return;
 
-            Carry?.CancelPlacement();
             DisableTerminal();
             activeTerminal = targetTerminal;
             if (activeTerminal != null)
@@ -276,7 +271,6 @@ namespace Codetective.Interaction
         {
             if (flow.Mode == InspectionMode.Menu || !RequestOverview())
                 return;
-            Carry?.CancelPlacement();
             DisableTerminal();
             flow.ReturnToOverview();
             OverviewEntered?.Invoke();

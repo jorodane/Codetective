@@ -15,6 +15,7 @@ namespace Codetective.Gameplay
     {
         public string title;
         public string text;
+        public PaperLayout layout;
         public IReadOnlyList<PaperClue> clues = Array.Empty<PaperClue>();
     }
 
@@ -25,7 +26,6 @@ namespace Codetective.Gameplay
         public string Title { get; private set; }
         public IReadOnlyList<PaperSection> Sections { get; private set; } = Array.Empty<PaperSection>();
         public event Action<PaperDocument, int> AreaClicked;
-        public event Action<int> ChangeProfile;
         private ItemCarryController carry;
         private Font font;
         private RectTransform ink;
@@ -54,14 +54,6 @@ namespace Codetective.Gameplay
             inkInteraction = ink.GetComponent<CanvasGroup>();
             title = OverlayWidgets.Label(ink, font, new Vector2(26, -20), new Vector2(pageSize.x - 52, 100), "", 36);
             title.color = new Color(0.1f, 0.08f, 0.06f);
-            var pickup = OverlayWidgets.Button(ink, font, new Vector2(24, -pageSize.y + 62), new Vector2(180, 42), "들기 / 놓기", () =>
-            { if (!carry.CanManipulate) return; if (Item.IsHeld) carry.PutDown(); else carry.TryPickup(Item); });
-            pickup.image.color = new Color(0.64f, 0.61f, 0.51f);
-            if (Item.Use == HeldItemUse.Profile)
-            {
-                OverlayWidgets.Button(ink, font, new Vector2(pageSize.x - 290, -pageSize.y + 62), new Vector2(122, 42), "이전 인물", () => ChangeProfile?.Invoke(-1));
-                OverlayWidgets.Button(ink, font, new Vector2(pageSize.x - 158, -pageSize.y + 62), new Vector2(132, 42), "다음 인물", () => ChangeProfile?.Invoke(1));
-            }
             Item.PoseChanged += RefreshShape; RefreshShape();
         }
         public void SetContent(string heading, IReadOnlyList<PaperSection> sections)
@@ -72,29 +64,29 @@ namespace Codetective.Gameplay
             if (contentKey == key) return; contentKey = key;
             title.text = heading;
             foreach (GameObject old in regions) { old.SetActive(false); Discard(old); } regions.Clear();
-            int count = Mathf.Min(4, sections.Count);
-            float height = (pageSize.y - 200) / Mathf.Max(1, count);
+            int count = sections.Count;
+            float height = (pageSize.y - 150) / Mathf.Max(1, count);
             for (int i = 0; i < count; i++)
             {
                 int index = i; PaperSection section = sections[i];
                 Button area = OverlayWidgets.Button(ink, font, new Vector2(26, -124 - i * height), new Vector2(pageSize.x - 52, height - 10), "", () => AreaClicked?.Invoke(this, index));
-                area.name = "PrintedArea_" + i; area.image.color = new Color(0.3f, 0.25f, 0.18f, 0.035f);
+                area.name = "PrintedArea_" + i; area.image.color = Color.clear; area.transition = Selectable.Transition.None;
                 area.navigation = new Navigation { mode = Navigation.Mode.None };
-                Text preview = area.GetComponentInChildren<Text>(); preview.alignment = TextAnchor.UpperLeft; preview.fontSize = 24;
-                preview.color = new Color(0.1f, 0.08f, 0.06f); preview.verticalOverflow = VerticalWrapMode.Truncate;
-                preview.text = section.title + "\n" + section.text;
+                RectTransform content = PaperContentView.Create(area.transform, font, section, 900, false);
+                float scale = Mathf.Min((pageSize.x - 72) / content.sizeDelta.x, (height - 24) / content.sizeDelta.y);
+                content.localScale = Vector3.one * scale; content.anchoredPosition = new Vector2(10, -6);
                 regions.Add(area.gameObject);
             }
         }
         public void RefreshShape()
         {
-            bool rolled = Item.Use == HeldItemUse.Newspaper && Item.IsStored;
+            bool rolled = Item.IsRolled;
             sheet.SetActive(!rolled); ink.gameObject.SetActive(!rolled); roll.SetActive(rolled);
         }
         private void Update()
         {
             if (Item == null || inkInteraction == null) return;
-            bool accessible = carry.CanManipulate && !(Item.IsHeld && carry.IsPlacing) && (!Item.IsStored || Item.Storage.CanRetrieve);
+            bool accessible = carry.CanManipulate && !carry.IsPlacing && (carry.HeldItem == null || Item.IsHeld) && (!Item.IsStored || Item.Storage.CanRetrieve);
             inkInteraction.interactable = inkInteraction.blocksRaycasts = accessible;
         }
         private void OnDestroy()

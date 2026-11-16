@@ -45,8 +45,34 @@ namespace Codetective.Tests.Interaction
             }
             finally { Object.DestroyImmediate(system); Object.DestroyImmediate(camera); Object.DestroyImmediate(desk); }
         }
+        [TestCase(16)]
+        [TestCase(60)]
+        public void ExaminedObjectsFitTheCameraAndRetainTheirPhysicalSizeOnPlacement(float fov)
+        {
+            var system = new GameObject("Carry"); var camera = new GameObject("Camera", typeof(Camera));
+            GameObject cup = GameObject.CreatePrimitive(PrimitiveType.Cube); var desk = new GameObject("Desk");
+            try
+            {
+                Camera view = camera.GetComponent<Camera>(); view.fieldOfView = fov;
+                cup.transform.localScale = new Vector3(0.08f, 0.12f, 0.08f);
+                HoldableItem item = cup.AddComponent<HoldableItem>();
+                ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                Assert.That(carry.TryPickup(item), Is.True);
+                Bounds local = cup.GetComponent<MeshFilter>().sharedMesh.bounds;
+                for (int x = -1; x <= 1; x += 2) for (int y = -1; y <= 1; y += 2) for (int z = -1; z <= 1; z += 2)
+                {
+                    Vector3 point = view.WorldToViewportPoint(cup.transform.TransformPoint(local.center + Vector3.Scale(local.extents, new Vector3(x, y, z))));
+                    Assert.That(point.x, Is.InRange(0.17f, 0.83f)); Assert.That(point.y, Is.InRange(0.17f, 0.83f));
+                    Assert.That(point.z, Is.GreaterThan(view.nearClipPlane));
+                }
+                ItemPlacementSurface surface = desk.AddComponent<ItemPlacementSurface>(); surface.Initialize("desk.top", null, new Bounds(new Vector3(4, 0, 0), Vector3.one));
+                Assert.That(carry.BeginPlacement(), Is.True); Assert.That(carry.TryPlaceOn(surface), Is.True);
+                Assert.That(Vector3.Distance(cup.transform.lossyScale, new Vector3(0.08f, 0.12f, 0.08f)), Is.LessThan(0.001f));
+            }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(cup); Object.DestroyImmediate(desk); Object.DestroyImmediate(camera); }
+        }
         [Test]
-        public void EUseIsBlockedDuringTextInputAndOnlyOneObjectCanBeHeld()
+        public void UseRequestsAreBlockedDuringTextInputAndOnlyOneObjectCanBeExamined()
         {
             var system = new GameObject("Carry"); var camera = new GameObject("Camera"); var a = new GameObject("A"); var b = new GameObject("B");
             try

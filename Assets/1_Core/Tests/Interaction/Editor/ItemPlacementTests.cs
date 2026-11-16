@@ -65,6 +65,31 @@ namespace Codetective.Tests.Interaction
             finally { Object.DestroyImmediate(root); Object.DestroyImmediate(paper); Object.DestroyImmediate(second); Object.DestroyImmediate(drawer); Object.DestroyImmediate(camera); }
         }
         [Test]
+        public void CursorPlacementUsesTheChosenPointAndRejectsOccupiedOrOutOfBoundsPositions()
+        {
+            var system = new GameObject("Carry"); var camera = new GameObject("Camera"); var desk = new GameObject("Desk");
+            var first = new GameObject("First"); var second = new GameObject("Second");
+            try
+            {
+                desk.transform.SetPositionAndRotation(new Vector3(3, 2, 1), Quaternion.Euler(0, 35, 0));
+                desk.transform.localScale = Vector3.one * 0.5f;
+                ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                HoldableItem a = first.AddComponent<HoldableItem>(), b = second.AddComponent<HoldableItem>();
+                a.ConfigurePaper(new Vector3(0.12f, 0.004f, 0.12f)); b.ConfigurePaper(new Vector3(0.12f, 0.004f, 0.12f));
+                ItemPlacementSurface surface = desk.AddComponent<ItemPlacementSurface>(); surface.Initialize("desk.top", null, new Bounds(Vector3.zero, Vector3.one));
+                Vector3 point = desk.transform.TransformPoint(new Vector3(0.2f, 0, -0.15f));
+                Assert.That(carry.TryPickup(a), Is.True); Assert.That(carry.IsExamining, Is.True);
+                Assert.That(carry.BeginPlacement(), Is.True); Assert.That(carry.IsExamining, Is.False);
+                Assert.That(carry.TryPlaceOn(surface, point), Is.True);
+                Assert.That(a.transform.localPosition.x, Is.EqualTo(0.2f).Within(0.001));
+                Assert.That(a.transform.localPosition.z, Is.EqualTo(-0.15f).Within(0.001));
+                Assert.That(surface.TryGetPosition(b, point, out _), Is.False);
+                Assert.That(surface.TryGetPosition(b, desk.transform.TransformPoint(Vector3.right), out _), Is.False);
+                carry.TryPickup(a); Assert.That(surface.TryGetPosition(b, point, out _), Is.True);
+            }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(first); Object.DestroyImmediate(second); Object.DestroyImmediate(desk); Object.DestroyImmediate(camera); }
+        }
+        [Test]
         public void ScaledDrawersUseWorldDimensionsAndDoNotShrinkStoredObjects()
         {
             var root = new GameObject("Carry"); var camera = new GameObject("Camera"); var drawer = new GameObject("Drawer"); var paper = new GameObject("Paper");
@@ -72,7 +97,8 @@ namespace Codetective.Tests.Interaction
             {
                 drawer.transform.localScale = Vector3.one * 0.5f;
                 ItemCarryController carry = root.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
-                HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("paper", "신문", HeldItemUse.Newspaper); carry.Register(item);
+                HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("paper", "신문", HeldItemUse.Newspaper);
+                item.ConfigurePaper(new Vector3(0.44f, 0.004f, 0.28f)); carry.Register(item);
                 ItemPlacementSurface surface = drawer.AddComponent<ItemPlacementSurface>();
                 surface.Initialize("drawer", null, new Bounds(Vector3.zero, new Vector3(0.4f, 0.1f, 0.4f)));
                 Assert.That(surface.TryGetPosition(item, out _), Is.False); // Only 20cm wide in the world.

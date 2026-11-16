@@ -40,13 +40,11 @@ namespace Codetective.Gameplay
         private int completionSuffix;
         private string draft;
         private string draftArguments;
-        private RectTransform drawerBar;
-        private Button[] drawerButtons;
         private RectTransform suspicionFill;
         private Image suspicionImage;
         private RectTransform heldBar, newspaperReader;
-        private Text heldLabel, newspaperHeading, newspaperBody;
-        private Button useHeld, putDown, storeHeld;
+        private Text heldLabel;
+        private Button putDown;
         private PaperDocument openedDocument;
         private int documentSection;
         private GameObject nextDayButton, dateRoot;
@@ -92,7 +90,6 @@ namespace Codetective.Gameplay
             var dialogue = GetComponent<ConsultationOverlay>();
             if (dialogue == null) dialogue = gameObject.AddComponent<ConsultationOverlay>();
             dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation);
-            BuildDrawerControls();
             BuildItemControls();
             Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 (입력 중 제외) · ESC 메뉴", 14);
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
@@ -108,17 +105,13 @@ namespace Codetective.Gameplay
         {
             if (!IsInitialized) return;
             interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && inspection.Mode != InspectionMode.Menu;
-            drawerBar.gameObject.SetActive(game.CanOperateDrawers && modal == null);
             HoldableItem held = game.Carry.HeldItem;
             heldBar.gameObject.SetActive(held != null && modal == null && inspection.Mode != InspectionMode.Menu && !game.IsDateTransitioning);
             if (held != null)
             {
-                heldLabel.text = game.Carry.IsPlacing ? game.Carry.PlacementHint : held.DisplayName + "  ·  인쇄 영역 클릭 / E 확대";
-                heldBar.anchoredPosition = new Vector2(0, game.CanOperateDrawers ? 104 : 16);
-                useHeld.interactable = !inspection.TextInputFocused && !game.IsViewTransitioning;
-                putDown.interactable = !inspection.TextInputFocused;
-                storeHeld.interactable = !inspection.TextInputFocused && !game.IsViewTransitioning;
-                storeHeld.GetComponentInChildren<Text>().text = game.Carry.IsPlacing ? "배치 취소" : "서랍에 넣기";
+                heldLabel.text = game.Carry.IsPlacing ? game.Carry.PlacementHint : held.DisplayName;
+                putDown.gameObject.SetActive(!game.Carry.IsPlacing);
+                putDown.interactable = game.Carry.CanManipulate;
             }
             nextDayButton.SetActive(game.Runtime.IsDayEnded && !game.IsDateTransitioning && modal == null && inspection.Mode != InspectionMode.Menu);
             if (modal == "protocol" && protocolSource != null && protocolSource.isFocused) RefreshProtocolCompletions();
@@ -129,7 +122,6 @@ namespace Codetective.Gameplay
             float suspicion = Mathf.Clamp01((float)r.Suspicion / 100f);
             suspicionFill.anchorMax = new Vector2(suspicion, 1);
             suspicionImage.color = Color.Lerp(new Color(0.25f, 0.72f, 0.43f), new Color(1f, 0.38f, 0.12f), suspicion);
-            for (int i = 0; i < drawerButtons.Length; i++) drawerButtons[i].GetComponentInChildren<Text>().text = (i + 1) + (game.Drawers[i].IsOpen ? " 닫기" : " 열기");
             if (panel.gameObject.activeSelf && modal != "protocol") RefreshBody();
         }
 
@@ -231,23 +223,6 @@ namespace Codetective.Gameplay
             RefreshBody();
         }
 
-        private void BuildDrawerControls()
-        {
-            drawerBar = Box("DrawerControls", root.transform, new Vector2(0, 16), new Vector2(1120, 76), new Vector2(0.5f, 0));
-            Label(drawerBar, new Vector2(12, -5), new Vector2(1096, 24), "서랍을 클릭하거나 아래 버튼으로 열고 닫으세요.", 18);
-            drawerButtons = new Button[game.Drawers.Count];
-            for (int i = 0; i < drawerButtons.Length; i++)
-            {
-                int index = i;
-                drawerButtons[i] = Button(drawerBar, new Vector2(12 + i * 122, -34), new Vector2(114, 34), "", () => game.ToggleDrawer(index));
-            }
-            drawerBar.gameObject.SetActive(false);
-        }
-        public void RefreshDrawerControls()
-        {
-            if (!IsInitialized || drawerButtons.Length == game.Drawers.Count) return;
-            drawerBar.gameObject.SetActive(false); Destroy(drawerBar.gameObject); BuildDrawerControls();
-        }
         private void BuildOperationsPage()
         {
             MonitorPageHost host = game.Monitor; if (host == null) return;
@@ -272,18 +247,16 @@ namespace Codetective.Gameplay
         }
         private void BuildItemControls()
         {
-            heldBar = Box("HeldObject", root.transform, new Vector2(0, 16), new Vector2(1040, 54), new Vector2(0.5f, 0));
-            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(576, 32), "", 15);
-            useHeld = Button(heldBar, new Vector2(600, -8), new Vector2(116, 38), "E 확대", game.UseHeldItem);
-            putDown = Button(heldBar, new Vector2(728, -8), new Vector2(128, 38), "책상에 놓기", game.PutDownItem);
-            storeHeld = Button(heldBar, new Vector2(868, -8), new Vector2(156, 38), "서랍에 넣기", () =>
-            { if (game.Carry.IsPlacing) game.Carry.CancelPlacement(); else game.BeginItemPlacement(); });
+            heldBar = Box("HeldObject", root.transform, new Vector2(0, 24), new Vector2(1040, 54), new Vector2(0.5f, 0));
+            heldBar.GetComponent<Image>().raycastTarget = false;
+            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(850, 32), "", 15);
+            putDown = Button(heldBar, new Vector2(880, -8), new Vector2(144, 38), "내려놓기", game.BeginItemPlacement);
             heldBar.gameObject.SetActive(false);
         }
         public void ShowNewspaper() => ShowDocument(game.NewspaperDocument, 0);
         public void ShowDocument(PaperDocument document, int index)
         {
-            if (document == null || document.Sections.Count == 0) return;
+            if (document == null || !document.Item.IsHeld || game.Carry.IsPlacing || document.Sections.Count == 0) return;
             openedDocument = document; documentSection = Mathf.Clamp(index, 0, document.Sections.Count - 1); OpenModal("document");
         }
         private void BuildDocumentReader()
@@ -292,39 +265,19 @@ namespace Codetective.Gameplay
             if (newspaperReader != null) { newspaperReader.gameObject.SetActive(false); Destroy(newspaperReader.gameObject); }
             newspaperReader = Box("DocumentReader", root.transform, Vector2.zero, new Vector2(1000, 642), new Vector2(0.5f, 0.5f));
             newspaperReader.GetComponent<Image>().color = new Color(0.85f, 0.82f, 0.69f);
-            newspaperHeading = Label(newspaperReader, new Vector2(30, -20), new Vector2(940, 70), "", 30);
-            newspaperHeading.color = new Color(0.12f, 0.11f, 0.08f);
-            newspaperBody = ScrollText(newspaperReader, new Vector2(30, -150), new Vector2(940, 402));
-            newspaperBody.transform.parent.GetComponent<Image>().color = new Color(0.80f, 0.77f, 0.64f);
-            newspaperBody.color = new Color(0.12f, 0.11f, 0.08f);
-            Button(newspaperReader, new Vector2(30, -102), new Vector2(180, 36), "이전 영역", () => ChangeDocumentSection(-1));
-            Button(newspaperReader, new Vector2(222, -102), new Vector2(180, 36), "다음 영역", () => ChangeDocumentSection(1));
-            Button(newspaperReader, new Vector2(30, -584), new Vector2(450, 40), "확대 보기 닫기", () => Back());
-            Button(newspaperReader, new Vector2(520, -584), new Vector2(450, 40), "책상에 놓기", () =>
-            { game.Carry.ReturnToDesk(openedDocument.Item); game.Runtime.SetItemStorage(openedDocument.Item.Id, null); Back(); });
+            Text title = Label(newspaperReader, new Vector2(30, -16), new Vector2(824, 40), openedDocument.Title, 22);
+            title.color = new Color(0.12f, 0.11f, 0.08f);
+            Button(newspaperReader, new Vector2(872, -12), new Vector2(98, 40), "닫기", () => Back());
+            RectTransform viewport = Box("DocumentViewport", newspaperReader, new Vector2(30, -72), new Vector2(940, 540), new Vector2(0, 1));
+            viewport.GetComponent<Image>().color = new Color(0.85f, 0.82f, 0.69f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            ScrollRect scroll = viewport.gameObject.AddComponent<ScrollRect>();
+            scroll.viewport = viewport; scroll.horizontal = false; scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 32;
+            scroll.content = PaperContentView.Create(viewport, font, openedDocument.Sections[documentSection], 922, true);
+            scroll.content.anchoredPosition = new Vector2(4, -4); scroll.verticalNormalizedPosition = 1;
             newspaperReader.gameObject.SetActive(true);
-            PaperSection section = openedDocument.Sections[documentSection];
-            newspaperHeading.text = openedDocument.Title + "\n" + section.title;
-            newspaperBody.text = section.text;
-            ScrollRect scroll = newspaperBody.transform.parent.GetComponent<ScrollRect>();
-            RectTransform content = OverlayWidgets.Rect("ArticleAndClues", scroll.transform, Vector2.zero, new Vector2(928, 0));
-            newspaperBody.transform.SetParent(content, false);
-            newspaperBody.rectTransform.anchorMin = newspaperBody.rectTransform.anchorMax = newspaperBody.rectTransform.pivot = new Vector2(0, 1);
-            newspaperBody.rectTransform.anchoredPosition = Vector2.zero; newspaperBody.rectTransform.sizeDelta = new Vector2(928, 0);
-            Canvas.ForceUpdateCanvases(); float height = newspaperBody.preferredHeight + 20;
-            foreach (PaperClue clue in section.clues)
-            {
-                Button button = Button(content, new Vector2(0, -height), new Vector2(916, 40), "● " + clue.label + " / 단서 기록", () =>
-                {
-                    try { clue.collect?.Invoke(); newspaperHeading.text = openedDocument.Title + "\n단서를 기록했습니다: " + clue.label; }
-                    catch (CommandException error) { newspaperHeading.text = error.Message; }
-                });
-                button.GetComponentInChildren<Text>().color = new Color(1, 0.38f, 0.32f); height += 48;
-            }
-            content.sizeDelta = new Vector2(928, height); scroll.content = content; scroll.verticalNormalizedPosition = 1;
         }
-        private void ChangeDocumentSection(int direction)
-        { documentSection = (documentSection + direction + openedDocument.Sections.Count) % openedDocument.Sections.Count; BuildDocumentReader(); }
         private void BuildDateTransition()
         {
             dateRoot = new GameObject("DateTransition", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(CanvasGroup));

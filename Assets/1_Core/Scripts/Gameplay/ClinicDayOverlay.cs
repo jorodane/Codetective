@@ -43,7 +43,8 @@ namespace Codetective.Gameplay
         {
             if (game == null) return;
             KernelRuntime r = game.Runtime;
-            bookingBar.gameObject.SetActive(r.HasClinicSchedule && !r.IsDayEnded && !r.AwaitingAssignment && !r.IsClinicTransitioning && !game.IsDateTransitioning && inspection.Mode != InspectionMode.Menu && !SummaryVisible);
+            bookingBar.gameObject.SetActive(r.HasClinicSchedule && !r.IsDayEnded && !r.AwaitingAssignment && !r.IsClinicTransitioning && !game.IsDateTransitioning &&
+                inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && (game.Carry == null || game.Carry.HeldItem == null) && !SummaryVisible);
             AppointmentProgress current = r.CurrentAppointment, next = r.NextAppointment;
             status.text = current != null ? current.patientName + " 님 상담 중  /  " + (next != null ? "다음 " + KernelRuntime.TimeOfDay(next.startMinute) + " " + next.patientName : "마지막 예약") :
                 next != null ? "다음 예약  " + KernelRuntime.TimeOfDay(next.startMinute) + "  " + next.patientName : "오늘의 상담 예약이 모두 끝났습니다.";

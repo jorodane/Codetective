@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Codetective.Interaction
 {
-    /// <summary>One inspected object at a time; put down restores its authored desk location.</summary>
+    /// <summary>One evidence object at a time. Placing it is a separate, cursor-driven interaction.</summary>
     [DisallowMultipleComponent]
     public sealed class ItemCarryController : MonoBehaviour
     {
@@ -15,6 +15,8 @@ namespace Codetective.Interaction
         public event Action<HoldableItem> PickedUp;
         public event Action<HoldableItem> Placed;
         public bool IsPlacing { get; private set; }
+        public bool IsExamining => HeldItem != null && !IsPlacing;
+        public Camera ViewCamera => hand != null ? hand.GetComponent<Camera>() : null;
         public bool PlacementValid { get; private set; }
         public Func<bool> ManipulationAllowed { get; set; }
         public bool CanManipulate => ManipulationAllowed == null || ManipulationAllowed();
@@ -22,6 +24,8 @@ namespace Codetective.Interaction
         private GameObject preview;
         private Material previewMaterial;
         private ItemPlacementSurface destination;
+        private Vector3 destinationPosition;
+        private Transform flatPreview, rolledPreview;
         public void Initialize(Transform camera)
         {
             hand = camera;
@@ -29,6 +33,8 @@ namespace Codetective.Interaction
         }
         public void Register(HoldableItem item) { if (item != null) item.Register(this); }
         public void SetPresentationVisible(bool visible) { if (HeldItem != null) HeldItem.SetPresentationVisible(visible); }
+        private void LateUpdate()
+        { if (IsExamining) HeldItem.FrameForInspection(ViewCamera); }
         public bool TryPickup(HoldableItem item)
         {
             if (!CanManipulate || hand == null || HeldItem != null || item == null || !item.isActiveAndEnabled || (item.IsStored && !item.Storage.CanRetrieve)) return false;
@@ -50,30 +56,33 @@ namespace Codetective.Interaction
         {
             if (!CanManipulate || HeldItem == null || IsPlacing) return false;
             IsPlacing = true; destination = null; PlacementValid = false;
-            PlacementHint = "열린 서랍 위로 마우스를 이동하세요. 우클릭 취소";
+            PlacementHint = "놓을 곳을 클릭하세요 · 4 서랍 앵글 · 우클릭 확인으로 돌아가기";
             SetPresentationVisible(false);
             preview = new GameObject("ItemPlacementPreview");
             Shader shader = Resources.Load<Shader>("PlacementPreview");
             if (shader == null) { CancelPlacement(); return false; }
             previewMaterial = new Material(shader);
+            flatPreview = new GameObject("UnfoldedPreview").transform; flatPreview.SetParent(preview.transform, false);
+            flatPreview.localRotation = HeldItem.PlacementRotation; flatPreview.localScale = HeldItem.RestingWorldScale;
+            foreach (MeshFilter source in HeldItem.GetComponentsInChildren<MeshFilter>())
+            {
+                if (source.sharedMesh == null) continue;
+                var part = new GameObject("PreviewMesh", typeof(MeshFilter), typeof(MeshRenderer)); part.transform.SetParent(flatPreview, false);
+                part.GetComponent<MeshFilter>().sharedMesh = source.sharedMesh;
+                part.transform.localPosition = HeldItem.transform.InverseTransformPoint(source.transform.position);
+                part.transform.localRotation = Quaternion.Inverse(HeldItem.transform.rotation) * source.transform.rotation;
+                Vector3 scale = HeldItem.transform.lossyScale, partScale = source.transform.lossyScale;
+                part.transform.localScale = new Vector3(partScale.x / scale.x, partScale.y / scale.y, partScale.z / scale.z);
+                part.GetComponent<Renderer>().sharedMaterial = previewMaterial;
+            }
             if (HeldItem.Use == HeldItemUse.Newspaper)
             {
-                GameObject roll = GameObject.CreatePrimitive(PrimitiveType.Cylinder); roll.transform.SetParent(preview.transform, false);
+                rolledPreview = new GameObject("RolledPreview").transform; rolledPreview.SetParent(preview.transform, false);
+                rolledPreview.localScale = HeldItem.RestingWorldScale;
+                GameObject roll = GameObject.CreatePrimitive(PrimitiveType.Cylinder); roll.transform.SetParent(rolledPreview, false);
                 roll.transform.localRotation = Quaternion.Euler(0, 0, 90); roll.transform.localScale = new Vector3(0.052f, 0.14f, 0.052f);
                 Discard(roll.GetComponent<Collider>()); roll.GetComponent<Renderer>().sharedMaterial = previewMaterial;
-            }
-            else
-            {
-                foreach (MeshFilter source in HeldItem.GetComponentsInChildren<MeshFilter>())
-                {
-                    if (source.sharedMesh == null) continue;
-                    var part = new GameObject("PreviewMesh", typeof(MeshFilter), typeof(MeshRenderer)); part.transform.SetParent(preview.transform, false);
-                    part.GetComponent<MeshFilter>().sharedMesh = source.sharedMesh;
-                    part.transform.localPosition = Quaternion.Inverse(HeldItem.transform.rotation) * (source.transform.position - HeldItem.transform.position);
-                    part.transform.localRotation = Quaternion.Inverse(HeldItem.transform.rotation) * source.transform.rotation;
-                    part.transform.localScale = source.transform.lossyScale;
-                    part.GetComponent<Renderer>().sharedMaterial = previewMaterial;
-                }
+                rolledPreview.gameObject.SetActive(false);
             }
             foreach (Renderer renderer in preview.GetComponentsInChildren<Renderer>())
             { renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows = false; }
@@ -84,7 +93,7 @@ namespace Codetective.Interaction
             if (!IsPlacing || HeldItem == null || preview == null) return;
             destination = null; PlacementValid = false;
             if (pointerBlocked) { HidePlacementPreview(); return; }
-            Camera camera = hand != null ? hand.GetComponent<Camera>() : null;
+            Camera camera = ViewCamera;
             if (camera == null) { HidePlacementPreview(); return; }
             Ray ray = camera.ScreenPointToRay(point);
             RaycastHit[] hits = Physics.RaycastAll(ray, 10, ~0, QueryTriggerInteraction.Collide);
@@ -93,31 +102,44 @@ namespace Codetective.Interaction
             foreach (RaycastHit hit in hits)
             {
                 ItemPlacementSurface surface = hit.collider.GetComponentInParent<ItemPlacementSurface>();
-                SlidingDrawer drawer = hit.collider.GetComponentInParent<SlidingDrawer>();
-                if (surface == null && drawer != null) surface = drawer.GetComponentInChildren<ItemPlacementSurface>();
-                if (surface == null && hit.collider.GetComponentInParent<HoldableItem>() == null && hit.collider.isTrigger) continue;
+                HoldableItem other = hit.collider.GetComponentInParent<HoldableItem>();
+                if (surface == null && other != null) surface = other.Storage;
+                if (surface == null && hit.collider.GetComponentInParent<SlidingDrawer>() != null && hit.collider.GetComponent<DrawerFrontTarget>() == null) continue;
+                if (surface == null && other == null && hit.collider.isTrigger && hit.collider.GetComponent<DrawerFrontTarget>() == null) continue;
                 location = hit.point;
                 if (surface != null)
                 {
                     destination = surface;
-                    PlacementValid = surface.TryGetPosition(HeldItem, out Vector3 local);
-                    location = PlacementValid ? surface.transform.TransformPoint(local) : hit.point + hit.normal * (HeldItem.PlacementSize.y * 0.5f + 0.01f);
+                    PlacementValid = surface.TryGetPosition(HeldItem, ray, out destinationPosition);
+                    location = surface.transform.TransformPoint(destinationPosition);
                     rotation = surface.transform.rotation;
                 }
                 break;
             }
+            bool rolled = HeldItem.Use == HeldItemUse.Newspaper && destination != null && destination.IsContainer;
+            flatPreview.gameObject.SetActive(!rolled); if (rolledPreview != null) rolledPreview.gameObject.SetActive(rolled);
             preview.transform.SetPositionAndRotation(location, rotation); preview.SetActive(true);
             previewMaterial.SetColor("_Tint", PlacementValid ? new Color(0.15f, 1f, 0.32f, 0.7f) : new Color(1f, 0.36f, 0.04f, 0.7f));
-            PlacementHint = PlacementValid ? "클릭: 서랍에 넣기  ·  우클릭 취소" : "배치 불가 · 서랍 열림 / 크기 / 빈 공간을 확인하세요.";
+            PlacementHint = PlacementValid ? "클릭: 내려놓기 · 우클릭: 확인으로 돌아가기" : "이곳에는 놓을 수 없습니다 · 서랍 앞면 클릭: 열기 / 닫기 · 우클릭: 확인으로 돌아가기";
         }
         public bool TryPlaceAtScreenPoint(Vector2 point)
         {
             UpdatePlacement(point);
-            return PlacementValid && TryPlaceOn(destination);
+            return PlacementValid && CommitPlacement(destination, destinationPosition);
         }
         public bool TryPlaceOn(ItemPlacementSurface surface)
         {
-            if (!CanManipulate || !IsPlacing || surface == null || HeldItem == null || !surface.Place(HeldItem)) return false;
+            if (surface == null || HeldItem == null || !surface.TryGetPosition(HeldItem, out Vector3 position)) return false;
+            return CommitPlacement(surface, position);
+        }
+        public bool TryPlaceOn(ItemPlacementSurface surface, Vector3 worldPoint)
+        {
+            if (surface == null || HeldItem == null || !surface.TryGetPosition(HeldItem, worldPoint, out Vector3 position)) return false;
+            return CommitPlacement(surface, position);
+        }
+        private bool CommitPlacement(ItemPlacementSurface surface, Vector3 localPosition)
+        {
+            if (!CanManipulate || !IsPlacing || surface == null || HeldItem == null || !surface.PlaceAt(HeldItem, localPosition)) return false;
             HoldableItem item = HeldItem; HeldItem = null; CancelPlacement(); Placed?.Invoke(item); return true;
         }
         public void HidePlacementPreview() { if (preview != null) preview.SetActive(false); PlacementValid = false; destination = null; }
@@ -126,6 +148,7 @@ namespace Codetective.Interaction
             IsPlacing = false; PlacementValid = false; destination = null;
             Discard(preview); Discard(previewMaterial);
             preview = null; previewMaterial = null; SetPresentationVisible(true);
+            flatPreview = rolledPreview = null;
         }
         public void ReturnToDesk(HoldableItem item)
         {
@@ -135,6 +158,8 @@ namespace Codetective.Interaction
         }
         public bool RestoreStorage(HoldableItem item, ItemPlacementSurface surface)
         { return item != null && surface != null && !item.IsHeld && surface.Place(item, true); }
+        public bool RestoreStorage(HoldableItem item, ItemPlacementSurface surface, Vector3 localPosition)
+        { return item != null && surface != null && !item.IsHeld && surface.PlaceAt(item, localPosition, true); }
         private static void Discard(UnityEngine.Object value)
         { if (value == null) return; if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
         private void OnDisable() => PutDown();

@@ -53,7 +53,6 @@ namespace Codetective.Gameplay
         private PaperDocument profileDocument;
         private int paperRevision = -1;
         private string printedProfile;
-        private bool pendingPlacement;
         private readonly List<ItemPlacementSurface> storageSurfaces = new List<ItemPlacementSurface>();
         private ClinicVisitPresentation visits;
         private int summaryShownDay;
@@ -69,6 +68,8 @@ namespace Codetective.Gameplay
         private Quaternion hourBasis;
         private Quaternion minuteBasis;
         private GameObject ownCoffee;
+        private HoldableItem coffeeItem;
+        private HoldableItem guestCoffeeItem;
         private TextMesh dayText;
         private string pendingView;
         private bool delivering;
@@ -111,7 +112,7 @@ namespace Codetective.Gameplay
             if (!initialized) { enabled = false; return; }
             Carry = GetComponent<ItemCarryController>();
             if (Carry == null) Carry = gameObject.AddComponent<ItemCarryController>();
-            Carry.Initialize(views.ControlledCamera.transform); Carry.Used += UseItem; inspection.Carry = Carry;
+            Carry.Initialize(views.ControlledCamera.transform); inspection.Carry = Carry;
             Carry.ManipulationAllowed = () => !IsDateTransitioning && !IsVisitPresenting && !IsViewTransitioning &&
                 inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !inspection.TextInputFocused;
             Carry.PickedUp += PickedUpItem; Carry.Placed += StoredItem;
@@ -122,9 +123,9 @@ namespace Codetective.Gameplay
             CreateCoffeeCopy();
             CreateCalendarText();
             InitializeDrawers();
-            ui.RefreshDrawerControls();
+            InitializeDesktop();
             newspaper = gameObject.AddComponent<DeskNewspaper>();
-            newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry); newspaper.Refresh(Runtime);
+            newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry, scenario != null ? scenario.newspaper : null); newspaper.Refresh(Runtime);
             newspaper.Document.AreaClicked += ReadPrintedArea;
             InitializeProfilePaper();
             RestoreStoredItems();
@@ -156,9 +157,6 @@ namespace Codetective.Gameplay
                 ui.ShowContext(pendingView);
                 pendingView = null;
             }
-            if (pendingPlacement && (CurrentView != "drawer" || inspection.Mode == InspectionMode.Menu || Carry.HeldItem == null)) pendingPlacement = false;
-            if (pendingPlacement && !IsViewTransitioning && !IsDateTransitioning && !IsVisitPresenting)
-            { pendingPlacement = false; Carry.BeginPlacement(); }
             // Both meshes turn clockwise around local +Z. The hour mesh's zero is 09:00;
             // the minute mesh's zero is :00. Fractional minutes also advance the hour hand.
             if (clockHour != null) clockHour.localRotation = hourBasis * Quaternion.AngleAxis((float)((Runtime.Minute * 0.5 + 90) % 360), Vector3.forward);
@@ -177,12 +175,11 @@ namespace Codetective.Gameplay
         private void EnterView(CameraAnglePreset angle)
         {
             CurrentView = angle.Id; pendingView = angle.Id;
-            if (angle.Id != "drawer") pendingPlacement = false;
             if (ui != null) ui.HideContext();
         }
         private void LeaveView()
         {
-            CurrentView = "overview"; pendingView = null; pendingPlacement = false;
+            CurrentView = "overview"; pendingView = null;
             if (ui != null) ui.HideContext();
         }
         public void ShowMonitor()
@@ -196,21 +193,21 @@ namespace Codetective.Gameplay
             terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.ShowPage(pageId);
             ShowMonitor();
         }
-        private void UseItem(HoldableItem item)
-        {
-            PaperDocument document = item.GetComponent<PaperDocument>();
-            if (document != null) ui.ShowDocument(document, 0);
-        }
         private void PickedUpItem(HoldableItem item)
         {
             Runtime.SetItemStorage(item.Id, null);
             if (item.Use == HeldItemUse.Newspaper) { Runtime.ReadNewspaper(); newspaper.Refresh(Runtime); }
         }
-        private void StoredItem(HoldableItem item) => Runtime.SetItemStorage(item.Id, item.Storage?.Id);
+        private void StoredItem(HoldableItem item)
+        {
+            Vector3 position = item.transform.localPosition;
+            Runtime.SetItemStorage(new StoredItemState { itemId = item.Id, containerId = item.Storage?.Id,
+                hasPosition = true, x = position.x, y = position.y, z = position.z });
+        }
         private void ReadPrintedArea(PaperDocument document, int index)
         {
             if (inspection.Mode == InspectionMode.Menu || inspection.ModalInputBlocked || IsViewTransitioning || IsDateTransitioning || IsVisitPresenting) return;
-            if (document.Item.Use == HeldItemUse.Newspaper && !document.Item.IsHeld) Carry.TryPickup(document.Item);
+            if (!document.Item.IsHeld) Carry.TryPickup(document.Item);
             else ui.ShowDocument(document, index);
         }
         private void InitializeProfilePaper()
@@ -234,15 +231,8 @@ namespace Codetective.Gameplay
             HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("desk.profile", "인물 프로필", HeldItemUse.Profile, SelectedProfileId);
             profileDocument = paper.AddComponent<PaperDocument>();
             profileDocument.Initialize(item, Carry, views.ControlledCamera, font, new Vector2(0.27f, 0.35f)); Carry.Register(item);
-            profileDocument.AreaClicked += ReadPrintedArea; profileDocument.ChangeProfile += ChangePrintedProfile;
+            profileDocument.AreaClicked += ReadPrintedArea;
             RefreshProfilePaper();
-        }
-        private void ChangePrintedProfile(int direction)
-        {
-            if (!Carry.CanManipulate) return;
-            string[] profiles = Runtime.VisibleProfileIds.ToArray(); if (profiles.Length == 0) return;
-            int current = Math.Max(0, Array.IndexOf(profiles, SelectedProfileId));
-            SelectedProfileId = profiles[(current + direction + profiles.Length) % profiles.Length]; RefreshProfilePaper();
         }
         private void RefreshProfilePaper()
         {
@@ -257,24 +247,19 @@ namespace Codetective.Gameplay
         {
             foreach (StoredItemState state in Runtime.StoredItems)
             {
-                HoldableItem item = state.itemId == newspaper.Item.Id ? newspaper.Item : state.itemId == profileDocument.Item.Id ? profileDocument.Item : null;
+                HoldableItem item = state.itemId == newspaper.Item.Id ? newspaper.Item : state.itemId == profileDocument.Item.Id ? profileDocument.Item :
+                    coffeeItem != null && state.itemId == coffeeItem.Id ? coffeeItem : guestCoffeeItem != null && state.itemId == guestCoffeeItem.Id ? guestCoffeeItem : null;
                 ItemPlacementSurface surface = storageSurfaces.FirstOrDefault(s => s.Id == state.containerId);
-                if (item != null && surface != null) Carry.RestoreStorage(item, surface);
+                if (item == null || surface == null) continue;
+                if (state.hasPosition) Carry.RestoreStorage(item, surface, new Vector3(state.x, state.y, state.z));
+                else Carry.RestoreStorage(item, surface);
             }
         }
         public void BeginItemPlacement()
         {
             if (IsDateTransitioning || IsVisitPresenting || inspection.Mode == InspectionMode.Menu || inspection.TextInputFocused || Carry.HeldItem == null) return;
-            int index = views.AngleSet.FindId("drawer"); if (index < 0) return;
-            ui.Back(); inspection.InspectAngle(views.AngleSet.Get(index));
-            if (views.IsTransitioning) pendingPlacement = true; else Carry.BeginPlacement();
+            if (!IsViewTransitioning) Carry.BeginPlacement();
         }
-        public void UseHeldItem()
-        {
-            if (!IsDateTransitioning && !IsVisitPresenting && inspection.Mode != InspectionMode.Menu && !IsViewTransitioning)
-                Carry.TryUse(inspection.TextInputFocused);
-        }
-        public void PutDownItem() { if (!IsDateTransitioning && !inspection.TextInputFocused) Carry.PutDown(); }
         public void BeginNextDay()
         {
             if (!Runtime.IsDayEnded) { Feedback = "18시 이후 다음 날로 진행할 수 있습니다."; return; }
@@ -355,17 +340,34 @@ namespace Codetective.Gameplay
                 Vector3 scale = child.lossyScale;
                 Vector3 size = new Vector3(Mathf.Max(0.01f, local.size.x - 0.04f / Mathf.Abs(scale.x)), Mathf.Max(0.01f, local.size.y - 0.025f / Mathf.Abs(scale.y)), Mathf.Max(0.01f, local.size.z - 0.06f / Mathf.Abs(scale.z)));
                 surface.Initialize(drawer.Id, drawer, new Bounds(local.center + Vector3.up * 0.008f, size)); storageSurfaces.Add(surface);
-                if (!child.GetComponentsInChildren<Collider>().Any(c => !c.isTrigger))
-                {
-                    BoxCollider front = child.gameObject.AddComponent<BoxCollider>(); front.isTrigger = true;
-                    front.center = new Vector3(local.center.x, local.center.y, local.max.z);
-                    front.size = new Vector3(local.size.x, local.size.y, 0.025f / Mathf.Abs(scale.z));
-                }
+                var front = new GameObject("DrawerFront"); front.transform.SetParent(child, false);
+                front.AddComponent<DrawerFrontTarget>().Initialize(drawer, new Bounds(new Vector3(local.center.x, local.center.y, local.max.z),
+                    new Vector3(local.size.x, local.size.y, 0.025f / Mathf.Abs(scale.z))));
             }
         }
-        public void ToggleDrawer(int index)
+        private void InitializeDesktop()
         {
-            if (CanOperateDrawers && index >= 0 && index < drawers.Count) drawers[index].Interact();
+            if (deskSurface == null) return;
+            Renderer[] renderers = deskSurface.GetComponentsInChildren<Renderer>().Where(r => r.GetComponentInParent<SlidingDrawer>() == null).ToArray();
+            if (renderers.Length == 0) return;
+            Bounds local = LocalBounds(deskSurface, renderers); Vector3 scale = deskSurface.lossyScale;
+            float height = 0.25f / Mathf.Abs(scale.y);
+            var desktop = new GameObject("DesktopPlacement"); desktop.transform.SetParent(deskSurface, false);
+            ItemPlacementSurface surface = desktop.AddComponent<ItemPlacementSurface>();
+            surface.Initialize("desk.top", null, new Bounds(new Vector3(local.center.x, local.max.y + height * 0.5f + 0.002f / Mathf.Abs(scale.y), local.center.z),
+                new Vector3(local.size.x, height, local.size.z)));
+            storageSurfaces.Add(surface);
+        }
+        private static Bounds LocalBounds(Transform root, Renderer[] renderers)
+        {
+            Bounds result = default; bool found = false;
+            foreach (Renderer renderer in renderers)
+                for (int x = -1; x <= 1; x += 2) for (int y = -1; y <= 1; y += 2) for (int z = -1; z <= 1; z += 2)
+                {
+                    Vector3 point = root.InverseTransformPoint(renderer.bounds.center + Vector3.Scale(renderer.bounds.extents, new Vector3(x, y, z)));
+                    if (!found) { result = new Bounds(point, Vector3.zero); found = true; } else result.Encapsulate(point);
+                }
+            return result;
         }
 
         public void SaveNow()
@@ -469,7 +471,21 @@ namespace Codetective.Gameplay
                 foreach (Renderer renderer in cupRenderers) bounds.Encapsulate(renderer.bounds);
                 ownCoffee.transform.position += Vector3.up * (position.y - bounds.min.y);
             }
+            coffeeItem = RegisterCoffeeItem(ownCoffee, "desk.coffee", "커피");
+            guestCoffeeItem = RegisterCoffeeItem(guestCoffeeTemplate.gameObject, "desk.guest-coffee", "손님용 커피");
             ownCoffee.SetActive(Runtime.CoffeeReceived);
+        }
+        private HoldableItem RegisterCoffeeItem(GameObject cup, string id, string label)
+        {
+            HoldableItem item = cup.GetComponent<HoldableItem>();
+            if (item == null) item = cup.AddComponent<HoldableItem>();
+            item.Configure(id, label, HeldItemUse.Custom);
+            if (cup.GetComponentsInChildren<Collider>().Length == 0)
+            {
+                BoxCollider collider = cup.AddComponent<BoxCollider>(); Bounds local = LocalBounds(cup.transform, cup.GetComponentsInChildren<Renderer>());
+                collider.center = local.center; collider.size = local.size;
+            }
+            Carry.Register(item); return item;
         }
 
         private void CreateCalendarText()
@@ -493,7 +509,7 @@ namespace Codetective.Gameplay
             StopAllCoroutines();
             if (sceneLights != null && initialLights != null) for (int i = 0; i < Math.Min(sceneLights.Length, initialLights.Length); i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;
-            if (Carry != null) { Carry.PutDown(); Carry.Used -= UseItem; Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; }
+            if (Carry != null) { Carry.PutDown(); Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; }
             if (profileDocument != null) Destroy(profileDocument.gameObject);
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.NavigationBlocked = false; }
             if (Runtime != null)
