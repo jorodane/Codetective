@@ -48,6 +48,8 @@ namespace Codetective.Operations
         public string profileId;
         public int day;
         public double minute;
+        public bool hasSessionTime;
+        public int sessionDay, startMinute, endMinute;
         public string text;
         public ConsultationNote Copy() => (ConsultationNote)MemberwiseClone();
     }
@@ -111,14 +113,35 @@ namespace Codetective.Operations
         public IEnumerable<ConsultationNote> NotesFor(string profileId) => notes.Where(n => n.profileId == profileId).Select(n => n.Copy());
         public ConsultationNote AddConsultationNote(string profileId, string text)
         {
+            AppointmentProgress visit = CurrentAppointment;
+            int end = Math.Max(0, Math.Min(1440, (int)Minute));
+            int start = visit != null && visit.profileId == profileId ? Math.Min(end, visit.startMinute) : end;
+            return AddConsultationNote(profileId, text, Day, start, end);
+        }
+        public ConsultationNote AddConsultationNote(string profileId, string text, int sessionDay, int startMinute, int endMinute)
+        {
             ValidateNote(profileId, text);
-            var note = new ConsultationNote { id = nextNoteId++, profileId = profileId, day = Day, minute = Minute, text = text.Trim() };
+            ValidateSessionTime(sessionDay, startMinute, endMinute);
+            var note = new ConsultationNote { id = nextNoteId++, profileId = profileId, day = Day, minute = Minute, text = text.Trim(),
+                hasSessionTime = true, sessionDay = sessionDay, startMinute = startMinute, endMinute = endMinute };
             notes.Add(note); Revision++; NarrativeUpdated(); return note.Copy();
         }
         public void UpdateConsultationNote(int id, string text)
         {
             ConsultationNote note = notes.FirstOrDefault(n => n.id == id) ?? throw new CommandException("상담 메모를 찾을 수 없습니다.");
             ValidateNote(note.profileId, text); note.text = text.Trim(); Revision++; NarrativeUpdated();
+        }
+        public void UpdateConsultationNote(int id, string text, int sessionDay, int startMinute, int endMinute)
+        {
+            ConsultationNote note = notes.FirstOrDefault(n => n.id == id) ?? throw new CommandException("상담 일지를 찾을 수 없습니다.");
+            ValidateNote(note.profileId, text); ValidateSessionTime(sessionDay, startMinute, endMinute);
+            note.text = text.Trim(); note.hasSessionTime = true; note.sessionDay = sessionDay; note.startMinute = startMinute; note.endMinute = endMinute;
+            Revision++; NarrativeUpdated();
+        }
+        private void ValidateSessionTime(int day, int start, int end)
+        {
+            if (day < 1 || day > Day || start < 0 || start >= 1440 || end < start || end > 1440)
+                throw new CommandException("상담일과 시간을 확인하세요. 시작 시간은 종료 시간보다 늦을 수 없습니다.");
         }
         public bool RemoveConsultationNote(int id) { bool removed = notes.RemoveAll(n => n.id == id) > 0; if (removed) { Revision++; NarrativeUpdated(); } return removed; }
         private void ValidateNote(string profileId, string text)
@@ -161,7 +184,15 @@ namespace Codetective.Operations
             {
                 if (note.id < 1 || notes.Any(n => n.id == note.id) || string.IsNullOrWhiteSpace(note.profileId) || note.text == null || note.text.Length > 8000)
                     throw new CommandException("저장된 상담 메모가 유효하지 않습니다.");
-                notes.Add(note.Copy());
+                ConsultationNote restored = note.Copy();
+                if (!restored.hasSessionTime)
+                {
+                    if (double.IsNaN(restored.minute) || double.IsInfinity(restored.minute)) throw new CommandException("저장된 상담 시간이 유효하지 않습니다.");
+                    restored.hasSessionTime = true; restored.sessionDay = Math.Max(1, restored.day);
+                    restored.startMinute = restored.endMinute = Math.Max(0, Math.Min(1439, (int)restored.minute));
+                }
+                ValidateSessionTime(restored.sessionDay, restored.startMinute, restored.endMinute);
+                notes.Add(restored);
             }
             nextNoteId = Math.Max(snapshot.nextConsultationNoteId, notes.Count == 0 ? 1 : notes.Max(n => n.id) + 1);
             mailProgress.Clear();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Codetective.Interaction;
+using Codetective.Operations;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,6 +17,8 @@ namespace Codetective.Gameplay
         public string title;
         public string text;
         public PaperLayout layout;
+        public PersonProfile profile;
+        public Sprite portrait;
         public IReadOnlyList<PaperClue> clues = Array.Empty<PaperClue>();
     }
 
@@ -26,6 +29,10 @@ namespace Codetective.Gameplay
         public string Title { get; private set; }
         public IReadOnlyList<PaperSection> Sections { get; private set; } = Array.Empty<PaperSection>();
         public event Action<PaperDocument, int> AreaClicked;
+        public event Action<int> PageChanged;
+        public int PageIndex { get; private set; }
+        public int ContentRevision { get; private set; }
+        private bool paginated;
         private ItemCarryController carry;
         private Font font;
         private RectTransform ink;
@@ -36,6 +43,8 @@ namespace Codetective.Gameplay
         private Vector2 pageSize;
         private string contentKey;
         private CanvasGroup inkInteraction;
+        private Button previousPage, nextPage;
+        private Text pageLabel;
 
         public void Initialize(HoldableItem item, ItemCarryController controller, Camera camera, Font typeface, Vector2 size)
         {
@@ -54,22 +63,51 @@ namespace Codetective.Gameplay
             inkInteraction = ink.GetComponent<CanvasGroup>();
             title = OverlayWidgets.Label(ink, font, new Vector2(26, -20), new Vector2(pageSize.x - 52, 100), "", 36);
             title.color = new Color(0.1f, 0.08f, 0.06f);
+            if (item.Use == HeldItemUse.Profile)
+            {
+                previousPage = PageCorner(new Vector2(26, -pageSize.y + 66), "‹", () => TurnPage(-1));
+                nextPage = PageCorner(new Vector2(pageSize.x - 90, -pageSize.y + 66), "›", () => TurnPage(1));
+                pageLabel = OverlayWidgets.Label(ink, font, new Vector2(pageSize.x * 0.5f - 90, -pageSize.y + 60), new Vector2(180, 44), "", 22);
+                pageLabel.alignment = TextAnchor.MiddleCenter; pageLabel.color = title.color;
+                previousPage.gameObject.SetActive(false); nextPage.gameObject.SetActive(false);
+            }
             Item.PoseChanged += RefreshShape; RefreshShape();
         }
         public void SetContent(string heading, IReadOnlyList<PaperSection> sections)
+            => SetContentCore(heading, sections, false, 0);
+        public void SetPagedContent(string heading, IReadOnlyList<PaperSection> pages, int pageIndex)
+            => SetContentCore(heading, pages, true, pageIndex);
+        public void SetPageIndex(int index)
         {
-            string key = heading;
-            foreach (PaperSection section in sections) key += "\n" + section.title + "\n" + section.text;
+            int next = Mathf.Clamp(index, 0, Mathf.Max(0, Sections.Count - 1));
+            if (!paginated || PageIndex == next) return;
+            SetContentCore(Title, Sections, true, next); PageChanged?.Invoke(PageIndex);
+        }
+        private void SetContentCore(string heading, IReadOnlyList<PaperSection> sections, bool pageMode, int index)
+        {
+            paginated = pageMode; PageIndex = Mathf.Clamp(index, 0, Mathf.Max(0, sections.Count - 1));
+            string key = heading + "|" + paginated + "|" + PageIndex;
+            foreach (PaperSection section in sections)
+            {
+                key += "\n" + section.title + "\n" + section.text + "|" + (section.portrait != null ? section.portrait.GetInstanceID() : 0);
+                if (section.profile != null) key += "|" + section.profile.Name + "|" + section.profile.Gender + "|" + section.profile.Age + "|" + section.profile.Birthday + "|" + section.profile.Occupation + "|" + section.profile.Family;
+            }
             Title = heading; Sections = sections;
-            if (contentKey == key) return; contentKey = key;
+            if (contentKey == key) return; contentKey = key; ContentRevision++;
             title.text = heading;
+            if (previousPage != null)
+            {
+                previousPage.gameObject.SetActive(paginated && sections.Count > 1); nextPage.gameObject.SetActive(paginated && sections.Count > 1);
+                previousPage.interactable = PageIndex > 0; nextPage.interactable = PageIndex + 1 < sections.Count;
+                pageLabel.text = paginated ? (PageIndex + 1) + " / " + Mathf.Max(1, sections.Count) : "";
+            }
             foreach (GameObject old in regions) { old.SetActive(false); Discard(old); } regions.Clear();
-            int count = sections.Count;
-            float height = (pageSize.y - 150) / Mathf.Max(1, count);
+            int count = paginated ? Mathf.Min(1, sections.Count) : sections.Count;
+            float height = (pageSize.y - (paginated ? 215 : 150)) / Mathf.Max(1, count);
             for (int i = 0; i < count; i++)
             {
-                int index = i; PaperSection section = sections[i];
-                Button area = OverlayWidgets.Button(ink, font, new Vector2(26, -124 - i * height), new Vector2(pageSize.x - 52, height - 10), "", () => AreaClicked?.Invoke(this, index));
+                int sectionIndex = paginated ? PageIndex : i; PaperSection section = sections[sectionIndex];
+                Button area = OverlayWidgets.Button(ink, font, new Vector2(26, -124 - i * height), new Vector2(pageSize.x - 52, height - 10), "", () => AreaClicked?.Invoke(this, sectionIndex));
                 area.name = "PrintedArea_" + i; area.image.color = Color.clear; area.transition = Selectable.Transition.None;
                 area.navigation = new Navigation { mode = Navigation.Mode.None };
                 RectTransform content = PaperContentView.Create(area.transform, font, section, 900, false);
@@ -77,6 +115,19 @@ namespace Codetective.Gameplay
                 content.localScale = Vector3.one * scale; content.anchoredPosition = new Vector2(10, -6);
                 regions.Add(area.gameObject);
             }
+        }
+        private Button PageCorner(Vector2 position, string text, Action action)
+        {
+            Button button = OverlayWidgets.Button(ink, font, position, new Vector2(64, 44), text, action);
+            button.image.color = Color.clear; button.transition = Selectable.Transition.None;
+            button.navigation = new Navigation { mode = Navigation.Mode.None }; button.GetComponentInChildren<Text>().color = title.color;
+            return button;
+        }
+        private void TurnPage(int direction)
+        {
+            if (!carry.CanManipulate) return;
+            if (!Item.IsHeld) { carry.TryPickup(Item); return; }
+            SetPageIndex(PageIndex + direction);
         }
         public void RefreshShape()
         {

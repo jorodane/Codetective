@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Codetective.Operations;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -17,6 +18,9 @@ namespace Codetective.Terminal
         [SerializeField] private Text heading;
         [SerializeField] private RectTransform navigationRoot;
         [SerializeField] private string initialPage = "home";
+        [Tooltip("Portraits are keyed by world profile ID. Availability uses the same story triggers as permissions.")]
+        [SerializeField] private ProfilePortrait[] profilePortraits = Array.Empty<ProfilePortrait>();
+        private readonly Dictionary<string, int> journalPages = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, MonitorPage> pages = new Dictionary<string, MonitorPage>(StringComparer.Ordinal);
         private readonly Dictionary<string, Button> tabs = new Dictionary<string, Button>(StringComparer.Ordinal);
         private readonly PageNavigation navigation = new PageNavigation();
@@ -33,6 +37,20 @@ namespace Codetective.Terminal
         public string CurrentMenuId => CurrentPage != null ? CurrentPage.NavigationPageId : null;
         public string SelectedProfileId { get; set; } = "client";
         public int SelectedScheduleDay { get; set; }
+        public int ProfilePageRevision { get; private set; }
+        public int JournalPageFor(string profileId) => profileId != null && journalPages.TryGetValue(profileId, out int page) ? page : 0;
+        public void SelectJournalPage(string profileId, int page)
+        {
+            if (profileId == null || page < 0 || JournalPageFor(profileId) == page) return;
+            journalPages[profileId] = page; ProfilePageRevision++;
+        }
+        public Sprite PortraitFor(string profileId)
+        {
+            if (runtime == null || !runtime.VisibleProfileIds.Contains(profileId)) return null;
+            foreach (ProfilePortrait portrait in profilePortraits ?? Array.Empty<ProfilePortrait>())
+                if (portrait != null && portrait.profileId == profileId && (portrait.availability == null || portrait.availability.Matches(runtime))) return portrait.photo;
+            return null;
+        }
         public bool CanGoBack => navigation.CanGoBack;
         public bool CanGoForward => navigation.CanGoForward;
         public bool IsCompositionProtected

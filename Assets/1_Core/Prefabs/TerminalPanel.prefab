@@ -2874,6 +2874,31 @@ MonoBehaviour:
   heading: {fileID: 100008}
   navigationRoot: {fileID: 134001}
   initialPage: home
+  profilePortraits:
+  - profileId: client
+    photo: {fileID: 0}
+    availability:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+  - profileId: kernel
+    photo: {fileID: 0}
+    availability:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+  - profileId: careerVisitor
+    photo: {fileID: 0}
+    availability:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+  - profileId: careVisitor
+    photo: {fileID: 0}
+    availability:
+      triggersOn: []
+      triggersOff: []
+      quests: []
 --- !u!1 &131000
 GameObject:
   m_ObjectHideFlags: 0

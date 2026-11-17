@@ -53,6 +53,7 @@ namespace Codetective.Gameplay
         private PaperDocument profileDocument;
         private int paperRevision = -1;
         private string printedProfile;
+        private int paperPageRevision = -1;
         private readonly List<ItemPlacementSurface> storageSurfaces = new List<ItemPlacementSurface>();
         private ClinicVisitPresentation visits;
         private int summaryShownDay;
@@ -150,7 +151,7 @@ namespace Codetective.Gameplay
                 ShowDaySummary();
             if (narrativeDirty && Time.unscaledTime >= narrativeSaveAt) { narrativeDirty = false; SaveNow(); }
             foreach (SlidingDrawer drawer in drawers) drawer.SetInteractionEnabled(CanOperateDrawers);
-            if (profileDocument != null && (paperRevision != Runtime.Revision || printedProfile != SelectedProfileId))
+            if (profileDocument != null && (paperRevision != Runtime.Revision || printedProfile != SelectedProfileId || paperPageRevision != (Monitor?.ProfilePageRevision ?? 0)))
             { RefreshProfilePaper(); newspaper.Refresh(Runtime); paperRevision = Runtime.Revision; }
             if (pendingView != null && !views.IsTransitioning && !IsDateTransitioning && !IsVisitPresenting)
             {
@@ -232,16 +233,26 @@ namespace Codetective.Gameplay
             profileDocument = paper.AddComponent<PaperDocument>();
             profileDocument.Initialize(item, Carry, views.ControlledCamera, font, new Vector2(0.27f, 0.35f)); Carry.Register(item);
             profileDocument.AreaClicked += ReadPrintedArea;
+            profileDocument.PageChanged += index => Monitor?.SelectJournalPage(printedProfile, index);
             RefreshProfilePaper();
         }
         private void RefreshProfilePaper()
         {
             if (!Runtime.VisibleProfileIds.Contains(SelectedProfileId)) SelectedProfileId = Runtime.VisibleProfileIds.FirstOrDefault();
             printedProfile = SelectedProfileId;
+            paperPageRevision = Monitor?.ProfilePageRevision ?? 0;
             string label = (printedProfile != null ? Runtime.Entity(printedProfile)?.Label : null) ?? printedProfile ?? "미등록";
             profileDocument.Item.Configure("desk.profile", label + " / 프로필", HeldItemUse.Profile, printedProfile);
-            profileDocument.SetContent("인물 프로필 / " + label, new[] { new PaperSection { title = "신원 · 기록한 단서 · 상담 기록",
-                text = printedProfile != null ? Runtime.ProfileSummary(printedProfile) : "열람 가능한 프로필이 없습니다." } });
+            if (printedProfile == null)
+            {
+                profileDocument.SetContent("인물 프로필", new[] { new PaperSection { title = "미등록", text = "열람 가능한 프로필이 없습니다." } });
+                return;
+            }
+            PersonProfile profile = Runtime.ProfileCard(printedProfile); Sprite portrait = Monitor?.PortraitFor(printedProfile);
+            int count = Math.Max(1, Runtime.NotesFor(printedProfile).Count());
+            PaperSection[] pages = Enumerable.Range(0, count).Select(index => new PaperSection { title = "상담 일지 " + (index + 1) + " / " + count,
+                profile = profile, portrait = portrait, text = Runtime.ProfileJournalText(printedProfile, index) }).ToArray();
+            profileDocument.SetPagedContent("인물 프로필 / " + label, pages, Monitor?.JournalPageFor(printedProfile) ?? 0);
         }
         private void RestoreStoredItems()
         {

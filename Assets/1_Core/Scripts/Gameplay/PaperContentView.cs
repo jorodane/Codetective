@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using Codetective.Terminal;
 
 namespace Codetective.Gameplay
 {
@@ -10,6 +11,8 @@ namespace Codetective.Gameplay
     {
         public static RectTransform Create(Transform parent, Font font, PaperSection section, float width, bool interactive)
         {
+            if (section.profile != null)
+                return ProfileFormView.CreatePage(parent, font, section.profile, section.portrait, section.title, section.text, width);
             PaperLayout layout = section.layout;
             bool authored = layout != null && layout.blocks != null && layout.blocks.Length > 0;
             float logicalWidth = authored ? Mathf.Max(1, layout.width) : width;

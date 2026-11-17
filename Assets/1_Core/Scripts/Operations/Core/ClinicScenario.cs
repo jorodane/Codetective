@@ -107,12 +107,15 @@ namespace Codetective.Operations
 
         public static void EnsureKernelProfile(KernelRuntime runtime)
         {
-            if (runtime.Entity("kernel") != null) return;
-            Entity kernel = runtime.CreateInstance("Person", "kernel", "Kernel", false);
+            Entity kernel = runtime.Entity("kernel"); bool created = kernel == null;
+            if (created) kernel = runtime.CreateInstance("Person", "kernel", "Kernel", false);
             foreach (var field in new[] { new[] { "legalName", "이름" }, new[] { "birthDate", "생년월일" }, new[] { "family", "가족관계" },
+                new[] { "gender", "성별" }, new[] { "age", "나이" }, new[] { "occupation", "직업" },
                 new[] { "pastAgency", "과거 소속" }, new[] { "serviceRecord", "작전 이력" } })
-                kernel.AddVariable(new VariableDefinition { Code = field[0], Label = field[1], Kind = DataKind.Text, DefaultValue = Datum.Text("[데이터 말소됨]") });
-            kernel.SetValue("description", Datum.Text("현재 코드네임: Kernel / 위장 신분: 개인 심리상담소 상담가"));
+                if (kernel.GetVariableDefinition(field[0]) == null)
+                    kernel.AddVariable(new VariableDefinition { Code = field[0], Label = field[1], Kind = DataKind.Text,
+                        DefaultValue = Datum.Text(field[0] == "occupation" ? "심리상담가" : "[데이터 말소됨]") });
+            if (created) kernel.SetValue("description", Datum.Text("현재 코드네임: Kernel / 위장 신분: 개인 심리상담소 상담가"));
         }
 
         private static EntitySchema Define(KernelRuntime runtime, string id, string korean, DataKind kind)

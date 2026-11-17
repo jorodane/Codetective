@@ -105,6 +105,91 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.IsMailAccepted("intro"), Is.False);
         }
         [Test]
+        public void ProfileCardsUseKnownInstanceFieldsAndRespectDynamicAccess()
+        {
+            KernelRuntime runtime = ClinicScenario.Create(); Entity person = runtime.Entity("client");
+            person.AddVariable(new VariableDefinition { Code = "legalName", Kind = DataKind.Text, DefaultValue = Datum.Text("이서현") });
+            person.AddVariable(new VariableDefinition { Code = "gender", Kind = DataKind.Text, DefaultValue = Datum.Text("여성") });
+            person.AddVariable(new VariableDefinition { Code = "age", Kind = DataKind.Number, DefaultValue = Datum.Number(31) });
+            person.AddVariable(new VariableDefinition { Code = "birthDate", Kind = DataKind.Text, DefaultValue = Datum.Text("1962.04.17") });
+            person.AddVariable(new VariableDefinition { Code = "family", Kind = DataKind.Text, DefaultValue = Datum.Text("배우자, 자녀 1명"),
+                Access = new AccessRule { Story = new StoryCondition { triggersOn = new[] { "family.known" } } } });
+            PersonProfile profile = runtime.ProfileCard("client");
+            Assert.That(profile.Name, Is.EqualTo("이서현")); Assert.That(profile.Gender, Is.EqualTo("여성"));
+            Assert.That(profile.Age, Is.EqualTo("31")); Assert.That(profile.Birthday, Is.EqualTo("1962.04.17"));
+            Assert.That(profile.Occupation, Is.EqualTo("회사원")); Assert.That(profile.Family, Is.EqualTo("[접근 제한]"));
+            runtime.SetTrigger("family.known", true); Assert.That(runtime.ProfileCard("client").Family, Is.EqualTo("배우자, 자녀 1명"));
+            person.SetVariableAccess("family", PlayerAccess.Internal); Assert.That(runtime.ProfileCard("client").Family, Is.EqualTo("[접근 제한]"));
+            profile.Name = "copy"; Assert.That(runtime.ProfileCard("client").Name, Is.EqualTo("이서현"));
+            person.SetEntityAccess(PlayerAccess.Internal);
+            Assert.That(() => runtime.ProfileCard("client"), Throws.TypeOf<CommandException>());
+            Assert.That(() => runtime.ProfileJournalText("client", 0), Throws.TypeOf<CommandException>());
+            Assert.That(() => runtime.ProfileCard("thread01"), Throws.TypeOf<CommandException>());
+        }
+        [Test]
+        public void KernelUsesTheSameFormWithoutReplacingRecoveredIdentityInformation()
+        {
+            KernelRuntime runtime = ClinicScenario.Create(); PersonProfile kernel = runtime.ProfileCard("kernel");
+            Assert.That(kernel.Name, Is.EqualTo("[데이터 말소됨]")); Assert.That(kernel.Gender, Is.EqualTo("[데이터 말소됨]"));
+            Assert.That(kernel.Age, Is.EqualTo("[데이터 말소됨]")); Assert.That(kernel.Birthday, Is.EqualTo("[데이터 말소됨]"));
+            Assert.That(kernel.Family, Is.EqualTo("[데이터 말소됨]")); Assert.That(kernel.Occupation, Is.EqualTo("심리상담가"));
+            runtime.Entity("kernel").SetValue("legalName", Datum.Text("확인한 과거 이름")); ClinicScenario.EnsureKernelProfile(runtime);
+            Assert.That(runtime.ProfileCard("kernel").Name, Is.EqualTo("확인한 과거 이름"));
+        }
+        [Test]
+        public void JournalPagesStoreSessionTimesAndCanBeEditedWithoutAddingDuplicateEntries()
+        {
+            KernelRuntime runtime = ClinicScenario.Create();
+            ConsultationNote first = runtime.AddConsultationNote("client", "첫 상담", 1, 570, 610);
+            ConsultationNote second = runtime.AddConsultationNote("client", "두 번째 상담", 1, 660, 720);
+            runtime.UpdateConsultationNote(first.id, "수정한 첫 상담", 1, 575, 615);
+            Assert.That(runtime.NotesFor("client").Count(), Is.EqualTo(2));
+            Assert.That(runtime.ProfileJournalText("client", 0), Does.Contain("09:35 ~ 10:15").And.Contain("수정한 첫 상담").And.Not.Contain("두 번째 상담"));
+            Assert.That(runtime.ProfileJournalText("client", 1), Does.Contain("11:00 ~ 12:00").And.Contain("두 번째 상담"));
+            KernelSnapshot snapshot = runtime.Capture(); KernelRuntime restored = ClinicScenario.Create(); restored.Restore(snapshot);
+            snapshot.consultationNotes[0].startMinute = 0; second.text = "copy";
+            Assert.That(restored.NotesFor("client").First().startMinute, Is.EqualTo(575));
+            Assert.That(restored.NotesFor("client").Last().text, Is.EqualTo("두 번째 상담"));
+            runtime.AddConsultationNote("kernel", "Kernel 자신에 대한 기록", 1, 540, 550);
+            Assert.That(runtime.NotesFor("kernel").Single().text, Is.EqualTo("Kernel 자신에 대한 기록"));
+            Assert.That(runtime.NotesFor("client").Count(), Is.EqualTo(2));
+        }
+        [Test]
+        public void LegacyNotesBecomeJournalPagesAtTheirOriginalRecordedTime()
+        {
+            KernelRuntime runtime = ClinicScenario.Create(); runtime.Tick(15); runtime.AddConsultationNote("client", "이전 메모");
+            KernelSnapshot snapshot = runtime.Capture(); snapshot.consultationNotes[0].hasSessionTime = false;
+            snapshot.consultationNotes[0].sessionDay = snapshot.consultationNotes[0].startMinute = snapshot.consultationNotes[0].endMinute = 0;
+            KernelRuntime restored = ClinicScenario.Create(); restored.Restore(snapshot);
+            ConsultationNote note = restored.NotesFor("client").Single();
+            Assert.That(note.hasSessionTime, Is.True); Assert.That(note.sessionDay, Is.EqualTo(1));
+            Assert.That(note.startMinute, Is.EqualTo(555)); Assert.That(note.endMinute, Is.EqualTo(555));
+            Assert.That(note.text, Is.EqualTo("이전 메모"));
+            Assert.That(snapshot.consultationNotes[0].hasSessionTime, Is.False);
+        }
+        [TestCase(2, 600, 660)]
+        [TestCase(1, 700, 600)]
+        [TestCase(1, -1, 600)]
+        [TestCase(1, 600, 1441)]
+        public void InvalidJournalSessionTimesDoNotChangeSavedPages(int day, int start, int end)
+        {
+            KernelRuntime runtime = ClinicScenario.Create(); ConsultationNote note = runtime.AddConsultationNote("client", "보존할 내용", 1, 600, 660);
+            Assert.That(() => runtime.AddConsultationNote("client", "새 내용", day, start, end), Throws.TypeOf<CommandException>());
+            Assert.That(() => runtime.UpdateConsultationNote(note.id, "바꿀 내용", day, start, end), Throws.TypeOf<CommandException>());
+            Assert.That(runtime.NotesFor("client").Single().text, Is.EqualTo("보존할 내용"));
+        }
+        [TestCase("09:05", 545)]
+        [TestCase("9:05", 545)]
+        [TestCase("24:00", 1440)]
+        public void JournalTimeInputAcceptsClockTimes(string value, int expected)
+        { Assert.That(KernelRuntime.ParseConsultationTime(value), Is.EqualTo(expected)); }
+        [TestCase("25:00")]
+        [TestCase("09:61")]
+        [TestCase("-1:05")]
+        [TestCase("hello")]
+        public void JournalTimeInputRejectsInvalidClockTimes(string value)
+        { Assert.That(() => KernelRuntime.ParseConsultationTime(value), Throws.TypeOf<CommandException>()); }
+        [Test]
         public void PrototypeTestsCannotMutateRealDrawerOrMailState()
         {
             KernelRuntime r = World(); r.ReadMail("intro"); r.AcceptMail("intro"); r.SetDrawerOpen("desk.1", true);

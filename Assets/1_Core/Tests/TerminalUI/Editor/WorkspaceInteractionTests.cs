@@ -138,6 +138,41 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void ProfilePaperTurnsJournalPagesWithoutPuttingTheEvidenceDown()
+        {
+            var system = new GameObject("Carry"); var camera = new GameObject("Camera", typeof(Camera)); var paper = new GameObject("Profile");
+            try
+            {
+                KernelRuntime runtime = ClinicScenario.Create(); runtime.AddConsultationNote("kernel", "첫 번째 Kernel 일지", 1, 540, 570);
+                runtime.AddConsultationNote("kernel", "두 번째 Kernel 일지", 1, 600, 630);
+                ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("profile", "Kernel 프로필", HeldItemUse.Profile, "kernel");
+                Component document = paper.AddComponent(FindType("Codetective.Gameplay.PaperDocument"));
+                Call(document, "Initialize", item, carry, camera.GetComponent<Camera>(), Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), new Vector2(0.27f, 0.35f));
+                Type sectionType = FindType("Codetective.Gameplay.PaperSection"); Array pages = Array.CreateInstance(sectionType, 2);
+                for (int i = 0; i < 2; i++)
+                {
+                    object page = Activator.CreateInstance(sectionType); sectionType.GetField("profile").SetValue(page, runtime.ProfileCard("kernel"));
+                    sectionType.GetField("title").SetValue(page, "상담 일지 " + (i + 1));
+                    sectionType.GetField("text").SetValue(page, runtime.ProfileJournalText("kernel", i)); pages.SetValue(page, i);
+                }
+                Call(document, "SetPagedContent", "Kernel 프로필", pages, 0); carry.Register(item); carry.TryPickup(item);
+                Assert.That(paper.GetComponentsInChildren<ProfileFormView>().Length, Is.EqualTo(1));
+                Assert.That(paper.GetComponentsInChildren<Text>().Any(t => t.text.Contains("첫 번째 Kernel 일지")), Is.True);
+                int changed = -1; document.GetType().GetEvent("PageChanged").AddEventHandler(document, (Action<int>)(index => changed = index));
+                Button next = (Button)document.GetType().GetField("nextPage", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(document); next.onClick.Invoke();
+                Assert.That(changed, Is.EqualTo(1)); Assert.That(item.IsHeld, Is.True);
+                Assert.That(paper.GetComponentsInChildren<ProfileFormView>().Length, Is.EqualTo(1));
+                Assert.That(paper.GetComponentsInChildren<Text>().Any(t => t.text.Contains("두 번째 Kernel 일지")), Is.True);
+                Assert.That(paper.GetComponentsInChildren<Text>().Any(t => t.text.Contains("첫 번째 Kernel 일지")), Is.False);
+                Assert.That(paper.GetComponentsInChildren<Text>().Any(t => t.text == "이름: [데이터 말소됨]"), Is.True);
+                Button previous = (Button)document.GetType().GetField("previousPage", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(document); previous.onClick.Invoke();
+                Assert.That(changed, Is.Zero); Assert.That(item.IsHeld, Is.True);
+            }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(paper); Object.DestroyImmediate(camera); }
+        }
+
+        [Test]
         public void PlacementSurvivesAngleChangesAndFrontClicksStillToggleTheDrawer()
         {
             var navigation = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); navigation.SetActive(false);

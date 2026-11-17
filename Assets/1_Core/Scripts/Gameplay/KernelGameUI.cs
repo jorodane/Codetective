@@ -47,6 +47,7 @@ namespace Codetective.Gameplay
         private Button putDown;
         private PaperDocument openedDocument;
         private int documentSection;
+        private int documentRevision;
         private GameObject nextDayButton, dateRoot;
         private CanvasGroup dateFade;
         private Text dateLabel;
@@ -105,6 +106,11 @@ namespace Codetective.Gameplay
         {
             if (!IsInitialized) return;
             interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && inspection.Mode != InspectionMode.Menu;
+            if (modal == "document" && openedDocument != null && openedDocument.ContentRevision != documentRevision)
+            {
+                if (openedDocument.Sections.Count == 0) Back();
+                else { documentSection = Mathf.Clamp(documentSection, 0, openedDocument.Sections.Count - 1); BuildDocumentReader(); }
+            }
             HoldableItem held = game.Carry.HeldItem;
             heldBar.gameObject.SetActive(held != null && modal == null && inspection.Mode != InspectionMode.Menu && !game.IsDateTransitioning);
             if (held != null)
@@ -269,6 +275,7 @@ namespace Codetective.Gameplay
         private void BuildDocumentReader()
         {
             if (openedDocument == null) return;
+            documentRevision = openedDocument.ContentRevision;
             if (newspaperReader != null) { newspaperReader.gameObject.SetActive(false); Destroy(newspaperReader.gameObject); }
             newspaperReader = Box("DocumentReader", root.transform, Vector2.zero, new Vector2(1000, 642), new Vector2(0.5f, 0.5f));
             newspaperReader.GetComponent<Image>().color = new Color(0.85f, 0.82f, 0.69f);

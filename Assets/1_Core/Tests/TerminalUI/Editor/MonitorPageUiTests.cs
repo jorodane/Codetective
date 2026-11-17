@@ -38,6 +38,74 @@ namespace Codetective.Terminal.Tests.UI
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
 
         [Test]
+        public void ClientAndKernelUseTheSamePortraitAndSixFieldForm()
+        {
+            host.ShowPage("clinic"); ClinicMonitorPage clinic = host.CurrentPage.GetComponent<ClinicMonitorPage>();
+            ProfileFormView form = host.CurrentPage.GetComponentInChildren<ProfileFormView>();
+            RectTransform portrait = (RectTransform)form.transform.Find("Portrait35x45");
+            Assert.That(portrait.rect.width / portrait.rect.height, Is.EqualTo(3.5f / 4.5f).Within(0.001f));
+            string[] labels = { "이름: ", "성별: ", "나이: ", "생일: ", "직업: ", "가족관계: " };
+            foreach (string label in labels)
+            {
+                Text field = form.GetComponentsInChildren<Text>(true).Single(t => t.text.StartsWith(label, StringComparison.Ordinal));
+                Assert.That(field.rectTransform.anchoredPosition.x, Is.GreaterThan(portrait.rect.width));
+            }
+            host.SelectedProfileId = "kernel"; Invoke(clinic, "Refresh");
+            Assert.That(host.CurrentPage.GetComponentInChildren<ProfileFormView>(), Is.SameAs(form));
+            string[] values = form.GetComponentsInChildren<Text>(true).Select(t => t.text).ToArray();
+            Assert.That(values, Does.Contain("이름: [데이터 말소됨]")); Assert.That(values, Does.Contain("나이: [데이터 말소됨]"));
+            Assert.That(values, Does.Contain("직업: 심리상담가"));
+        }
+        [Test]
+        public void PortraitsFollowStoryUnlocksAndHiddenPeopleDoNotExposePhotos()
+        {
+            var texture = new Texture2D(4, 4); Sprite photo = Sprite.Create(texture, new Rect(0, 0, 4, 4), Vector2.zero);
+            try
+            {
+                SetField(host, "profilePortraits", new[] { new ProfilePortrait { profileId = "client", photo = photo,
+                    availability = new StoryCondition { triggersOn = new[] { "portrait.known" } } }, new ProfilePortrait { profileId = "thread01", photo = photo } });
+                Assert.That(host.PortraitFor("client"), Is.Null); Assert.That(host.PortraitFor("thread01"), Is.Null);
+                runtime.SetTrigger("portrait.known", true); Assert.That(host.PortraitFor("client"), Is.SameAs(photo));
+                host.ShowPage("clinic"); ClinicMonitorPage clinic = host.CurrentPage.GetComponent<ClinicMonitorPage>();
+                Assert.That(host.CurrentPage.GetComponentInChildren<ProfileFormView>().GetComponentsInChildren<Image>(true).Any(i => i.sprite == photo), Is.True);
+                runtime.Entity("client").SetEntityAccess(PlayerAccess.Internal); Assert.That(host.PortraitFor("client"), Is.Null);
+                Invoke(clinic, "Refresh");
+                Assert.That(host.CurrentPage.GetComponentInChildren<ProfileFormView>().GetComponentsInChildren<Image>(true).Any(i => i.sprite == photo), Is.False);
+            }
+            finally { Object.DestroyImmediate(photo); Object.DestroyImmediate(texture); }
+        }
+        [Test]
+        public void JournalPagesRetainSeparateDraftsAndEditTheirOwnSessionTime()
+        {
+            host.ShowPage("clinic-records"); ClinicMonitorPage records = host.CurrentPage.GetComponent<ClinicMonitorPage>();
+            MonitorNoteInput input = Field<MonitorNoteInput>(records, "noteInput");
+            input.text = "첫 번째 상담 내용"; Field<MonitorNoteInput>(records, "startInput").text = "09:30";
+            Field<MonitorNoteInput>(records, "endInput").text = "10:00"; Invoke(records, "SaveNote");
+            Invoke(records, "NewPage"); input.text = "두 번째 상담 내용";
+            Field<MonitorNoteInput>(records, "startInput").text = "10:30"; Field<MonitorNoteInput>(records, "endInput").text = "11:00"; Invoke(records, "SaveNote");
+            Assert.That(runtime.NotesFor("client").Count(), Is.EqualTo(2));
+            Invoke(records, "ChangePage", -1); Assert.That(input.text, Is.EqualTo("첫 번째 상담 내용")); input.text = "수정 중인 첫 페이지";
+            runtime.SetTrigger("background.report", true); Invoke(records, "Refresh"); Assert.That(input.text, Is.EqualTo("수정 중인 첫 페이지"));
+            Invoke(records, "ChangePage", 1); Assert.That(input.text, Is.EqualTo("두 번째 상담 내용"));
+            Invoke(records, "ChangePage", -1); Assert.That(input.text, Is.EqualTo("수정 중인 첫 페이지")); Invoke(records, "SaveNote");
+            Assert.That(runtime.NotesFor("client").Count(), Is.EqualTo(2)); Assert.That(runtime.NotesFor("client").First().startMinute, Is.EqualTo(570));
+            host.SelectedProfileId = "kernel"; Invoke(records, "Refresh"); Assert.That(input.text, Is.Empty);
+            input.text = "Kernel 자신의 기록"; Invoke(records, "SaveNote");
+            host.SelectedProfileId = "client"; Invoke(records, "Refresh"); Assert.That(input.text, Is.EqualTo("수정 중인 첫 페이지"));
+            Assert.That(runtime.NotesFor("kernel").Single().text, Is.EqualTo("Kernel 자신의 기록"));
+        }
+        [Test]
+        public void UntouchedNewPagesUseTodaysDateWithoutOverwritingAnEditedDraft()
+        {
+            host.ShowPage("clinic-records"); ClinicMonitorPage records = host.CurrentPage.GetComponent<ClinicMonitorPage>();
+            runtime.Tick(540); runtime.NextDay(); Invoke(records, "Refresh");
+            Assert.That(Field<MonitorNoteInput>(records, "dayInput").text, Is.EqualTo("2"));
+            Field<MonitorNoteInput>(records, "noteInput").text = "작성 중인 상담 내용";
+            Field<MonitorNoteInput>(records, "startInput").text = "09:15"; runtime.Tick(15); Invoke(records, "Refresh");
+            Assert.That(Field<MonitorNoteInput>(records, "noteInput").text, Is.EqualTo("작성 중인 상담 내용"));
+            Assert.That(Field<MonitorNoteInput>(records, "startInput").text, Is.EqualTo("09:15"));
+        }
+        [Test]
         public void HomeAndHeaderShareTheFourMenusAndEachCardOpensItsDestination()
         {
             Assert.That(host.CurrentPage.Id, Is.EqualTo("home")); Assert.That(terminal.PageVisible, Is.False);
