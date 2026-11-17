@@ -43,9 +43,11 @@ namespace Codetective.Terminal
             cursor--; Changed?.Invoke(Current); return true;
         }
         public bool CycleTab(int direction)
+            => CycleTab(direction, Current);
+        public bool CycleTab(int direction, string activeTab)
         {
             if (direction == 0 || tabOrder.Count == 0) return false;
-            int index = tabOrder.IndexOf(Current);
+            int index = tabOrder.IndexOf(activeTab);
             int next = index < 0 ? (direction > 0 ? 0 : tabOrder.Count - 1) :
                 (index + (direction > 0 ? 1 : -1) + tabOrder.Count) % tabOrder.Count;
             return Navigate(tabOrder[next]);

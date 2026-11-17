@@ -228,8 +228,9 @@ namespace Codetective.Gameplay
             MonitorPageHost host = game.Monitor; if (host == null) return;
             host.Initialize();
             RectTransform page = OverlayWidgets.Rect("OperationTools", host.transform, new Vector2(24, -140), new Vector2(1140, 590));
-            MonitorPage definition = page.gameObject.AddComponent<MonitorPage>(); definition.Configure("operations", "작전 도구");
+            MonitorPage definition = page.gameObject.AddComponent<MonitorPage>(); definition.Configure("operations", "작전 도구", false, "kernel");
             OverlayWidgets.Label(page, font, new Vector2(20, -16), new Vector2(1080, 50), "데이터 · Thread · 프로토콜", 32);
+            OverlayWidgets.Button(page, font, new Vector2(840, -16), new Vector2(240, 50), "명령창으로", () => host.ShowPage("kernel"));
             OverlayWidgets.Button(page, font, new Vector2(20, -100), new Vector2(320, 70), "확보 데이터", () => OpenModal("data"));
             OverlayWidgets.Button(page, font, new Vector2(370, -100), new Vector2(320, 70), "Thread 상태 / 배정", () => OpenModal("threads"));
             OverlayWidgets.Button(page, font, new Vector2(720, -100), new Vector2(320, 70), "프로토콜 편집", () => OpenModal("protocol"));
@@ -238,6 +239,12 @@ namespace Codetective.Gameplay
             foreach (Graphic graphic in page.GetComponentsInChildren<Graphic>(true))
                 if (graphic.GetComponent<CrtMeshEffect>() == null) graphic.gameObject.AddComponent<CrtMeshEffect>();
             host.Register(definition);
+            MonitorPage kernel = host.FindPage("kernel");
+            if (kernel != null)
+            {
+                Button tools = OverlayWidgets.Button(kernel.transform, font, new Vector2(610, -84), new Vector2(148, 34), "작전 도구", () => host.ShowPage("operations"));
+                foreach (Graphic graphic in tools.GetComponentsInChildren<Graphic>(true)) graphic.gameObject.AddComponent<CrtMeshEffect>();
+            }
         }
         private void ChangeProfile(int direction)
         {

@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Codetective.Operations;
@@ -37,9 +38,62 @@ namespace Codetective.Terminal.Tests.UI
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
 
         [Test]
+        public void HomeAndHeaderShareTheFourMenusAndEachCardOpensItsDestination()
+        {
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("home")); Assert.That(terminal.PageVisible, Is.False);
+            Assert.That(input.isFocused, Is.False);
+            string[] names = { "커널", "상담소", "메일", "스케쥴" };
+            Assert.That(host.NavigationPages.Select(p => p.Title), Is.EqualTo(names));
+            var tabs = Field<Dictionary<string, Button>>(host, "tabs");
+            Assert.That(tabs.Values.Select(b => b.GetComponentInChildren<Text>().text), Is.EqualTo(names));
+            MonitorPage home = host.CurrentPage; Button[] cards = home.GetComponentsInChildren<Button>(true);
+            Assert.That(cards.Select(b => b.GetComponentInChildren<Text>().text), Is.EqualTo(names));
+            for (int i = 0; i < cards.Length; i++)
+            {
+                cards[i].onClick.Invoke(); Assert.That(host.CurrentPage.Id, Is.EqualTo(host.NavigationPages[i].Id));
+                Assert.That(terminal.PageVisible, Is.EqualTo(i == 0)); Assert.That(input.isFocused, Is.False);
+                Field<Button>(host, "home").onClick.Invoke(); Assert.That(host.CurrentPage, Is.SameAs(home));
+            }
+        }
+        [Test]
+        public void ClinicRecordsUseTheClinicMenuForHighlightAndKeyboardCycling()
+        {
+            WithEventSystem(events =>
+            {
+                terminal.SetInteractionEnabled(true); host.ShowPage("clinic-records");
+                Assert.That(host.CurrentPage.ShowInNavigation, Is.False); Assert.That(host.CurrentMenuId, Is.EqualTo("clinic"));
+                var tabs = Field<Dictionary<string, Button>>(host, "tabs");
+                Assert.That(tabs["clinic"].image.color, Is.Not.EqualTo(tabs["kernel"].image.color));
+                Assert.That(host.TryCycleTab(1), Is.True); Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
+                host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("clinic-records"));
+                Assert.That(host.TryCycleTab(-1), Is.True); Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel"));
+                Assert.That(input.isFocused, Is.False);
+            });
+        }
+        [Test]
+        public void KernelContainsTheOperationsLinkWithoutAddingAFifthHeaderMenu()
+        {
+            var gameRoot = new GameObject("Operation tools host"); gameRoot.SetActive(false);
+            try
+            {
+                Type gameType = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("Codetective.Gameplay.KernelGameController")).First(t => t != null);
+                Component game = gameRoot.AddComponent(gameType); SetField(game, "<Runtime>k__BackingField", runtime); SetField(game, "terminalRoot", root.transform);
+                Component ui = gameRoot.GetComponents<Component>().Single(c => c != null && c.GetType().FullName == "Codetective.Gameplay.KernelGameUI");
+                SetField(ui, "game", game); SetField(ui, "font", Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")); Invoke(ui, "BuildOperationsPage");
+                Assert.That(host.NavigationPages.Count, Is.EqualTo(4));
+                host.ShowPage("kernel"); input.SetTextWithoutNotify("save draft");
+                host.CurrentPage.GetComponentsInChildren<Button>().Single(b => b.GetComponentInChildren<Text>()?.text == "작전 도구").onClick.Invoke();
+                Assert.That(host.CurrentPage.Id, Is.EqualTo("operations")); Assert.That(host.CurrentMenuId, Is.EqualTo("kernel"));
+                Assert.That(host.CurrentPage.ShowInNavigation, Is.False);
+                host.CurrentPage.GetComponentsInChildren<Button>().Single(b => b.GetComponentInChildren<Text>()?.text == "명령창으로").onClick.Invoke();
+                Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel")); Assert.That(input.text, Is.EqualTo("save draft"));
+            }
+            finally { Object.DestroyImmediate(gameRoot); }
+        }
+        [Test]
         public void SwitchingPagesReusesTheirViewsAndKeepsTheCommandDraft()
         {
-            Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("home"));
             Assert.That(terminal.PageVisible, Is.False);
             input.SetTextWithoutNotify("save 작성중인단서");
             host.ShowPage("kernel");
@@ -158,7 +212,7 @@ namespace Codetective.Terminal.Tests.UI
             MonitorPageLink link = linkObject.AddComponent<MonitorPageLink>(); SetField(link, "pageId", "custom");
             link.OpenPage();
             Assert.That(host.CurrentPage, Is.SameAs(page));
-            host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
+            host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("home"));
             Assert.That(canvas.GetComponentsInChildren<Canvas>(true).Length, Is.EqualTo(1));
         }
         [Test]

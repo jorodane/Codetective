@@ -98,6 +98,30 @@ namespace Codetective.Terminal.Tests
             navigation.Navigate("detail"); navigation.CycleTab(-1); Assert.That(navigation.Current, Is.EqualTo("last"));
         }
         [Test]
+        public void DetailPagesCycleFromTheirOwningMenuAndKeepTheirOwnHistory()
+        {
+            var navigation = new PageNavigation();
+            foreach (string id in new[] { "kernel", "clinic", "mail", "schedule" }) navigation.Register(id);
+            navigation.Register("clinic-records", false); navigation.Register("operations", false);
+            navigation.Navigate("clinic-records"); navigation.CycleTab(1, "clinic");
+            Assert.That(navigation.Current, Is.EqualTo("mail"));
+            navigation.Back(); Assert.That(navigation.Current, Is.EqualTo("clinic-records"));
+            navigation.CycleTab(-1, "clinic"); Assert.That(navigation.Current, Is.EqualTo("kernel"));
+            navigation.Navigate("operations"); navigation.CycleTab(-1, "kernel");
+            Assert.That(navigation.Current, Is.EqualTo("schedule"));
+        }
+        [Test]
+        public void HomeStaysOutsideTheMenuCycleAndStartsAtEitherEnd()
+        {
+            var navigation = new PageNavigation(); navigation.Register("home", false);
+            foreach (string id in new[] { "kernel", "clinic", "mail", "schedule" }) navigation.Register(id);
+            navigation.Navigate("home"); navigation.CycleTab(1);
+            Assert.That(navigation.Current, Is.EqualTo("kernel"));
+            navigation.Back(); Assert.That(navigation.Current, Is.EqualTo("home"));
+            navigation.CycleTab(-1); Assert.That(navigation.Current, Is.EqualTo("schedule"));
+            navigation.CycleTab(1); Assert.That(navigation.Current, Is.EqualTo("kernel"));
+        }
+        [Test]
         public void EmptySingleAndUnselectedTabListsDoNotCreateDuplicateHistory()
         {
             var navigation = new PageNavigation(); int changes = 0; navigation.Changed += _ => changes++;

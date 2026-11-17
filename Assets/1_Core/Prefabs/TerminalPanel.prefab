@@ -41,6 +41,7 @@ RectTransform:
   - {fileID: 133001}
   - {fileID: 135001}
   - {fileID: 136001}
+  - {fileID: 137001}
   - {fileID: 100006}
   - {fileID: 134001}
   m_Father: {fileID: 0}
@@ -153,7 +154,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 28, y: -20}
-  m_SizeDelta: {x: 340, y: 40}
+  m_SizeDelta: {x: 300, y: 40}
   m_Pivot: {x: 0, y: 1}
 --- !u!222 &100007
 CanvasRenderer:
@@ -2872,7 +2873,7 @@ MonoBehaviour:
   terminal: {fileID: 100112}
   heading: {fileID: 100008}
   navigationRoot: {fileID: 134001}
-  initialPage: mail
+  initialPage: home
 --- !u!1 &131000
 GameObject:
   m_ObjectHideFlags: 0
@@ -2889,7 +2890,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &131001
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2931,7 +2932,7 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   pageId: kernel
-  title: Kernel
+  title: 커널
   showInNavigation: 1
   terminalPage: 1
   shown:
@@ -3065,7 +3066,8 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   pageId: clinic-records
   title: 상담 기록
-  showInNavigation: 1
+  showInNavigation: 0
+  navigationPageId: clinic
   terminalPage: 0
   shown:
     m_PersistentCalls:
@@ -3112,7 +3114,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 134000}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -160, y: 334, z: 0}
+  m_LocalPosition: {x: -210, y: 334, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3120,8 +3122,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 400, y: -18}
-  m_SizeDelta: {x: 692, y: 44}
+  m_AnchoredPosition: {x: 350, y: -18}
+  m_SizeDelta: {x: 742, y: 44}
   m_Pivot: {x: 0, y: 1}
 --- !u!1 &135000
 GameObject:
@@ -3245,7 +3247,7 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   pageId: schedule
-  title: 스케줄
+  title: 스케쥴
   showInNavigation: 1
   terminalPage: 0
   shown:
@@ -3264,5 +3266,76 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d71d25c3cf9aef61e2341fe8b5802781, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+--- !u!1 &137000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 137001}
+  - component: {fileID: 137002}
+  - component: {fileID: 137003}
+  m_Layer: 5
+  m_Name: HomePage
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &137001
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 137000}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 100002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &137002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 137000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f19c6426f915a6b339bc2f97da774e0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  pageId: home
+  title: 홈
+  showInNavigation: 0
+  terminalPage: 0
+  shown:
+    m_PersistentCalls:
+      m_Calls: []
+  hidden:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &137003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 137000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: abd5a78c6dea4a6c91d79aa481fb1c97, type: 3}
   m_Name:
   m_EditorClassIdentifier:

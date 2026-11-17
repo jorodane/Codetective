@@ -16,17 +16,21 @@ namespace Codetective.Terminal
         [SerializeField] private TerminalController terminal;
         [SerializeField] private Text heading;
         [SerializeField] private RectTransform navigationRoot;
-        [SerializeField] private string initialPage = "clinic";
+        [SerializeField] private string initialPage = "home";
         private readonly Dictionary<string, MonitorPage> pages = new Dictionary<string, MonitorPage>(StringComparer.Ordinal);
         private readonly Dictionary<string, Button> tabs = new Dictionary<string, Button>(StringComparer.Ordinal);
         private readonly PageNavigation navigation = new PageNavigation();
+        private readonly List<MonitorPage> navigationPages = new List<MonitorPage>();
         private RectTransform tabContent;
         private CrtScrollRect tabScroll;
         private Button back;
         private Button forward;
+        private Button home;
         private KernelRuntime runtime;
         private bool initialized;
         public MonitorPage CurrentPage { get; private set; }
+        public IReadOnlyList<MonitorPage> NavigationPages => navigationPages;
+        public string CurrentMenuId => CurrentPage != null ? CurrentPage.NavigationPageId : null;
         public string SelectedProfileId { get; set; } = "client";
         public int SelectedScheduleDay { get; set; }
         public bool CanGoBack => navigation.CanGoBack;
@@ -85,10 +89,11 @@ namespace Codetective.Terminal
             InitializeContent(page);
             if (page.ShowInNavigation)
             {
+                navigationPages.Add(page);
                 string id = page.Id;
                 int index = tabs.Count;
-                tabs.Add(id, MonitorWidgets.Button(tabContent, Font, new Vector2(index * 152, 0), new Vector2(144, 44), page.Title, () => ShowPage(id)));
-                tabContent.sizeDelta = new Vector2(tabs.Count * 152 - 8, 44);
+                tabs.Add(id, MonitorWidgets.Button(tabContent, Font, new Vector2(index * 140, 0), new Vector2(132, 44), page.Title, () => ShowPage(id)));
+                tabContent.sizeDelta = new Vector2(tabs.Count * 140 - 8, 44);
             }
         }
         private void InitializeContent(MonitorPage page)
@@ -99,13 +104,15 @@ namespace Codetective.Terminal
         }
         public bool TryNavigate(string id) => initialized && navigation.Navigate(id);
         public void ShowPage(string id) => TryNavigate(id);
+        public void ShowHome() => ShowPage("home");
+        public MonitorPage FindPage(string id) => id != null && pages.TryGetValue(id, out MonitorPage page) ? page : null;
         public void GoBack() => navigation.Back();
         public void GoForward() => navigation.Forward();
         public bool TryCycleTab(int direction)
         {
             if (!initialized || !isActiveAndEnabled || terminal == null || !terminal.InteractionEnabled ||
                 TextInputFocus.IsActive || IsCompositionProtected || terminal.IsCompositionProtected) return false;
-            if (!navigation.CycleTab(direction)) return false;
+            if (!navigation.CycleTab(direction, CurrentMenuId)) return false;
             if (tabs.TryGetValue(CurrentPage.Id, out Button tab)) tab.Select();
             return true;
         }
@@ -125,9 +132,10 @@ namespace Codetective.Terminal
             CurrentPage.Show();
             terminal?.SetPageVisible(CurrentPage.TerminalPage);
             if (heading != null) heading.text = "CODETECTIVE / " + CurrentPage.Title;
-            foreach (var tab in tabs) tab.Value.image.color = tab.Key == id ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor;
+            foreach (var tab in tabs) tab.Value.image.color = tab.Key == CurrentMenuId ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor;
             back.interactable = CanGoBack; forward.interactable = CanGoForward;
-            RevealTab(id);
+            home.interactable = id != "home" && pages.ContainsKey("home");
+            RevealTab(CurrentMenuId);
             PageChanged?.Invoke(CurrentPage);
         }
         private void RevealTab(string id)
@@ -144,10 +152,11 @@ namespace Codetective.Terminal
         }
         private void BuildNavigation()
         {
-            back = MonitorWidgets.Button(navigationRoot, Font, Vector2.zero, new Vector2(44, 44), "<", GoBack);
-            forward = MonitorWidgets.Button(navigationRoot, Font, new Vector2(52, 0), new Vector2(44, 44), ">", GoForward);
+            back = MonitorWidgets.Button(navigationRoot, Font, Vector2.zero, new Vector2(32, 44), "<", GoBack);
+            forward = MonitorWidgets.Button(navigationRoot, Font, new Vector2(40, 0), new Vector2(32, 44), ">", GoForward);
+            home = MonitorWidgets.Button(navigationRoot, Font, new Vector2(80, 0), new Vector2(60, 44), "홈", ShowHome);
             back.interactable = forward.interactable = false;
-            RectTransform viewport = MonitorWidgets.Rect("Pages", navigationRoot, new Vector2(112, 0), new Vector2(navigationRoot.rect.width - 112, 44));
+            RectTransform viewport = MonitorWidgets.Rect("Pages", navigationRoot, new Vector2(156, 0), new Vector2(navigationRoot.rect.width - 156, 44));
             viewport.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, 0.01f);
             viewport.gameObject.AddComponent<CrtMeshEffect>(); viewport.gameObject.AddComponent<RectMask2D>();
             tabContent = MonitorWidgets.Rect("Tabs", viewport, Vector2.zero, new Vector2(0, 44));
