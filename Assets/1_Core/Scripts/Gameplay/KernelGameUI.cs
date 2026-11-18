@@ -22,6 +22,10 @@ namespace Codetective.Gameplay
         private Text heading;
         private Text body;
         private Text clock;
+        private Image statusBar;
+        private Color statusBarColor, clockColor;
+        private float mailBannerUntil;
+        private int receivedMailCount;
         private Text feedback;
         private Text languageLabel;
         private readonly List<GameObject> controls = new List<GameObject>();
@@ -58,6 +62,7 @@ namespace Codetective.Gameplay
         public bool IsInitialized { get; private set; }
         public bool SummaryVisible => clinicDay != null && clinicDay.SummaryVisible;
         public bool DayStartVisible => dayStart != null && dayStart.IsVisible;
+        public bool MailNotificationVisible => IsInitialized && Time.unscaledTime < mailBannerUntil;
         public bool IsCompositionProtected => (protocolSource is CompletingInputField source && source.isFocused && source.IsCompositionProtected) ||
             (arguments is CompletingInputField args && args.isFocused && args.IsCompositionProtected);
 
@@ -75,8 +80,9 @@ namespace Codetective.Gameplay
             scale.referenceResolution = new Vector2(1280, 720); scale.matchWidthOrHeight = 0.5f;
             raycaster = root.GetComponent<GraphicRaycaster>();
             RectTransform hud = Box("KernelHUD", root.transform, new Vector2(16, -12), new Vector2(550, 42), new Vector2(0, 1));
-            hud.GetComponent<Image>().raycastTarget = false;
+            statusBar = hud.GetComponent<Image>(); statusBar.raycastTarget = false; statusBarColor = statusBar.color;
             clock = Label(hud, new Vector2(10, -4), new Vector2(270, 34), "", 18);
+            clockColor = clock.color;
             Label(hud, new Vector2(286, -4), new Vector2(80, 34), "의심도", 18);
             RectTransform gauge = Box("SuspicionGauge", hud, new Vector2(368, -14), new Vector2(164, 14), new Vector2(0, 1));
             gauge.GetComponent<Image>().raycastTarget = false;
@@ -135,11 +141,28 @@ namespace Codetective.Gameplay
             if (Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + 0.2f;
             KernelRuntime r = game.Runtime;
-            clock.text = r.ClockText;
+            RefreshStatusBar();
             float suspicion = Mathf.Clamp01((float)r.Suspicion / 100f);
             suspicionFill.anchorMax = new Vector2(suspicion, 1);
             suspicionImage.color = Color.Lerp(new Color(0.25f, 0.72f, 0.43f), new Color(1f, 0.38f, 0.12f), suspicion);
             if (panel.gameObject.activeSelf && modal != "protocol") RefreshBody();
+        }
+
+        public bool ShowMailReceived(int count)
+        {
+            if (!IsInitialized || count <= 0) return false;
+            receivedMailCount = MailNotificationVisible ? receivedMailCount + count : count;
+            PresentationSettings settings = game.Transitions != null ? game.Transitions.Settings : null;
+            mailBannerUntil = Time.unscaledTime + Mathf.Max(0.5f, settings != null ? settings.mailBannerSeconds : 3f);
+            RefreshStatusBar(); return true;
+        }
+        private void RefreshStatusBar()
+        {
+            bool notifying = MailNotificationVisible;
+            PresentationSettings settings = game.Transitions != null ? game.Transitions.Settings : null;
+            statusBar.color = notifying ? settings != null ? settings.mailBannerColor : new Color(0.33f, 0.22f, 0.06f, 0.98f) : statusBarColor;
+            clock.text = notifying ? "메일 수신 · " + receivedMailCount + "건" : game.Runtime.ClockText;
+            clock.color = notifying ? new Color(1, 0.92f, 0.62f) : clockColor;
         }
 
         public bool BlocksPointer(Vector2 point)

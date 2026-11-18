@@ -49,3 +49,5 @@ MonoBehaviour:
   mailArrivalSound: {fileID: 8300000, guid: 830df028768c406bbbaea7c4c19d4605, type: 3}
   mailArrivalVolume: 0.45
   mailBlinkSeconds: 0.55
+  mailBannerSeconds: 3
+  mailBannerColor: {r: 0.33, g: 0.22, b: 0.06, a: 0.98}
