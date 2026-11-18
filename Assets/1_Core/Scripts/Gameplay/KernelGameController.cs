@@ -143,6 +143,7 @@ namespace Codetective.Gameplay
             }
             // Bind and build the overlay before optional desk/paper presentation can fail or emit view events.
             ui.Initialize(this, inspection, font);
+            if (Monitor != null) gameObject.AddComponent<MailNotificationPresenter>().Initialize(this, inspection, Monitor, Transitions.Settings);
             inspection.BackHandler = ui.Back;
             inspection.QuickSaveRequested = QuickSave;
             inspection.PointerBlocked = ui.BlocksPointer;
@@ -357,21 +358,11 @@ namespace Codetective.Gameplay
             IsDateTransitioning = true; inspection.NavigationBlocked = true;
             while (Transitions.IsBusy) yield return null;
             ui.HideContext(); ui.HideDay(); inspection.SnapToOverview(); Runtime.DeferDayMailUntilIntro();
-            bool receivedMail = false;
             yield return ui.PlayDayStart(Runtime.Day, Runtime.DaySubtitle, () =>
             {
-                StoryMail[] incoming = Runtime.DeferredDayMail.ToArray();
                 Runtime.MarkDayIntroSeen();
-                if (incoming.Length > 0)
-                {
-                    int kernel = incoming.Count(m => m.mailbox == Mailbox.Kernel), clinic = incoming.Length - kernel;
-                    string subject = incoming[0].subject + (incoming.Length > 1 ? " 외 " + (incoming.Length - 1) + "건" : "");
-                    ui.ShowDayIntro("새 메일 수신", "Kernel " + kernel + "건 / 상담소 " + clinic + "건\n" + subject);
-                    receivedMail = true;
-                }
                 AutoSave();
             });
-            if (receivedMail) yield return SceneTransitionController.Hold(0.4f);
             ui.HideDay(); inspection.NavigationBlocked = false; IsDateTransitioning = false;
         }
         private IEnumerator ChangeDate()

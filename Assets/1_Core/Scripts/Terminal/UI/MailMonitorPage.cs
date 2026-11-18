@@ -71,12 +71,13 @@ namespace Codetective.Terminal
             StoryMail[] messages = runtime.Inbox(mailbox).ToArray();
             if (selectedId != null && !messages.Any(m => m.id == selectedId)) selectedId = null;
             if (selectedId == null && messages.Length > 0) selectedId = messages[0].id;
-            if (openFirst && selectedId != null && Interactive) runtime.ReadMail(selectedId);
+            if (openFirst && selectedId != null && Interactive && (GetComponentInParent<MonitorPageHost>()?.AutoReadMailAllowed?.Invoke() ?? true)) runtime.ReadMail(selectedId);
             string signature = string.Join("|", messages.Select(m => m.id + runtime.IsMailRead(m.id) + runtime.IsMailAccepted(m.id) + runtime.SelectedMailChoice(m.id))) + selectedId;
             if (signature != listSignature)
             {
                 listSignature = signature;
-                foreach (Transform child in list) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
+                foreach (Transform child in list.Cast<Transform>().ToArray())
+                { child.gameObject.SetActive(false); if (Application.isPlaying) Destroy(child.gameObject); else DestroyImmediate(child.gameObject); }
                 for (int i = 0; i < messages.Length; i++)
                 {
                     StoryMail message = messages[i];

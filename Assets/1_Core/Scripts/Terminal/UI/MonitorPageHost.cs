@@ -34,6 +34,7 @@ namespace Codetective.Terminal
         private KernelRuntime runtime;
         private bool initialized;
         private ProfileCatalog profiles;
+        private float nextMailRefresh;
         private readonly HashSet<object> overlays = new HashSet<object>();
         private readonly object legacyOverlay = new object();
         public MonitorPage CurrentPage { get; private set; }
@@ -47,6 +48,8 @@ namespace Codetective.Terminal
         public Action WaitForAppointment { get; set; }
         public Action FinishConsultation { get; set; }
         public Func<bool> ClinicActionsAllowed { get; set; }
+        public Func<bool> AutoReadMailAllowed { get; set; }
+        public bool HasOtherOverlay(object owner) => overlays.Any(value => !ReferenceEquals(value, owner));
         public int JournalPageFor(string profileId) => profileId != null && journalPages.TryGetValue(profileId, out int page) ? page : 0;
         public void SelectJournalPage(string profileId, int page)
         {
@@ -91,6 +94,15 @@ namespace Codetective.Terminal
         private void Awake() => Initialize();
         private void LateUpdate()
         {
+            if (initialized && runtime != null && Time.unscaledTime >= nextMailRefresh)
+            {
+                nextMailRefresh = Time.unscaledTime + 0.2f;
+                if (tabs.TryGetValue("mail", out Button mailTab))
+                {
+                    int unread = runtime.UnreadMailCount(Mailbox.Kernel) + runtime.UnreadMailCount(Mailbox.Clinic);
+                    mailTab.GetComponentInChildren<Text>().text = pages["mail"].Title + (unread > 0 ? " (" + unread + ")" : "");
+                }
+            }
 #if ENABLE_INPUT_SYSTEM
             // EventSystem has already selected any clicked input. Never steal its Tab/completion key.
             Keyboard keyboard = Keyboard.current;
