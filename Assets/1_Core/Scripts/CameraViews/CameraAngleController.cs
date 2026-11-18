@@ -115,6 +115,14 @@ namespace Codetective.CameraViews
                     Quaternion.Inverse(angleOrigin.rotation) * transform.rotation);
         }
 
+        /// <summary>Restore an interrupted view exactly. System menus never resume a camera blend.</summary>
+        public void RestoreView(Pose pose, float fieldOfView, CameraAnglePreset angle)
+        {
+            transition = null;
+            activeAngle = angle;
+            ApplyPose(pose, fieldOfView);
+        }
+
         private void ApplyPose(Pose pose, float fov)
         {
             if (angleOrigin != null)

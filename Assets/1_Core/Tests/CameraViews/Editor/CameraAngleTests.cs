@@ -164,6 +164,22 @@ namespace Codetective.Tests.CameraViews
             Assert.That(controller.TryGoToIndex(0, true), Is.False);
         }
 
+        [Test]
+        public void RestoringAMenuViewCancelsTheInterruptedBlendAndRestoresPoseFovAndIdentity()
+        {
+            var origin = NewObject("origin"); origin.transform.SetPositionAndRotation(new Vector3(3, 2, 1), Quaternion.Euler(0, 40, 0));
+            var controller = NewObject("camera").AddComponent<CameraAngleController>(); Set(controller, "angleOrigin", origin.transform);
+            var original = Preset("counsel", Vector3.one, new Vector3(10, 20, 0));
+            var monitor = Preset("monitor", Vector3.zero, new Vector3(7, 0, 0));
+            var set = New<CameraAngleSet>(); Set(set, "angles", new List<CameraAnglePreset> { original, monitor }); Set(controller, "angleSet", set);
+            Pose before = new Pose(new Vector3(1, 2, 3), Quaternion.Euler(12, 32, 4));
+            controller.RestoreView(before, 42, original); controller.TryGoToIndex(1, true);
+            Set(controller, "transition", new CameraAngleTransition(controller.CapturePose(), 16, original));
+            controller.PauseTransitions = true; controller.RestoreView(before, 42, original);
+            Assert.That(controller.IsTransitioning, Is.False); Assert.That(controller.ActiveAngle, Is.SameAs(original));
+            AssertPose(controller.CapturePose(), before); Assert.That(controller.ControlledCamera.fieldOfView, Is.EqualTo(42));
+        }
+
         private CameraAnglePreset Preset(string id, Vector3 position, Vector3 euler)
         {
             var preset = New<CameraAnglePreset>();

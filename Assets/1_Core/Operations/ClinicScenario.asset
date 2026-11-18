@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: ClinicScenario
   m_EditorClassIdentifier:
   secondsPerGameMinute: 2
-  loadDailySave: 1
   commandLanguage: 1
   consultation: []
   schemas:

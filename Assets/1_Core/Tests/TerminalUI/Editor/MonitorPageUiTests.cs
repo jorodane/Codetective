@@ -37,6 +37,64 @@ namespace Codetective.Terminal.Tests.UI
         }
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
 
+        private SystemMenuMonitorView SystemMenu(SystemMenuActions actions)
+        {
+            var menu = new GameObject("SystemMenu", typeof(RectTransform)); menu.transform.SetParent(root.transform, false);
+            var view = menu.AddComponent<SystemMenuMonitorView>(); view.Initialize(host, actions); terminal.SetInteractionEnabled(true); return view;
+        }
+        private static Button MenuButton(SystemMenuMonitorView view, string label) => view.GetComponentsInChildren<Button>().Single(b => b.GetComponentInChildren<Text>().text == label);
+        [Test]
+        public void TitleLocksNavigationAndKeepsTheCommandDraftOutsidePageHistory()
+        {
+            host.ShowPage("kernel"); input.SetTextWithoutNotify("save 작성중"); bool back = host.CanGoBack; int starts = 0, continues = 0;
+            var menu = SystemMenu(new SystemMenuActions { NewGame = () => starts++, Continue = () => continues++,
+                ReadSave = () => new SystemSaveInfo { Description = "저장된 기록이 없습니다." } });
+            menu.Show(true);
+            Assert.That(menu.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text), Is.EqualTo(new[] { "이어하기", "처음부터", "설정", "끝내기" }));
+            Assert.That(menu.GetComponentInParent<Canvas>(), Is.SameAs(canvas.GetComponent<Canvas>()));
+            Assert.That(terminal.PageVisible, Is.False); Assert.That(host.TryNavigate("mail"), Is.False); Assert.That(host.TryCycleTab(1), Is.False);
+            host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel")); Assert.That(host.CanGoBack, Is.EqualTo(back));
+            Assert.That(MenuButton(menu, "이어하기").interactable, Is.False); MenuButton(menu, "이어하기").onClick.Invoke(); Assert.That(continues, Is.Zero);
+            MenuButton(menu, "처음부터").onClick.Invoke(); Assert.That(starts, Is.EqualTo(1));
+            MenuButton(menu, "설정").onClick.Invoke(); Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.HandleEscape(), Is.True);
+            menu.Hide(); Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel")); Assert.That(terminal.PageVisible, Is.True);
+            Assert.That(input.text, Is.EqualTo("save 작성중")); Assert.That(input.isFocused, Is.False);
+        }
+        [Test]
+        public void PauseProvidesTheSaveSlotGuideAndSettingsWithoutExposingOtherPages()
+        {
+            int loads = 0, resumes = 0, titles = 0;
+            var menu = SystemMenu(new SystemMenuActions { Load = () => loads++, Resume = () => resumes++, Title = () => titles++,
+                ReadSave = () => new SystemSaveInfo { Available = true, Description = "DAY 3 / 10:00 기록" } });
+            menu.Show(false);
+            Assert.That(menu.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text),
+                Is.EqualTo(new[] { "계속하기", "불러오기", "가이드", "설정", "타이틀 화면" }));
+            MenuButton(menu, "불러오기").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("DAY 3 / 10:00")), Is.True);
+            MenuButton(menu, "이 기록 불러오기").onClick.Invoke(); Assert.That(loads, Is.EqualTo(1)); Assert.That(menu.HandleEscape(), Is.True);
+            MenuButton(menu, "가이드").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("Q 전체 보기")), Is.True);
+            Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.HandleEscape(), Is.False);
+            MenuButton(menu, "계속하기").onClick.Invoke(); Assert.That(resumes, Is.EqualTo(1));
+            Button title = MenuButton(menu, "타이틀 화면"); menu.Hide(); title.onClick.Invoke(); Assert.That(titles, Is.Zero);
+        }
+        [Test]
+        public void ScheduleHostsWaitingAndFinishingAndBlocksActionsOutsideTodaysActivePage()
+        {
+            runtime.RegisterClinicDay(new ClinicDayPlan { day = 1, appointments = new[] { new PatientAppointment { id = "visit", profileId = "client", patientName = "상담자", startMinute = 600,
+                dialogue = new[] { new ConsultationLine { sentence = "상담 내용" } } } } }); runtime.InitializeClinicDay();
+            bool allowed = true; host.ClinicActionsAllowed = () => allowed;
+            host.WaitForAppointment = runtime.WaitForNextAppointment; host.FinishConsultation = runtime.FinishConsultation;
+            terminal.SetInteractionEnabled(true); host.ShowPage("schedule");
+            ScheduleMonitorPage schedule = host.CurrentPage.GetComponent<ScheduleMonitorPage>();
+            Button wait = Field<Button>(schedule, "wait"), finish = Field<Button>(schedule, "finish");
+            Assert.That(wait.interactable, Is.True); Assert.That(finish.interactable, Is.False);
+            allowed = false; wait.onClick.Invoke(); Assert.That(runtime.CurrentAppointment, Is.Null);
+            allowed = true; schedule.ShowDay(2); wait.onClick.Invoke(); Assert.That(runtime.CurrentAppointment, Is.Null);
+            schedule.ShowDay(1); host.ShowHome(); wait.onClick.Invoke(); Assert.That(runtime.CurrentAppointment, Is.Null);
+            host.ShowPage("schedule"); wait.onClick.Invoke(); Assert.That(runtime.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Arriving));
+            var visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase); Invoke(schedule, "Refresh");
+            Assert.That(finish.interactable, Is.True); finish.onClick.Invoke(); Assert.That(runtime.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing));
+        }
+
         [Test]
         public void KernelEvidenceBrowserKeepsTheCommandDraftAndReconnectsFreedReferences()
         {

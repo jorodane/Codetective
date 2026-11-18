@@ -23,7 +23,7 @@ namespace Codetective.Terminal.Tests.UI
             .Single(m => m.Name == name && m.GetParameters().Length == args.Length).Invoke(target, args);
 
         [Test]
-        public void CounselAndGramophoneKeepTheTerminalInteractiveAndEscapeKeepsTheAngle()
+        public void EscapeSnapsToTheTerminalAndResumeRestoresTheExactWorkingView()
         {
             var root = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); root.SetActive(false);
             var canvas = new GameObject("Monitor", typeof(RectTransform), typeof(Canvas));
@@ -33,10 +33,14 @@ namespace Codetective.Terminal.Tests.UI
             try
             {
                 foreach (string id in new[] { "overview", "monitor", "counsel", "profile", "drawer", "gramophone" })
-                { var angle = ScriptableObject.CreateInstance<CameraAnglePreset>(); Set(angle, "angleId", id); presets.Add(angle); }
+                {
+                    var angle = ScriptableObject.CreateInstance<CameraAnglePreset>(); Set(angle, "angleId", id);
+                    Set(angle, "position", new Vector3(presets.Count, 1, 2)); Set(angle, "fieldOfView", 16f + presets.Count); presets.Add(angle);
+                }
                 Set(set, "angles", presets); CameraAngleController views = root.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
                 GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/1_Core/Prefabs/TerminalPanel.prefab");
                 GameObject monitor = Object.Instantiate(prefab, canvas.transform); monitor.GetComponent<MonitorPageHost>().ShowPage("kernel");
+                MonitorPageHost host = monitor.GetComponent<MonitorPageHost>();
                 TerminalController terminal = monitor.GetComponent<TerminalController>();
                 Component inspection = root.AddComponent(FindType("Codetective.Interaction.InspectionController"));
                 Set(inspection, "overviewAngle", presets[0]); Set(inspection, "terminalRoot", monitor.transform); Call(inspection, "Awake");
@@ -48,21 +52,37 @@ namespace Codetective.Terminal.Tests.UI
                 Call(inspection, "UnregisterTarget", target);
                 Assert.That(Call(inspection, "GetTarget", "monitor"), Is.Null);
                 Call(inspection, "RegisterTarget", target);
-                foreach (int index in new[] { 2, 5 })
+                foreach (int index in new[] { 0, 2, 4, 5 })
                 {
                     Call(inspection, "InspectAngle", presets[index]); Call(inspection, "LateUpdate");
-                    Assert.That(terminal.InteractionEnabled, Is.True);
+                    bool workingTerminal = index == 2 || index == 5;
+                    Assert.That(terminal.InteractionEnabled, Is.EqualTo(workingTerminal));
+                    if (index == 0 || index == 4) Call(inspection, "InspectAngle", presets[2]);
                     Call(inspection, "InspectTarget", target);
-                    Assert.That(views.ActiveAngle, Is.SameAs(presets[index]), "Clicking the monitor must keep the working angle.");
-                    Assert.That(terminal.InteractionEnabled, Is.True);
+                    Assert.That(views.ActiveAngle, Is.SameAs(presets[workingTerminal ? index : 2]), "Clicking the monitor must keep the working angle.");
+                    Call(inspection, "InspectAngle", presets[index]); Call(inspection, "LateUpdate");
+                    Pose before = views.CapturePose(); float beforeFov = views.ControlledCamera.fieldOfView;
+                    host.ShowPage("kernel");
+                    monitor.GetComponentInChildren<TerminalInputField>(true).SetTextWithoutNotify("save draft");
                     Call(inspection, "HandleEscape");
-                    Assert.That(views.ActiveAngle, Is.SameAs(presets[index])); Assert.That(terminal.InteractionEnabled, Is.False);
+                    Assert.That(views.ActiveAngle, Is.SameAs(presets[1])); Assert.That(views.IsTransitioning, Is.False);
+                    Assert.That(Vector3.Distance(views.CapturePose().position, presets[1].Pose.position), Is.LessThan(0.0001f));
+                    Assert.That(terminal.InteractionEnabled, Is.True); Assert.That(terminal.PageVisible, Is.False);
+                    Assert.That(host.SystemMenuVisible, Is.True); Assert.That(Time.timeScale, Is.Zero);
                     Call(inspection, "Resume"); Call(inspection, "LateUpdate");
-                    Assert.That(views.ActiveAngle, Is.SameAs(presets[index])); Assert.That(terminal.InteractionEnabled, Is.True);
+                    Assert.That(views.ActiveAngle, Is.SameAs(presets[index])); Assert.That(views.IsTransitioning, Is.False);
+                    Assert.That(Vector3.Distance(views.CapturePose().position, before.position), Is.LessThan(0.0001f));
+                    Assert.That(views.ControlledCamera.fieldOfView, Is.EqualTo(beforeFov)); Assert.That(Time.timeScale, Is.EqualTo(oldTime));
+                    Assert.That(terminal.InteractionEnabled, Is.EqualTo(workingTerminal)); Assert.That(host.SystemMenuVisible, Is.False);
+                    Assert.That(monitor.GetComponentInChildren<TerminalInputField>(true).text, Is.EqualTo("save draft"));
                 }
                 Assert.That(Call(inspection, "TryInspectNumber", 4), Is.True); Assert.That(views.ActiveAngle.Id, Is.EqualTo("drawer"));
                 Call(inspection, "InspectTarget", target); Assert.That(views.ActiveAngle.Id, Is.EqualTo("monitor"));
                 Call(inspection, "ReturnToOverview"); Assert.That(views.ActiveAngle.Id, Is.EqualTo("overview"));
+                Call(inspection, "ShowTitleMenu"); Call(inspection, "HandleEscape"); Call(inspection, "Resume");
+                Assert.That(inspection.GetType().GetProperty("IsTitleMenu").GetValue(inspection), Is.True);
+                Assert.That(Time.timeScale, Is.Zero); Assert.That(host.SystemMenuVisible, Is.True);
+                Call(inspection, "PrepareForSceneChange"); Assert.That(Time.timeScale, Is.EqualTo(oldTime));
             }
             finally { Object.DestroyImmediate(root); Object.DestroyImmediate(canvas); Object.DestroyImmediate(hotspot); Object.DestroyImmediate(set); foreach (var angle in presets) Object.DestroyImmediate(angle); Time.timeScale = oldTime; }
         }

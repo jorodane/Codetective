@@ -8,6 +8,7 @@ using Codetective.Interaction;
 using Codetective.Operations;
 using Codetective.Terminal;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Codetective.Gameplay
 {
@@ -35,6 +36,7 @@ namespace Codetective.Gameplay
         [SerializeField] private Light[] sceneLights = Array.Empty<Light>();
 
         public KernelRuntime Runtime { get; private set; }
+        public bool IsSessionActive { get; private set; }
         public string CurrentView { get; private set; } = "overview";
         public bool IsViewTransitioning => views != null && views.IsTransitioning;
         public DialoguePresentationDefinition DialoguePresentation => dialoguePresentation;
@@ -81,6 +83,12 @@ namespace Codetective.Gameplay
         private bool initialized;
         private bool presentationInitialized;
         private bool sceneBasisCaptured;
+        private bool changingScene;
+        private enum SessionStart { Title, NewGame, Continue }
+        private static SessionStart nextStart = SessionStart.Title;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetSessionStart() => nextStart = SessionStart.Title;
+        private KernelRuntime CreateRuntime() => scenario != null ? scenario.CreateRuntime() : ClinicScenario.Create();
 
         private void Awake()
         {
@@ -88,11 +96,13 @@ namespace Codetective.Gameplay
             hourBasis = ClockBasis(clockHour);
             minuteBasis = ClockBasis(clockMinute);
             sceneBasisCaptured = true;
-            Runtime = scenario != null ? scenario.CreateRuntime() : ClinicScenario.Create();
-            if (scenario != null && scenario.loadDailySave && File.Exists(SavePath))
+            SystemMenuMonitorView.ApplySavedSettings();
+            SessionStart start = nextStart; nextStart = SessionStart.Title;
+            Runtime = CreateRuntime(); IsSessionActive = start != SessionStart.Title;
+            if (start == SessionStart.Continue)
             {
-                try { Runtime.Restore(JsonUtility.FromJson<KernelSnapshot>(File.ReadAllText(SavePath))); Feedback = "날짜 기록을 불러왔습니다."; }
-                catch (Exception error) { Runtime = scenario.CreateRuntime(); Feedback = "저장 기록을 읽지 못해 새 작전을 시작합니다: " + error.Message; }
+                if (TryReadSave(out KernelRuntime restored, out string error)) { Runtime = restored; Feedback = "날짜 기록을 불러왔습니다."; }
+                else { IsSessionActive = false; Feedback = error; }
             }
             ClinicScenario.EnsureKernelProfile(Runtime);
             int preferredLanguage = PlayerPrefs.GetInt(CommandLanguagePreference, (int)(scenario != null ? scenario.commandLanguage : CommandLocale.Korean));
@@ -117,6 +127,13 @@ namespace Codetective.Gameplay
             Carry.ManipulationAllowed = () => !IsDateTransitioning && !IsVisitPresenting && !IsViewTransitioning &&
                 inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !inspection.TextInputFocused;
             Carry.PickedUp += PickedUpItem; Carry.Placed += StoredItem;
+            if (Monitor != null)
+            {
+                Monitor.WaitForAppointment = WaitForNextAppointment;
+                Monitor.FinishConsultation = FinishConsultation;
+                Monitor.ClinicActionsAllowed = () => IsSessionActive && !changingScene && !IsDateTransitioning && !IsVisitPresenting &&
+                    inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && (Carry == null || Carry.HeldItem == null) && !ui.SummaryVisible;
+            }
             // Bind and build the overlay before optional desk/paper presentation can fail or emit view events.
             ui.Initialize(this, inspection, font);
             inspection.BackHandler = ui.Back;
@@ -137,13 +154,18 @@ namespace Codetective.Gameplay
             visits.Initialize(Runtime);
             if (Runtime.CurrentAppointment != null) SelectedProfileId = Runtime.CurrentAppointment.profileId;
             presentationInitialized = true;
+            inspection.GetComponent<PauseMenuView>().Configure(new SystemMenuActions {
+                Continue = LoadGame, NewGame = () => RestartScene(SessionStart.NewGame), Load = LoadGame,
+                Title = ReturnToTitle, Quit = QuitGame, ReadSave = ReadSaveInfo,
+                GetLanguage = () => Runtime.Language, SetLanguage = SetCommandLanguage });
+            if (!IsSessionActive) { inspection.ShowTitleMenu(); return; }
             Runtime.RetrySceneActions();
             if (!Runtime.IsDayEnded && !Runtime.DayIntroSeen) StartCoroutine(IntroduceDay());
         }
 
         private void Update()
         {
-            if (!presentationInitialized) return;
+            if (!presentationInitialized || !IsSessionActive || changingScene || inspection.Mode == InspectionMode.Menu) return;
             if (!IsDateTransitioning) Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
             if (!IsDateTransitioning && Runtime.IsClinicTransitioning && !IsVisitPresenting) StartCoroutine(PresentVisits());
             if (Runtime.IsDayEnded && !Runtime.IsClinicTransitioning && !IsDateTransitioning && !IsVisitPresenting && summaryShownDay != Runtime.Day &&
@@ -296,7 +318,11 @@ namespace Codetective.Gameplay
         }
         public void WaitForNextAppointment()
         {
-            if ((Runtime.CanWaitForNextAppointment || Runtime.CanWaitUntilClosing) && !IsDateTransitioning && !IsVisitPresenting && inspection.Mode != InspectionMode.Menu) StartCoroutine(WaitForReservation());
+            if (IsSessionActive && (Monitor?.ClinicActionsAllowed?.Invoke() ?? false) && (Runtime.CanWaitForNextAppointment || Runtime.CanWaitUntilClosing)) StartCoroutine(WaitForReservation());
+        }
+        public void FinishConsultation()
+        {
+            if (IsSessionActive && (Monitor?.ClinicActionsAllowed?.Invoke() ?? false) && Runtime.CurrentAppointment?.phase == VisitPhase.Talking) Runtime.FinishConsultation();
         }
         private IEnumerator WaitForReservation()
         {
@@ -381,9 +407,10 @@ namespace Codetective.Gameplay
             return result;
         }
 
-        public void SaveNow()
+        public void SaveNow() => TrySaveNow();
+        private bool TrySaveNow()
         {
-            if (!initialized || Runtime == null) return;
+            if (!initialized || Runtime == null || !IsSessionActive || changingScene) return false;
             narrativeDirty = false;
             try
             {
@@ -393,10 +420,70 @@ namespace Codetective.Gameplay
                 if (File.Exists(SavePath)) File.Replace(temporary, SavePath, SavePath + ".bak");
                 else File.Move(temporary, SavePath);
                 Feedback = "DAY " + Runtime.Day + " 기록 저장 완료";
+                return true;
             }
-            catch (Exception error) { Feedback = "저장 실패: " + error.Message; Debug.LogWarning(Feedback, this); }
+            catch (Exception error) { Feedback = "저장 실패: " + error.Message; Debug.LogWarning(Feedback, this); return false; }
         }
-        private void QueueNarrativeSave() { narrativeDirty = true; narrativeSaveAt = Time.unscaledTime + 0.3f; }
+        private bool TryReadSave(out KernelRuntime restored, out string error)
+        {
+            restored = null; error = "저장된 기록이 없습니다.";
+            if (!File.Exists(SavePath)) return false;
+            try
+            {
+                KernelSnapshot saved = JsonUtility.FromJson<KernelSnapshot>(File.ReadAllText(SavePath));
+                if (saved == null) throw new CommandException("저장된 기록이 비어 있습니다.");
+                KernelRuntime candidate = CreateRuntime(); candidate.Restore(saved); ClinicScenario.EnsureKernelProfile(candidate);
+                restored = candidate; return true;
+            }
+            catch (Exception failure) { error = "저장 기록을 읽을 수 없습니다: " + failure.Message; return false; }
+        }
+        private SystemSaveInfo ReadSaveInfo()
+        {
+            bool available = TryReadSave(out KernelRuntime saved, out string error);
+            return new SystemSaveInfo { Available = available, Description = available ?
+                "DAY " + saved.Day + " / " + KernelRuntime.TimeOfDay(saved.Minute) + "  " + saved.DaySubtitle : error };
+        }
+        public void LoadGame()
+        {
+            if (changingScene) return;
+            if (!TryReadSave(out _, out string error)) { inspection.GetComponent<PauseMenuView>().ShowFeedback(error); return; }
+            RestartScene(SessionStart.Continue);
+        }
+        public void ReturnToTitle()
+        {
+            if (changingScene) return;
+            if (IsSessionActive && !TrySaveNow()) { inspection.GetComponent<PauseMenuView>().ShowFeedback(Feedback); return; }
+            RestartScene(SessionStart.Title);
+        }
+        private void RestartScene(SessionStart start)
+        {
+            if (changingScene) return;
+            changingScene = true; nextStart = start;
+            inspection.PrepareForSceneChange();
+            try
+            {
+                Scene scene = SceneManager.GetActiveScene();
+                if (scene.buildIndex >= 0) SceneManager.LoadScene(scene.buildIndex);
+                else SceneManager.LoadScene(scene.name);
+            }
+            catch (Exception error)
+            {
+                changingScene = false; nextStart = SessionStart.Title;
+                if (IsSessionActive) inspection.HandleEscape(); else inspection.ShowTitleMenu();
+                inspection.GetComponent<PauseMenuView>().ShowFeedback("화면을 열 수 없습니다: " + error.Message);
+            }
+        }
+        private void QuitGame()
+        {
+            if (IsSessionActive && !TrySaveNow()) { inspection.GetComponent<PauseMenuView>().ShowFeedback(Feedback); return; }
+            changingScene = true; inspection.PrepareForSceneChange();
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+        private void QueueNarrativeSave() { if (!IsSessionActive || changingScene) return; narrativeDirty = true; narrativeSaveAt = Time.unscaledTime + 0.3f; }
         private void OnApplicationPause(bool paused) { if (paused && narrativeDirty) { narrativeDirty = false; SaveNow(); } }
         private void OnApplicationQuit() { if (narrativeDirty) { narrativeDirty = false; SaveNow(); } }
 
@@ -405,6 +492,7 @@ namespace Codetective.Gameplay
             Runtime.Language = language;
             PlayerPrefs.SetInt(CommandLanguagePreference, (int)language);
             PlayerPrefs.Save();
+            if (ui != null) ui.RefreshCommandLanguage();
         }
 
         private void SceneAction(string agent, string action)
@@ -523,6 +611,7 @@ namespace Codetective.Gameplay
             if (Carry != null) { Carry.PutDown(); Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; }
             if (profileDocument != null) Destroy(profileDocument.gameObject);
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.NavigationBlocked = false; }
+            if (Monitor != null) { Monitor.WaitForAppointment = null; Monitor.FinishConsultation = null; Monitor.ClinicActionsAllowed = null; }
             if (Runtime != null)
             {
                 Runtime.SceneActionRequested -= SceneAction;

@@ -35,9 +35,15 @@ namespace Codetective.Interaction
         private bool ownsPause;
         private float previousTimeScale;
         private bool previousBlendPause;
+        private bool previousAudioPause;
+        private Pose menuReturnPose;
+        private float menuReturnFieldOfView;
+        private CameraAnglePreset menuReturnAngle;
+        private bool showingTitle;
         private bool started;
 
         public InspectionMode Mode => flow.Mode;
+        public bool IsTitleMenu => flow.Mode == InspectionMode.Menu && showingTitle;
         public bool CanInspectByPointer => flow.CanInspectByPointer(views != null ? views.ActiveAngle?.Id : null);
         public event Action<CameraAnglePreset> AngleEntered;
         public event Action OverviewEntered;
@@ -69,6 +75,7 @@ namespace Codetective.Interaction
             menu = GetComponent<PauseMenuView>();
             foreach (InspectionTarget target in inspectionTargets) RegisterTarget(target);
             terminal = terminalRoot != null ? terminalRoot.GetComponentInChildren<TerminalController>(true) : null;
+            menu.BindTerminal(terminal != null ? terminal.GetComponent<MonitorPageHost>() : null);
             if (terminal != null)
                 terminal.SetInteractionEnabled(false);
         }
@@ -94,6 +101,7 @@ namespace Codetective.Interaction
                 menu.Hide();
             }
             RestorePause();
+            Carry?.SetPresentationVisible(true);
             DisableTerminal();
             flow.Resume();
             flow.ReturnToOverview();
@@ -152,6 +160,12 @@ namespace Codetective.Interaction
             // The click that starts the zoom must not also activate a terminal control.
             bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked && !NavigationBlocked &&
                 (Carry == null || Carry.HeldItem == null);
+            if (flow.Mode == InspectionMode.Menu)
+            {
+                // Only system controls are shown; command input and page navigation remain suspended.
+                if (terminal != null && !terminal.InteractionEnabled) terminal.SetInteractionEnabled(true);
+                return;
+            }
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
                 activeTerminal.SetInteractionEnabled(ready);
 #if ENABLE_INPUT_SYSTEM
@@ -285,32 +299,43 @@ namespace Codetective.Interaction
         public void HandleEscape()
         {
             if (NavigationBlocked) return;
-            switch (flow.Escape())
-            {
-                case EscapeAction.OpenMenu:
-                    TextInputFocus.ReleaseAll();
-                    if (activeTerminal != null) activeTerminal.SetInteractionEnabled(false);
-                    Carry?.CancelPlacement();
-                    previousTimeScale = Time.timeScale;
-                    previousBlendPause = views.PauseTransitions;
-                    ownsPause = true;
-                    Time.timeScale = 0f;
-                    views.PauseTransitions = true;
-                    menu.Show();
-                    break;
-                case EscapeAction.CloseMenu:
-                    menu.Hide();
-                    RestorePause();
-                    break;
-            }
+            if (flow.Mode == InspectionMode.Menu)
+            { if (!menu.HandleEscape()) Resume(); return; }
+            OpenSystemMenu(false);
+        }
+
+        public void ShowTitleMenu() => OpenSystemMenu(true);
+        private void OpenSystemMenu(bool title)
+        {
+            if (!menu.CanShow || flow.Mode == InspectionMode.Menu) return;
+            menuReturnPose = views.CapturePose(); menuReturnFieldOfView = views.ControlledCamera.fieldOfView;
+            menuReturnAngle = views.ActiveAngle;
+            TextInputFocus.ReleaseAll();
+            activeTerminal?.SetInteractionEnabled(false);
+            Carry?.CancelPlacement(); Carry?.SetPresentationVisible(false);
+            previousTimeScale = Time.timeScale; previousBlendPause = views.PauseTransitions;
+            previousAudioPause = AudioListener.pause; ownsPause = true;
+            Time.timeScale = 0f; AudioListener.pause = true; views.PauseTransitions = true;
+            showingTitle = title; flow.Escape();
+            if (views.AngleSet != null) views.TryGoToIndex(views.AngleSet.FindId("monitor"), true);
+            menu.Show(title); terminal?.SetInteractionEnabled(true);
         }
 
         public void Resume()
         {
-            if (!flow.Resume())
+            if (showingTitle || !flow.Resume())
                 return;
             menu.Hide();
+            terminal?.SetInteractionEnabled(false);
+            views.RestoreView(menuReturnPose, menuReturnFieldOfView, menuReturnAngle);
+            Carry?.SetPresentationVisible(true);
             RestorePause();
+        }
+
+        public void PrepareForSceneChange()
+        {
+            menu.Hide(); RestorePause(); DisableTerminal();
+            flow.Resume(); flow.ReturnToOverview(); showingTitle = false;
         }
 
         private void DisableTerminal()
@@ -327,6 +352,7 @@ namespace Codetective.Interaction
             if (!ownsPause)
                 return;
             Time.timeScale = previousTimeScale;
+            AudioListener.pause = previousAudioPause;
             if (views != null)
                 views.PauseTransitions = previousBlendPause;
             ownsPause = false;

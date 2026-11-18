@@ -14,7 +14,7 @@ namespace Codetective.Terminal
         private Font font;
         private RectTransform rows;
         private Text status, detail, feedback;
-        private Button previous, source;
+        private Button previous, source, wait, finish;
         private int selectedDay;
         private string selectedId, signature;
         private float nextRefresh;
@@ -46,17 +46,23 @@ namespace Codetective.Terminal
             previous = MonitorWidgets.Button(transform, font, new Vector2(640, -90), new Vector2(140, 44), "이전 날", () => ShowDay(selectedDay - 1));
             MonitorWidgets.Button(transform, font, new Vector2(796, -90), new Vector2(140, 44), "오늘", () => ShowDay(runtime.Day));
             MonitorWidgets.Button(transform, font, new Vector2(952, -90), new Vector2(140, 44), "다음 날", () => ShowDay(selectedDay == int.MaxValue ? selectedDay : selectedDay + 1));
-            RectTransform viewport = MonitorWidgets.Rect("Schedule", transform, new Vector2(28, -154), new Vector2(650, 414));
+            RectTransform viewport = MonitorWidgets.Rect("Schedule", transform, new Vector2(28, -154), new Vector2(650, 390));
             viewport.gameObject.AddComponent<Image>().color = new Color(0.02f, 0.04f, 0.03f);
             viewport.gameObject.AddComponent<CrtMeshEffect>(); viewport.gameObject.AddComponent<RectMask2D>();
-            rows = MonitorWidgets.Rect("Appointments", viewport, Vector2.zero, new Vector2(650, 414));
+            rows = MonitorWidgets.Rect("Appointments", viewport, Vector2.zero, new Vector2(650, 390));
             var scroll = viewport.gameObject.AddComponent<CrtScrollRect>(); scroll.content = rows; scroll.viewport = viewport;
             scroll.horizontal = false; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 30;
-            detail = MonitorWidgets.ScrollText(transform, font, new Vector2(702, -154), new Vector2(390, 414));
-            MonitorWidgets.Button(transform, font, new Vector2(28, -592), new Vector2(650, 46), "예약 문의 메일 확인", OpenClinicMail);
-            source = MonitorWidgets.Button(transform, font, new Vector2(702, -592), new Vector2(390, 46), "이 예약의 문의 메일", OpenSourceMail);
-            feedback = MonitorWidgets.Label(transform, font, new Vector2(28, -650), new Vector2(1064, 34), "", 22);
+            detail = MonitorWidgets.ScrollText(transform, font, new Vector2(702, -154), new Vector2(390, 390));
+            MonitorWidgets.Button(transform, font, new Vector2(28, -562), new Vector2(650, 44), "예약 문의 메일 확인", OpenClinicMail);
+            source = MonitorWidgets.Button(transform, font, new Vector2(702, -562), new Vector2(390, 44), "이 예약의 문의 메일", OpenSourceMail);
+            wait = MonitorWidgets.Button(transform, font, new Vector2(28, -620), new Vector2(650, 44), "다음 예약까지 기다리기", () =>
+            { if (CanAct && (runtime.CanWaitForNextAppointment || runtime.CanWaitUntilClosing)) host.WaitForAppointment?.Invoke(); });
+            finish = MonitorWidgets.Button(transform, font, new Vector2(702, -620), new Vector2(390, 44), "상담 마치기", () =>
+            { if (CanAct && runtime.CurrentAppointment?.phase == VisitPhase.Talking) host.FinishConsultation?.Invoke(); });
+            feedback = MonitorWidgets.Label(transform, font, new Vector2(28, -672), new Vector2(1064, 26), "", 20);
         }
+        private bool CanAct => isActiveAndEnabled && selectedDay == runtime.Day && !host.SystemMenuVisible && host.GetComponent<TerminalController>().InteractionEnabled &&
+            (host.ClinicActionsAllowed?.Invoke() ?? false);
         private void Refresh()
         {
             AppointmentProgress[] visits = runtime.ScheduleForDay(selectedDay).ToArray();
@@ -67,7 +73,11 @@ namespace Codetective.Terminal
             if (next != signature)
             {
                 signature = next;
-                foreach (Transform child in rows) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
+                for (int i = rows.childCount - 1; i >= 0; i--)
+                {
+                    GameObject child = rows.GetChild(i).gameObject; child.SetActive(false);
+                    if (Application.isPlaying) Destroy(child); else DestroyImmediate(child);
+                }
                 for (int i = 0; i < visits.Length; i++)
                 {
                     AppointmentProgress visit = visits[i];
@@ -76,7 +86,7 @@ namespace Codetective.Terminal
                         () => { selectedId = visit.id; signature = null; Refresh(); });
                     if (visit.id == selectedId) button.image.color = new Color(0.16f, 0.32f, 0.23f);
                 }
-                rows.sizeDelta = new Vector2(650, Math.Max(414, visits.Length * 104));
+                rows.sizeDelta = new Vector2(650, Math.Max(390, visits.Length * 104));
             }
             AppointmentProgress selected = visits.FirstOrDefault(v => v.id == selectedId);
             string mailId = runtime.ReservationMailFor(selectedId);
@@ -85,6 +95,9 @@ namespace Codetective.Terminal
                 selected.patientName + "\n\nDAY " + selectedDay + "\n" + KernelRuntime.TimeOfDay(selected.startMinute) + " ~ " + KernelRuntime.TimeOfDay(selected.endMinute) +
                 "\n\n" + VisitStatus(selected) + "\n\n" + (mailId != null ? "문의 메일 승인으로 등록된 예약입니다." : "기존에 확정된 예약입니다.");
             feedback.text = "확정 " + visits.Length + "건 · 승인 대기 " + runtime.PendingReservationCount + "건 / 예약 문의는 메일에서 승인하세요.";
+            wait.GetComponentInChildren<Text>().text = runtime.NextAppointment != null ? "다음 예약까지 기다리기" : "마감까지 기다리기";
+            wait.interactable = CanAct && host.WaitForAppointment != null && (runtime.CanWaitForNextAppointment || runtime.CanWaitUntilClosing);
+            finish.interactable = CanAct && host.FinishConsultation != null && runtime.CurrentAppointment?.phase == VisitPhase.Talking;
         }
         private static string VisitStatus(AppointmentProgress visit) => visit.phase == VisitPhase.Waiting ? "예약 확정" : visit.phase == VisitPhase.Arriving ? "입실 중" :
             visit.phase == VisitPhase.Talking ? "상담 중" : visit.phase == VisitPhase.Closing ? "상담 마무리" : visit.phase == VisitPhase.Departing ? "퇴실 중" :

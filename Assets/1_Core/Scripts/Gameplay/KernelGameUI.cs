@@ -97,7 +97,7 @@ namespace Codetective.Gameplay
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
             BuildDateTransition();
-            clinicDay = gameObject.AddComponent<ClinicDayOverlay>(); clinicDay.Initialize(game, inspection, root.transform, this.font);
+            clinicDay = gameObject.AddComponent<ClinicDayOverlay>(); clinicDay.Initialize(game, root.transform, this.font);
             IsInitialized = true;
             if (context != null) ShowContext(context);
         }
@@ -105,7 +105,10 @@ namespace Codetective.Gameplay
         private void Update()
         {
             if (!IsInitialized) return;
-            interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && inspection.Mode != InspectionMode.Menu;
+            bool inMenu = inspection.Mode == InspectionMode.Menu;
+            interfaceInteraction.alpha = inMenu ? 0 : 1;
+            interfaceInteraction.blocksRaycasts = !inMenu;
+            interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && !inMenu;
             if (modal == "document" && openedDocument != null && openedDocument.ContentRevision != documentRevision)
             {
                 if (openedDocument.Sections.Count == 0) Back();
@@ -252,6 +255,7 @@ namespace Codetective.Gameplay
                 foreach (Graphic graphic in tools.GetComponentsInChildren<Graphic>(true)) graphic.gameObject.AddComponent<CrtMeshEffect>();
             }
         }
+        public void RefreshCommandLanguage() { if (languageLabel != null) RefreshLanguageLabel(); }
         private void ChangeProfile(int direction)
         {
             string[] profiles = game.Runtime.VisibleProfileIds.ToArray(); if (profiles.Length == 0) return;

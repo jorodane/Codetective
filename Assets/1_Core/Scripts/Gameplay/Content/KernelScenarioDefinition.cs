@@ -8,7 +8,6 @@ namespace Codetective.Gameplay
     public sealed class KernelScenarioDefinition : ScriptableObject
     {
         [Min(0.1f)] public float secondsPerGameMinute = 2f;
-        public bool loadDailySave = true;
         public CommandLocale commandLanguage = CommandLocale.Korean;
         public ConsultationLine[] consultation = Array.Empty<ConsultationLine>();
         public EntitySchemaAsset[] schemas = Array.Empty<EntitySchemaAsset>();

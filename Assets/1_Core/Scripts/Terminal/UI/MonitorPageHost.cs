@@ -38,6 +38,11 @@ namespace Codetective.Terminal
         public string SelectedProfileId { get; set; } = "client";
         public int SelectedScheduleDay { get; set; }
         public int ProfilePageRevision { get; private set; }
+        public bool SystemMenuVisible { get; private set; }
+        public Font DisplayFont => Font;
+        public Action WaitForAppointment { get; set; }
+        public Action FinishConsultation { get; set; }
+        public Func<bool> ClinicActionsAllowed { get; set; }
         public int JournalPageFor(string profileId) => profileId != null && journalPages.TryGetValue(profileId, out int page) ? page : 0;
         public void SelectJournalPage(string profileId, int page)
         {
@@ -120,15 +125,23 @@ namespace Codetective.Terminal
             foreach (MonoBehaviour component in page.GetComponentsInChildren<MonoBehaviour>(true))
                 if (component is IMonitorPageContent content) content.Initialize(runtime, Font);
         }
-        public bool TryNavigate(string id) => initialized && navigation.Navigate(id);
+        public bool TryNavigate(string id) => initialized && !SystemMenuVisible && navigation.Navigate(id);
         public void ShowPage(string id) => TryNavigate(id);
         public void ShowHome() => ShowPage("home");
         public MonitorPage FindPage(string id) => id != null && pages.TryGetValue(id, out MonitorPage page) ? page : null;
-        public void GoBack() => navigation.Back();
-        public void GoForward() => navigation.Forward();
+        public void GoBack() { if (!SystemMenuVisible) navigation.Back(); }
+        public void GoForward() { if (!SystemMenuVisible) navigation.Forward(); }
+        public void SetSystemMenuVisible(bool visible)
+        {
+            if (SystemMenuVisible == visible) return;
+            TextInputFocus.ReleaseAll();
+            SystemMenuVisible = visible;
+            if (visible) { CurrentPage?.Hide(); terminal?.SetPageVisible(false); }
+            else { CurrentPage?.Show(); terminal?.SetPageVisible(CurrentPage != null && CurrentPage.TerminalPage); }
+        }
         public bool TryCycleTab(int direction)
         {
-            if (!initialized || !isActiveAndEnabled || terminal == null || !terminal.InteractionEnabled ||
+            if (!initialized || SystemMenuVisible || !isActiveAndEnabled || terminal == null || !terminal.InteractionEnabled ||
                 TextInputFocus.IsActive || IsCompositionProtected || terminal.IsCompositionProtected) return false;
             if (!navigation.CycleTab(direction, CurrentMenuId)) return false;
             if (tabs.TryGetValue(CurrentPage.Id, out Button tab)) tab.Select();
