@@ -79,6 +79,11 @@ namespace Codetective.Terminal.Tests.UI
                 Assert.That(Call(inspection, "TryInspectNumber", 4), Is.True); Assert.That(views.ActiveAngle.Id, Is.EqualTo("drawer"));
                 Call(inspection, "InspectTarget", target); Assert.That(views.ActiveAngle.Id, Is.EqualTo("monitor"));
                 Call(inspection, "ReturnToOverview"); Assert.That(views.ActiveAngle.Id, Is.EqualTo("overview"));
+                Call(inspection, "BeginTerminalPresentation", true); Call(inspection, "ReturnToOverview");
+                Assert.That(views.ActiveAngle.Id, Is.EqualTo("monitor"));
+                Call(inspection, "HandleEscape"); Call(inspection, "HandleEscape");
+                Assert.That(inspection.GetType().GetProperty("PresentingOnTerminal").GetValue(inspection), Is.True);
+                Call(inspection, "EndTerminalPresentation"); Assert.That(views.ActiveAngle.Id, Is.EqualTo("overview"));
                 Call(inspection, "ShowTitleMenu"); Call(inspection, "HandleEscape"); Call(inspection, "Resume");
                 Assert.That(inspection.GetType().GetProperty("IsTitleMenu").GetValue(inspection), Is.True);
                 Assert.That(Time.timeScale, Is.Zero); Assert.That(host.SystemMenuVisible, Is.True);
@@ -312,7 +317,7 @@ namespace Codetective.Terminal.Tests.UI
             }
             finally
             {
-                if (ui != null) foreach (string name in new[] { "root", "dateRoot", "saveNoticeRoot" })
+                if (ui != null) foreach (string name in new[] { "root", "saveNoticeRoot" })
                 {
                     var field = ui.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
                     Object.DestroyImmediate((GameObject)field.GetValue(ui)); field.SetValue(ui, null);

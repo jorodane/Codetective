@@ -1,6 +1,6 @@
 {
     "name": "Codetective.Operations.Authoring",
     "rootNamespace": "Codetective.Gameplay",
-    "references": ["Codetective.Operations.Core"],
+    "references": ["Codetective.Operations.Core", "Codetective.CameraViews"],
     "autoReferenced": true
 }

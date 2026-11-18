@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Codetective.Operations;
 using UnityEngine;
 
@@ -18,13 +19,18 @@ namespace Codetective.Gameplay
         public StoryEffects initialStoryState = new StoryEffects();
         public ClinicDayPlanAsset[] clinicDays = Array.Empty<ClinicDayPlanAsset>();
         public string storyStartFact = "";
+        public PresentationSettings presentation;
+        public ProfileCatalog profiles;
 
         public KernelRuntime CreateRuntime()
         {
             KernelRuntime runtime = ClinicScenario.Create();
             runtime.Language = commandLanguage;
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
-            EntityAssetCompiler.Install(runtime, schemas, instances, additionalObjects);
+            profiles?.Validate();
+            EntityInstanceAsset[] profileInstances = profiles != null ? profiles.All.Select(p => p.entity).Where(p => p != null).ToArray() : Array.Empty<EntityInstanceAsset>();
+            EntityAssetCompiler.Install(runtime, schemas, instances.Concat(profileInstances).Distinct().ToArray(), additionalObjects);
+            profiles?.ApplyDescriptions(runtime);
             runtime.StoryStartFact = storyStartFact;
             runtime.ApplyStoryEffects(initialStoryState);
             foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);

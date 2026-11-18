@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 16fabf98f37a436995ad6e852813d46b
+    type: 3
+  m_Name: MainPresentation
+  m_EditorClassIdentifier: ''
+  defaultAngle:
+    fileID: 11400000
+    guid: 661a5a09d0b7467e96d4db1c52e05fd0
+    type: 2
+  menu: &id001
+    fileID: 11400000
+    guid: 52023de510124aa6906321ff10ef2016
+    type: 2
+  day: *id001
+  visit: *id001
+  scene:
+    fileID: 11400000
+    guid: b785c871a3f64f628bf90a579c7f1b31
+    type: 2
+  terminalFocusOpacity: 0.995
+  dayCardSeconds: 1.3

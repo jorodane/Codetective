@@ -41,3 +41,4 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  transition: {fileID: 11400000, guid: 5ff1196ef42b48a7a27fd321de04a4b7, type: 2}

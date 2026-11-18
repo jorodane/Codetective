@@ -61,9 +61,10 @@ namespace Codetective.Terminal
         public void Show(bool title)
         {
             IsTitle = title; section = "main";
-            host.SetSystemMenuVisible(true); transform.SetAsLastSibling(); gameObject.SetActive(true); Render();
+            host.SetOverlayVisible(this, true); transform.SetAsLastSibling(); gameObject.SetActive(true); Render();
         }
-        public void Hide() { gameObject.SetActive(false); if (host != null) host.SetSystemMenuVisible(false); }
+        public void Hide() { gameObject.SetActive(false); if (host != null) host.SetOverlayVisible(this, false); }
+        private void OnDestroy() { if (host != null) host.SetOverlayVisible(this, false); }
         // Escape goes back within system screens; only the in-game root may resume gameplay.
         public bool HandleEscape()
         {

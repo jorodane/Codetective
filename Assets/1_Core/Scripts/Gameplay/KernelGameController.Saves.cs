@@ -147,7 +147,13 @@ namespace Codetective.Gameplay
         private void RestartScene(SessionStart start, string saveId = null)
         {
             if (changingScene) return;
-            changingScene = true; nextStart = start; nextSaveId = saveId;
+            changingScene = true; inspection.NavigationBlocked = true;
+            StartCoroutine(RestartCovered(start, saveId));
+        }
+        private IEnumerator RestartCovered(SessionStart start, string saveId)
+        {
+            yield return Transitions.CoverScene();
+            nextStart = start; nextSaveId = saveId; Transitions.PrepareSceneReveal();
             inspection.PrepareForSceneChange();
             try
             {
@@ -156,7 +162,8 @@ namespace Codetective.Gameplay
             }
             catch (Exception error)
             {
-                changingScene = false; nextStart = SessionStart.Title; nextSaveId = null;
+                changingScene = false; nextStart = SessionStart.Title; nextSaveId = null; Transitions.CancelSceneReveal();
+                inspection.NavigationBlocked = false; StartCoroutine(Transitions.RevealScene());
                 if (IsSessionActive) inspection.HandleEscape(); else inspection.ShowTitleMenu();
                 inspection.GetComponent<PauseMenuView>().ShowFeedback("화면을 열 수 없습니다: " + error.Message);
             }

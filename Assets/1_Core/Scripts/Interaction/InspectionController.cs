@@ -1,5 +1,6 @@
 using Codetective.CameraViews;
 using Codetective.Terminal;
+using Codetective.Gameplay;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -41,6 +42,14 @@ namespace Codetective.Interaction
         private CameraAnglePreset menuReturnAngle;
         private bool showingTitle;
         private bool started;
+        private Pose presentationReturnPose;
+        private float presentationReturnFov;
+        private CameraAnglePreset presentationReturnAngle;
+        private bool presentationNavigationBlocked;
+        public SceneTransitionController Transitions { get; set; }
+        public bool PresentingOnTerminal { get; private set; }
+        public bool AllowPresentationMenu { get; private set; }
+        private bool ViewBusy => views.IsTransitioning || (Transitions != null && Transitions.IsBusy);
 
         public InspectionMode Mode => flow.Mode;
         public bool IsTitleMenu => flow.Mode == InspectionMode.Menu && showingTitle;
@@ -102,6 +111,8 @@ namespace Codetective.Interaction
                 menu.Hide();
             }
             RestorePause();
+            Transitions?.SetTerminalFocus("menu", false); Transitions?.SetTerminalFocus("day", false);
+            PresentingOnTerminal = false; AllowPresentationMenu = false;
             Carry?.SetPresentationVisible(true);
             DisableTerminal();
             flow.Resume();
@@ -110,14 +121,14 @@ namespace Codetective.Interaction
 
         private void Update()
         {
-            if (NavigationBlocked) return;
 #if ENABLE_INPUT_SYSTEM
             Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && (!NavigationBlocked || PresentingOnTerminal && AllowPresentationMenu))
             {
                 HandleEscape();
                 return;
             }
+            if (NavigationBlocked || (Transitions != null && Transitions.IsBusy)) return;
             if (keyboard != null && keyboard.f5Key.wasPressedThisFrame && !TextInputFocused)
             { QuickSaveRequested?.Invoke(); return; }
             if (flow.Mode == InspectionMode.Menu)
@@ -162,12 +173,13 @@ namespace Codetective.Interaction
         private void LateUpdate()
         {
             // The click that starts the zoom must not also activate a terminal control.
-            bool ready = flow.Mode == InspectionMode.Inspecting && !views.IsTransitioning && !ModalInputBlocked && !NavigationBlocked &&
+            bool ready = flow.Mode == InspectionMode.Inspecting && !ViewBusy && !ModalInputBlocked && !NavigationBlocked &&
                 (Carry == null || Carry.HeldItem == null);
-            if (flow.Mode == InspectionMode.Menu)
+            if (flow.Mode == InspectionMode.Menu || PresentingOnTerminal)
             {
                 // Only system controls are shown; command input and page navigation remain suspended.
-                if (terminal != null && !terminal.InteractionEnabled) terminal.SetInteractionEnabled(true);
+                bool allow = Transitions == null || !Transitions.IsBusy;
+                if (terminal != null && terminal.InteractionEnabled != allow) terminal.SetInteractionEnabled(allow);
                 return;
             }
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
@@ -185,7 +197,7 @@ namespace Codetective.Interaction
 
         public void InspectAtScreenPoint(Vector2 point)
         {
-            if (!CanInspectByPointer || (Carry != null && Carry.IsExamining) || views.IsTransitioning || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
+            if (!CanInspectByPointer || (Carry != null && Carry.IsExamining) || ViewBusy || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
                 return;
             Ray ray = views.ControlledCamera.ScreenPointToRay(point);
             RaycastHit[] hits = Physics.RaycastAll(ray, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
@@ -208,7 +220,7 @@ namespace Codetective.Interaction
 
         public bool InteractAtScreenPoint(Vector2 point)
         {
-            if (flow.Mode == InspectionMode.Menu || NavigationBlocked || views.IsTransitioning || ModalInputBlocked ||
+            if (flow.Mode == InspectionMode.Menu || NavigationBlocked || ViewBusy || ModalInputBlocked ||
                 (PointerBlocked != null && PointerBlocked(point))) return false;
             if (Carry != null && Carry.IsExamining) return true;
             if (TextInputFocused) TextInputFocus.ReleaseAll();
@@ -257,15 +269,20 @@ namespace Codetective.Interaction
                 return;
             if (flow.Mode == InspectionMode.Inspecting && views.ActiveAngle == angle)
                 return;
-            if (!views.TryGoToIndex(views.AngleSet.IndexOf(angle)))
+            if (!ChangeAngle(angle, () =>
+            {
+                DisableTerminal(); activeTerminal = targetTerminal;
+                activeTerminal?.SetInteractionEnabled(false);
+                flow.Inspect(); AngleEntered?.Invoke(angle);
+            }))
                 return;
-
-            DisableTerminal();
-            activeTerminal = targetTerminal;
-            if (activeTerminal != null)
-                activeTerminal.SetInteractionEnabled(false);
-            flow.Inspect();
-            AngleEntered?.Invoke(angle);
+            activeTerminal?.SetInteractionEnabled(false);
+        }
+        private bool ChangeAngle(CameraAnglePreset angle, Action changed)
+        {
+            if (Transitions != null) return Transitions.TryChangeAngle(angle, changed);
+            if (!views.TryGoToIndex(views.AngleSet.IndexOf(angle))) return false;
+            changed?.Invoke(); return true;
         }
 
         private TerminalController FindTerminalFor(CameraAnglePreset angle)
@@ -287,22 +304,15 @@ namespace Codetective.Interaction
 
         public void ReturnToOverview()
         {
-            if (flow.Mode == InspectionMode.Menu || !RequestOverview())
+            if (flow.Mode == InspectionMode.Menu || NavigationBlocked || PresentingOnTerminal || overviewAngle == null || views.AngleSet == null)
                 return;
-            DisableTerminal();
-            flow.ReturnToOverview();
-            OverviewEntered?.Invoke();
-        }
-
-        private bool RequestOverview()
-        {
-            return overviewAngle != null && views.AngleSet != null &&
-                   views.TryGoToIndex(views.AngleSet.IndexOf(overviewAngle));
+            if (ChangeAngle(overviewAngle, () => { DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); }))
+                activeTerminal?.SetInteractionEnabled(false);
         }
 
         public void HandleEscape()
         {
-            if (NavigationBlocked) return;
+            if (NavigationBlocked && !(PresentingOnTerminal && AllowPresentationMenu)) return;
             if (flow.Mode == InspectionMode.Menu)
             { if (!menu.HandleEscape()) Resume(); return; }
             OpenSystemMenu(false);
@@ -312,6 +322,7 @@ namespace Codetective.Interaction
         private void OpenSystemMenu(bool title)
         {
             if (!menu.CanShow || flow.Mode == InspectionMode.Menu) return;
+            Transitions?.CancelAngle();
             menuReturnPose = views.CapturePose(); menuReturnFieldOfView = views.ControlledCamera.fieldOfView;
             menuReturnAngle = views.ActiveAngle;
             TextInputFocus.ReleaseAll();
@@ -323,23 +334,42 @@ namespace Codetective.Interaction
             showingTitle = title; flow.Escape();
             if (views.AngleSet != null) views.TryGoToIndex(views.AngleSet.FindId("monitor"), true);
             menu.Show(title); terminal?.SetInteractionEnabled(true);
+            Transitions?.SetTerminalFocus("menu", true);
         }
 
         public void Resume()
         {
-            if (showingTitle || !flow.Resume())
+            if (showingTitle || (Transitions != null && Transitions.IsBusy) || !flow.Resume())
                 return;
             menu.Hide();
             terminal?.SetInteractionEnabled(false);
             views.RestoreView(menuReturnPose, menuReturnFieldOfView, menuReturnAngle);
             Carry?.SetPresentationVisible(true);
             RestorePause();
+            Transitions?.SetTerminalFocus("menu", false);
+        }
+        public void BeginTerminalPresentation(bool allowMenu)
+        {
+            if (PresentingOnTerminal) { AllowPresentationMenu = allowMenu; return; }
+            Transitions?.CancelAngle(); TextInputFocus.ReleaseAll(); Carry?.CancelPlacement(); Carry?.SetPresentationVisible(false);
+            presentationReturnPose = views.CapturePose(); presentationReturnFov = views.ControlledCamera.fieldOfView; presentationReturnAngle = views.ActiveAngle;
+            presentationNavigationBlocked = NavigationBlocked; PresentingOnTerminal = true; AllowPresentationMenu = allowMenu; NavigationBlocked = true;
+            if (views.AngleSet != null) views.TryGoToIndex(views.AngleSet.FindId("monitor"), true);
+            Transitions?.SetTerminalFocus("day", true);
+        }
+        public void EndTerminalPresentation()
+        {
+            if (!PresentingOnTerminal) return;
+            PresentingOnTerminal = false; AllowPresentationMenu = false; NavigationBlocked = presentationNavigationBlocked;
+            views.RestoreView(presentationReturnPose, presentationReturnFov, presentationReturnAngle);
+            Carry?.SetPresentationVisible(true); Transitions?.SetTerminalFocus("day", false);
         }
 
         public void PrepareForSceneChange()
         {
             menu.Hide(); RestorePause(); DisableTerminal();
             flow.Resume(); flow.ReturnToOverview(); showingTitle = false;
+            PresentingOnTerminal = false; Transitions?.SetTerminalFocus("day", false); Transitions?.SetTerminalFocus("menu", false);
         }
 
         private void DisableTerminal()

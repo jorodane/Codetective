@@ -48,11 +48,8 @@ namespace Codetective.Gameplay
         private PaperDocument openedDocument;
         private int documentSection;
         private int documentRevision;
-        private GameObject nextDayButton, dateRoot;
-        private CanvasGroup dateFade;
-        private Text dateLabel;
-        private Text dateSubtitle;
-        private ClinicDayOverlay clinicDay;
+        private GameObject nextDayButton;
+        private TerminalDayView clinicDay;
         private CanvasGroup interfaceInteraction;
         private GameObject saveNoticeRoot;
         private Text saveNotice;
@@ -99,9 +96,12 @@ namespace Codetective.Gameplay
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
-            BuildDateTransition();
             BuildSaveNotice();
-            clinicDay = gameObject.AddComponent<ClinicDayOverlay>(); clinicDay.Initialize(game, root.transform, this.font);
+            if (game.Monitor != null)
+            {
+                var dayRoot = new GameObject("TerminalDay", typeof(RectTransform)); dayRoot.transform.SetParent(game.Monitor.transform, false); dayRoot.layer = 5;
+                clinicDay = dayRoot.AddComponent<TerminalDayView>(); clinicDay.Initialize(game.Monitor, game.CloseDaySummary, game.BeginNextDay);
+            }
             IsInitialized = true;
             if (context != null) ShowContext(context);
         }
@@ -110,10 +110,10 @@ namespace Codetective.Gameplay
         {
             if (!IsInitialized) return;
             if (saveNoticeRoot.activeSelf && Time.unscaledTime >= saveNoticeUntil) saveNoticeRoot.SetActive(false);
-            bool inMenu = inspection.Mode == InspectionMode.Menu;
+            bool inMenu = inspection.Mode == InspectionMode.Menu || inspection.PresentingOnTerminal;
             interfaceInteraction.alpha = inMenu ? 0 : 1;
             interfaceInteraction.blocksRaycasts = !inMenu;
-            interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && !inMenu;
+            interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && !game.IsViewTransitioning && !inMenu;
             if (modal == "document" && openedDocument != null && openedDocument.ContentRevision != documentRevision)
             {
                 if (openedDocument.Sections.Count == 0) Back();
@@ -155,7 +155,7 @@ namespace Codetective.Gameplay
             BuildContext();
         }
 
-        public void HideContext() { context = null; CloseModal(); HidePanel(); if (clinicDay != null) clinicDay.HideSummary(); }
+        public void HideContext() { context = null; CloseModal(); HidePanel(); }
 
         public bool Back()
         {
@@ -173,7 +173,7 @@ namespace Codetective.Gameplay
         private void OpenModal(string name)
         {
             if (!IsInitialized) return;
-            if (inspection.Mode == InspectionMode.Menu || game.IsDateTransitioning || game.IsVisitPresenting || SummaryVisible) return;
+            if (inspection.Mode == InspectionMode.Menu || game.IsDateTransitioning || game.IsVisitPresenting || game.IsViewTransitioning || SummaryVisible) return;
             SaveDraft();
             modal = name;
             inspection.ModalInputBlocked = true;
@@ -301,22 +301,6 @@ namespace Codetective.Gameplay
             scroll.content.anchoredPosition = new Vector2(4, -4); scroll.verticalNormalizedPosition = 1;
             newspaperReader.gameObject.SetActive(true);
         }
-        private void BuildDateTransition()
-        {
-            dateRoot = new GameObject("DateTransition", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(CanvasGroup));
-            Canvas canvas = dateRoot.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 2000;
-            CanvasScaler scaler = dateRoot.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize; scaler.referenceResolution = new Vector2(1280, 720);
-            RectTransform black = Box("Blackout", dateRoot.transform, Vector2.zero, Vector2.zero, Vector2.zero);
-            black.anchorMin = Vector2.zero; black.anchorMax = Vector2.one; black.offsetMin = black.offsetMax = Vector2.zero;
-            black.GetComponent<Image>().color = Color.black;
-            dateLabel = Label(black, new Vector2(0, 44), new Vector2(1000, 160), "", 92);
-            dateLabel.rectTransform.anchorMin = dateLabel.rectTransform.anchorMax = dateLabel.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            dateLabel.alignment = TextAnchor.MiddleCenter;
-            dateSubtitle = Label(black, new Vector2(0, -76), new Vector2(1080, 100), "", 30);
-            dateSubtitle.rectTransform.anchorMin = dateSubtitle.rectTransform.anchorMax = dateSubtitle.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            dateSubtitle.alignment = TextAnchor.MiddleCenter;
-            dateFade = dateRoot.GetComponent<CanvasGroup>(); dateFade.alpha = 0; dateRoot.SetActive(false);
-        }
         private void BuildSaveNotice()
         {
             saveNoticeRoot = new GameObject("SaveNotification", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
@@ -333,15 +317,10 @@ namespace Codetective.Gameplay
             if (!IsInitialized || saveNoticeRoot == null) return;
             saveNotice.text = text; saveNoticeUntil = Time.unscaledTime + seconds; saveNoticeRoot.SetActive(true);
         }
-        public IEnumerator FadeDate(float from, float to, float duration, string label, string subtitle = "")
-        {
-            dateRoot.SetActive(true); dateLabel.text = label; dateSubtitle.text = subtitle;
-            for (float elapsed = 0; elapsed < duration; elapsed += Time.unscaledDeltaTime)
-            { dateFade.alpha = Mathf.Lerp(from, to, Mathf.Clamp01(elapsed / duration)); yield return null; }
-            dateFade.alpha = to; if (to == 0) dateRoot.SetActive(false);
-        }
-        public void ShowDaySummary(DailyRecord record) { HideContext(); clinicDay.ShowSummary(record); inspection.ModalInputBlocked = true; }
-        public void CloseDaySummary() { clinicDay.HideSummary(); inspection.ModalInputBlocked = false; }
+        public void ShowDayIntro(string title, string subtitle) { clinicDay?.ShowIntro(title, subtitle); }
+        public void HideDay() { clinicDay?.Hide(); }
+        public void ShowDaySummary(DailyRecord record) { HideContext(); clinicDay?.ShowSummary(record); }
+        public void CloseDaySummary() { clinicDay?.Hide(); }
 
         private void RefreshBody()
         {
@@ -595,6 +574,6 @@ namespace Codetective.Gameplay
             return text;
         }
 
-        private void OnDestroy() { IsInitialized = false; if (root != null) Destroy(root); if (dateRoot != null) Destroy(dateRoot); if (saveNoticeRoot != null) Destroy(saveNoticeRoot); }
+        private void OnDestroy() { IsInitialized = false; if (root != null) Destroy(root); if (clinicDay != null) Destroy(clinicDay.gameObject); if (saveNoticeRoot != null) Destroy(saveNoticeRoot); }
     }
 }

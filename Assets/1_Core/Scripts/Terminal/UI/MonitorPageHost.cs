@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Codetective.Operations;
+using Codetective.Gameplay;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -32,6 +33,9 @@ namespace Codetective.Terminal
         private Button home;
         private KernelRuntime runtime;
         private bool initialized;
+        private ProfileCatalog profiles;
+        private readonly HashSet<object> overlays = new HashSet<object>();
+        private readonly object legacyOverlay = new object();
         public MonitorPage CurrentPage { get; private set; }
         public IReadOnlyList<MonitorPage> NavigationPages => navigationPages;
         public string CurrentMenuId => CurrentPage != null ? CurrentPage.NavigationPageId : null;
@@ -49,14 +53,27 @@ namespace Codetective.Terminal
             if (profileId == null || page < 0 || JournalPageFor(profileId) == page) return;
             journalPages[profileId] = page; ProfilePageRevision++;
         }
+        public void AttachProfiles(ProfileCatalog value) { profiles = value; ProfilePageRevision++; }
         public Sprite PortraitFor(string profileId)
         {
             if (runtime == null || !runtime.VisibleProfileIds.Contains(profileId)) return null;
+            CharacterProfileAsset profile = profiles != null ? profiles.Character(profileId) : null;
+            if (profile != null)
+            {
+                if (profile.availability != null && !profile.availability.Matches(runtime)) return null;
+                if (profile.photo != null) return profile.photo;
+            }
             foreach (ProfilePortrait portrait in profilePortraits ?? Array.Empty<ProfilePortrait>())
                 if (portrait != null && portrait.profileId == profileId && (portrait.availability == null || portrait.availability.Matches(runtime))) return portrait.photo;
             return null;
         }
         public bool CanGoBack => navigation.CanGoBack;
+        public Sprite EvidencePhotoFor(string id)
+        {
+            if (runtime == null || !runtime.Evidence.Any(e => e.Id == id)) return null;
+            VisualProfileAsset profile = profiles != null ? profiles.Find(id) : null;
+            return profile != null && (profile.availability == null || profile.availability.Matches(runtime)) ? profile.photo : null;
+        }
         public bool CanGoForward => navigation.CanGoForward;
         public bool IsCompositionProtected
         {
@@ -131,13 +148,16 @@ namespace Codetective.Terminal
         public MonitorPage FindPage(string id) => id != null && pages.TryGetValue(id, out MonitorPage page) ? page : null;
         public void GoBack() { if (!SystemMenuVisible) navigation.Back(); }
         public void GoForward() { if (!SystemMenuVisible) navigation.Forward(); }
-        public void SetSystemMenuVisible(bool visible)
+        public void SetSystemMenuVisible(bool visible) => SetOverlayVisible(legacyOverlay, visible);
+        public void SetOverlayVisible(object owner, bool visible)
         {
-            if (SystemMenuVisible == visible) return;
+            if (visible) overlays.Add(owner); else overlays.Remove(owner);
+            bool suspended = overlays.Count > 0;
+            if (SystemMenuVisible == suspended) return;
             TextInputFocus.ReleaseAll();
-            SystemMenuVisible = visible;
-            if (visible) { CurrentPage?.Hide(); terminal?.SetPageVisible(false); }
-            else { CurrentPage?.Show(); terminal?.SetPageVisible(CurrentPage != null && CurrentPage.TerminalPage); }
+            SystemMenuVisible = suspended;
+            if (suspended) { if (CurrentPage != null) CurrentPage.Hide(); if (terminal != null) terminal.SetPageVisible(false); }
+            else { if (CurrentPage != null) CurrentPage.Show(); if (terminal != null) terminal.SetPageVisible(CurrentPage != null && CurrentPage.TerminalPage); }
         }
         public bool TryCycleTab(int direction)
         {

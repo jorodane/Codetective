@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 93c80d496e634a308c0b32bfadae71b8
+    type: 3
+  m_Name: Toolkit
+  m_EditorClassIdentifier: ''
+  worldId: toolkit
+  entity:
+    fileID: 0
+  modelPrefab:
+    fileID: 2272440649576570105
+    guid: 79237018600179e42ba124770814a0c0
+    type: 3
+  photo:
+    fileID: 0
+  description: 지휘소에 요청해 전달받는 작업 도구입니다.
+  availability:
+    triggersOn: []
+    triggersOff: []
+    quests: []
+  captureMissingPhoto: 1
+  modelScale:
+    x: 1
+    y: 1
+    z: 1
+  modelEuler:
+    x: 0
+    y: 180
+    z: 0

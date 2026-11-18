@@ -14,11 +14,14 @@ namespace Codetective.CameraViews
         [Tooltip("Time in seconds to enter this angle. Zero changes the view immediately.")]
         [SerializeField, Min(0f)] private float transitionDuration = 0.65f;
         [SerializeField] private AnimationCurve blendCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        [Tooltip("Optional entry effect. Empty keeps the existing camera interpolation.")]
+        [SerializeField] private TransitionPreset transition;
 
         public string Id => string.IsNullOrWhiteSpace(angleId) ? name : angleId.Trim();
         public Pose Pose => new Pose(position, Quaternion.Euler(eulerAngles));
         public float FieldOfView => Mathf.Clamp(fieldOfView, 1f, 179f);
         public float TransitionDuration => Mathf.Max(0f, transitionDuration);
         public AnimationCurve BlendCurve => blendCurve;
+        public TransitionPreset Transition => transition;
     }
 }

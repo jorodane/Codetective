@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Codetective.Operations;
+using Codetective.Gameplay;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -36,6 +37,34 @@ namespace Codetective.Terminal.Tests.UI
             terminal.SetInteractionEnabled(false); host.Initialize();
         }
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
+        [Test]
+        public void ClosingASystemMenuKeepsTheDayScreenAndItsSuspendedDraft()
+        {
+            host.ShowPage("kernel"); input.SetTextWithoutNotify("save draft");
+            var dayRoot = new GameObject("Day", typeof(RectTransform)); dayRoot.transform.SetParent(root.transform, false);
+            var day = dayRoot.AddComponent<TerminalDayView>(); day.Initialize(host, () => { }, () => { }); day.ShowIntro("DAY 1", "업무 시작");
+            var menu = SystemMenu(new SystemMenuActions()); menu.Show(false); menu.Hide();
+            Assert.That(host.SystemMenuVisible, Is.True); Assert.That(host.CurrentPage.gameObject.activeSelf, Is.False); Assert.That(terminal.PageVisible, Is.False);
+            Assert.That(day.gameObject.activeSelf, Is.True); day.Hide();
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel")); Assert.That(terminal.PageVisible, Is.True); Assert.That(input.text, Is.EqualTo("save draft"));
+        }
+        [Test]
+        public void ProfileAndEvidencePhotosRespectKnowledgeAndDynamicAccess()
+        {
+            var catalog = ScriptableObject.CreateInstance<ProfileCatalog>(); var person = ScriptableObject.CreateInstance<CharacterProfileAsset>();
+            var tool = ScriptableObject.CreateInstance<ToolProfileAsset>(); var texture = new Texture2D(4, 4); Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 4, 4), Vector2.zero);
+            try
+            {
+                person.worldId = "client"; person.photo = sprite; person.availability.triggersOn = new[] { "photo.known" };
+                tool.worldId = "toolkit"; tool.photo = sprite; catalog.characters = new[] { person }; catalog.tools = new[] { tool }; host.AttachProfiles(catalog);
+                Assert.That(host.PortraitFor("client"), Is.Null); runtime.SetTrigger("photo.known", true); Assert.That(host.PortraitFor("client"), Is.SameAs(sprite));
+                Assert.That(host.EvidencePhotoFor("toolkit"), Is.Null); runtime.Facts.Add("coffee_received"); runtime.CollectEvidence(runtime.Reference(runtime.Entity("toolkit")));
+                terminal.SetInteractionEnabled(true); host.ShowPage("evidence"); EvidenceMonitorPage page = host.CurrentPage.GetComponent<EvidenceMonitorPage>(); page.SelectEvidence("toolkit");
+                Assert.That(Field<Image>(page, "photo").sprite, Is.SameAs(sprite)); runtime.Entity("toolkit").SetEntityAccess(PlayerAccess.Internal); Invoke(page, "Refresh");
+                Assert.That(host.EvidencePhotoFor("toolkit"), Is.Null); Assert.That(Field<Image>(page, "photo").enabled, Is.False); Assert.That(Field<Image>(page, "photo").sprite, Is.Null);
+            }
+            finally { Object.DestroyImmediate(catalog); Object.DestroyImmediate(person); Object.DestroyImmediate(tool); Object.DestroyImmediate(sprite); Object.DestroyImmediate(texture); }
+        }
 
         private SystemMenuMonitorView SystemMenu(SystemMenuActions actions)
         {

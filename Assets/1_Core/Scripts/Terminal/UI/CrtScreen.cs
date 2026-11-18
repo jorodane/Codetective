@@ -21,6 +21,7 @@ namespace Codetective.Terminal
         private RectTransform Panel => panel != null ? panel : panel = (RectTransform)transform;
         public bool IsCurved => isActiveAndEnabled && centerBulge > 0f &&
                                 Panel.rect.width > 0f && Panel.rect.height > 0f;
+        public float CenterBulge => IsCurved ? centerBulge : 0f;
 
         private void OnEnable() => dirty = true;
         private void OnValidate() => dirty = true;
