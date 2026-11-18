@@ -13,7 +13,7 @@ namespace Codetective.Gameplay
         private KernelRuntime runtime;
         private InspectionController inspection;
         private MonitorPageHost host;
-        private KernelGameUI hud;
+        private PresentationSettings presentation;
         private TerminalMailNotice notice;
         private AudioSource speaker;
         private AudioClip sound;
@@ -22,7 +22,7 @@ namespace Codetective.Gameplay
         public void Initialize(KernelGameController owner, InspectionController navigation, MonitorPageHost monitor, PresentationSettings settings)
         {
             game = owner; runtime = game.Runtime; inspection = navigation; host = monitor;
-            hud = game.GetComponent<KernelGameUI>();
+            presentation = settings;
             arrivals.Initialize(runtime); runtime.NarrativeChanged += Observe;
             var panel = new GameObject("MailNotification", typeof(RectTransform)); panel.transform.SetParent(host.transform, false); panel.layer = 5;
             notice = panel.AddComponent<TerminalMailNotice>(); notice.Initialize(host, settings != null ? settings.mailBlinkSeconds : 0.55f);
@@ -45,7 +45,7 @@ namespace Codetective.Gameplay
             if (!CanAttend) { if (notice.IsVisible) notice.Hide(); return; }
             if (WatchingTerminal)
             {
-                if (arrivals.PendingCount > 0 && hud != null && hud.ShowMailReceived(arrivals.PendingCount)) arrivals.Acknowledge();
+                if (arrivals.PendingCount > 0 && host.ShowMailReceived(arrivals.PendingCount, presentation)) arrivals.Acknowledge();
                 if (notice.IsVisible) notice.Hide(); return;
             }
             // Keep live gramophone input intact; show the envelope after the field loses focus.

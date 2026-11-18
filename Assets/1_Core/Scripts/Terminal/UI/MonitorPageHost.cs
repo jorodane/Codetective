@@ -35,6 +35,10 @@ namespace Codetective.Terminal
         private bool initialized;
         private ProfileCatalog profiles;
         private float nextMailRefresh;
+        private Image headerBackground;
+        private Color headingColor, mailBannerColor;
+        private float mailBannerUntil;
+        private int receivedMailCount;
         private readonly HashSet<object> overlays = new HashSet<object>();
         private readonly object legacyOverlay = new object();
         public MonitorPage CurrentPage { get; private set; }
@@ -44,6 +48,7 @@ namespace Codetective.Terminal
         public int SelectedScheduleDay { get; set; }
         public int ProfilePageRevision { get; private set; }
         public bool SystemMenuVisible { get; private set; }
+        public bool MailNotificationVisible => initialized && Time.unscaledTime < mailBannerUntil;
         public Font DisplayFont => Font;
         public Action WaitForAppointment { get; set; }
         public Action FinishConsultation { get; set; }
@@ -94,6 +99,7 @@ namespace Codetective.Terminal
         private void Awake() => Initialize();
         private void LateUpdate()
         {
+            if (initialized) RefreshHeader();
             if (initialized && runtime != null && Time.unscaledTime >= nextMailRefresh)
             {
                 nextMailRefresh = Time.unscaledTime + 0.2f;
@@ -115,6 +121,7 @@ namespace Codetective.Terminal
             if (initialized || navigationRoot == null) return;
             terminal = terminal != null ? terminal : GetComponent<TerminalController>();
             runtime = runtime ?? terminal?.Runtime;
+            BuildHeader();
             BuildNavigation();
             navigation.Changed += Display;
             initialized = true;
@@ -194,8 +201,7 @@ namespace Codetective.Terminal
             CurrentPage = pages[id];
             CurrentPage.Show();
             terminal?.SetPageVisible(CurrentPage.TerminalPage);
-            if (heading != null) heading.text = "CODETECTIVE / " + CurrentPage.Title;
-            foreach (var tab in tabs) tab.Value.image.color = tab.Key == CurrentMenuId ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor;
+            RefreshHeader();
             back.interactable = CanGoBack; forward.interactable = CanGoForward;
             home.interactable = id != "home" && pages.ContainsKey("home");
             RevealTab(CurrentMenuId);
@@ -227,6 +233,42 @@ namespace Codetective.Terminal
             tabScroll.content = tabContent; tabScroll.viewport = viewport; tabScroll.horizontal = true; tabScroll.vertical = false;
             tabScroll.movementType = ScrollRect.MovementType.Clamped; tabScroll.scrollSensitivity = 40;
         }
+        private void BuildHeader()
+        {
+            if (heading == null) return;
+            headingColor = heading.color;
+            RectTransform bar = MonitorWidgets.Rect("TerminalHeaderBackground", transform, Vector2.zero, Vector2.zero);
+            bar.anchorMin = new Vector2(0, 1); bar.anchorMax = Vector2.one;
+            bar.offsetMin = new Vector2(16, -72); bar.offsetMax = new Vector2(-16, -12);
+            bar.SetAsFirstSibling();
+            headerBackground = bar.gameObject.AddComponent<Image>(); headerBackground.raycastTarget = false; headerBackground.color = Color.clear;
+            bar.gameObject.AddComponent<CrtMeshEffect>();
+        }
+        public bool ShowMailReceived(int count, PresentationSettings settings)
+        {
+            if (!initialized || heading == null || headerBackground == null || SystemMenuVisible || count <= 0) return false;
+            receivedMailCount = MailNotificationVisible ? receivedMailCount + count : count;
+            mailBannerUntil = Time.unscaledTime + Mathf.Max(0.5f, settings != null ? settings.mailBannerSeconds : 3f);
+            mailBannerColor = settings != null ? settings.mailBannerColor : new Color(0.33f, 0.22f, 0.06f, 0.98f);
+            RefreshHeader(); return true;
+        }
+        private void RefreshHeader()
+        {
+            bool notifying = MailNotificationVisible && !SystemMenuVisible;
+            if (headerBackground != null) headerBackground.color = notifying ? mailBannerColor : Color.clear;
+            if (heading != null)
+            {
+                heading.text = notifying ? "메일 수신 · " + receivedMailCount + "건" : "CODETECTIVE / " + (CurrentPage != null ? CurrentPage.Title : "");
+                heading.color = notifying ? new Color(1, 0.92f, 0.62f) : headingColor;
+            }
+            TintHeaderButton(back, MonitorWidgets.ButtonColor, notifying);
+            TintHeaderButton(forward, MonitorWidgets.ButtonColor, notifying);
+            TintHeaderButton(home, MonitorWidgets.ButtonColor, notifying);
+            foreach (var tab in tabs)
+                TintHeaderButton(tab.Value, tab.Key == CurrentMenuId ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor, notifying);
+        }
+        private void TintHeaderButton(Button button, Color normal, bool notifying)
+        { if (button != null) button.image.color = notifying ? Color.Lerp(normal, mailBannerColor, 0.85f) : normal; }
         private void OnDestroy() => navigation.Changed -= Display;
     }
 }
