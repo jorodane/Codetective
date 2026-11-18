@@ -71,7 +71,7 @@ namespace Codetective.Operations
             NewspaperEdition edition = editions[Day];
             if (edition.read) return;
             foreach (string id in edition.articleIds.Where(news.ContainsKey))
-            { NewsArticle article = news[id]; Facts.UnionWith(article.readFacts); ApplyStoryEffects(article.onRead); }
+            { NewsArticle article = news[id]; Facts.UnionWith(article.readFacts); ApplyStoryEffects(article.onRead); CollectNewsArticle(article); }
             edition.read = true;
             SetTrigger("newspaper.read", true);
             SetTrigger("newspaper.day." + Day + ".read", true);
@@ -87,6 +87,7 @@ namespace Codetective.Operations
             if (RecordedClues.Contains(key)) return;
             if (!string.IsNullOrWhiteSpace(clue.fact)) Facts.Add(clue.fact);
             ApplyStoryEffects(clue.onCollect); RecordedClues.Add(key); SetTrigger(key, true);
+            CollectNewsClue(article, clue);
             Revision++; NarrativeUpdated();
         }
         private void RestoreNewspapers(NewspaperEdition[] saved)

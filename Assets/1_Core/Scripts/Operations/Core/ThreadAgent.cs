@@ -192,6 +192,7 @@ namespace Codetective.Operations
             agent.SceneAction = null;
             CoffeeReceived = true;
             Facts.Add("coffee_received");
+            CollectEvidence(Datum.Ref(DataKind.Item, "coffee", "Kernel의 커피", "손님용과 같은 컵으로 전달받은 커피"), "커피 전달");
             FinishAgent(agent, Datum.Ref(DataKind.Item, "coffee", "Kernel의 커피", "손님용과 같은 컵으로 전달받은 커피"));
         }
 

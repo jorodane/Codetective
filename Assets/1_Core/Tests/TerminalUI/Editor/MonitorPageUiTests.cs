@@ -38,6 +38,49 @@ namespace Codetective.Terminal.Tests.UI
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
 
         [Test]
+        public void KernelEvidenceBrowserKeepsTheCommandDraftAndReconnectsFreedReferences()
+        {
+            terminal.SetInteractionEnabled(true); runtime.Store("record", Datum.Ref(DataKind.Document, "case_record", "사건 기록", "조사에서 얻은 상세 기록")); runtime.Free("record");
+            host.ShowPage("kernel"); input.SetTextWithoutNotify("save 작성중");
+            host.CurrentPage.GetComponentsInChildren<Button>().Single(b => b.GetComponentInChildren<Text>()?.text == "확보 자료").onClick.Invoke();
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("evidence")); Assert.That(host.CurrentMenuId, Is.EqualTo("kernel"));
+            Assert.That(host.NavigationPages.Count, Is.EqualTo(4)); Assert.That(terminal.PageVisible, Is.False);
+            EvidenceMonitorPage page = host.CurrentPage.GetComponent<EvidenceMonitorPage>(); page.SelectEvidence("case_record");
+            Assert.That(Field<Text>(page, "detail").text, Does.Contain("사건 기록").And.Contain("조사에서 얻은 상세 기록"));
+            Field<MonitorNoteInput>(page, "referenceName").text = "caseFile"; Invoke(page, "BindSelected");
+            Assert.That(runtime.Data["caseFile"].value.id, Is.EqualTo("case_record"));
+            Assert.That(runtime.Evidence.Count, Is.EqualTo(1)); host.ShowPage("kernel");
+            Assert.That(input.text, Is.EqualTo("save 작성중")); Assert.That(input.isFocused, Is.False);
+        }
+        [Test]
+        public void EvidenceFiltersSearchAndAccessChangesRemoveStaleDetails()
+        {
+            runtime.Store("key", Datum.Ref(DataKind.Item, "security_key", "보안 열쇠", "문을 여는 도구"));
+            runtime.Store("record", Datum.Ref(DataKind.Document, "security_record", "문서", "security 연구 기록"));
+            terminal.SetInteractionEnabled(true); host.ShowPage("evidence"); EvidenceMonitorPage page = host.CurrentPage.GetComponent<EvidenceMonitorPage>();
+            Invoke(page, "ChangeFilter", 1);
+            Assert.That(Field<RectTransform>(page, "rows").GetComponentsInChildren<Button>().Length, Is.EqualTo(1));
+            Assert.That(Field<Text>(page, "detail").text, Does.Contain("보안 열쇠"));
+            Invoke(page, "ChangeFilter", 0); Field<MonitorNoteInput>(page, "search").text = "security";
+            Assert.That(Field<RectTransform>(page, "rows").GetComponentsInChildren<Button>().Length, Is.EqualTo(1));
+            Assert.That(Field<Text>(page, "detail").text, Does.Contain("security 연구 기록"));
+            runtime.Entity("security_record").SetEntityAccess(PlayerAccess.Internal); Invoke(page, "Refresh");
+            Assert.That(Field<RectTransform>(page, "rows").GetComponentsInChildren<Button>(), Is.Empty);
+            Assert.That(Field<Text>(page, "detail").text, Does.Not.Contain("security 연구 기록"));
+            Assert.That(Field<Button>(page, "bind").interactable, Is.False);
+            runtime.Entity("security_record").SetEntityAccess(PlayerAccess.Public); Invoke(page, "Refresh");
+            Assert.That(Field<Text>(page, "detail").text, Does.Contain("security 연구 기록"));
+        }
+        [Test]
+        public void HiddenOrInactiveEvidencePagesCannotCreateReferences()
+        {
+            runtime.CollectEvidence(Datum.Ref(DataKind.Document, "case_record", "사건 기록", "설명")); host.ShowPage("evidence");
+            EvidenceMonitorPage page = host.CurrentPage.GetComponent<EvidenceMonitorPage>();
+            Field<MonitorNoteInput>(page, "referenceName").text = "fromUi"; Invoke(page, "BindSelected"); Assert.That(runtime.Data, Is.Empty);
+            terminal.SetInteractionEnabled(true); host.ShowPage("kernel"); Invoke(page, "BindSelected"); Assert.That(runtime.Data, Is.Empty);
+            host.ShowPage("evidence"); Invoke(page, "BindSelected"); Assert.That(runtime.Data["fromUi"].value.id, Is.EqualTo("case_record"));
+        }
+        [Test]
         public void ClientAndKernelUseTheSamePortraitAndSixFieldForm()
         {
             host.ShowPage("clinic"); ClinicMonitorPage clinic = host.CurrentPage.GetComponent<ClinicMonitorPage>();

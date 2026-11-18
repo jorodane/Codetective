@@ -83,11 +83,14 @@ namespace Codetective.Operations
         }
 
         public void Store(string name, Datum value)
+            => Store(name, value, "명령 결과");
+        private void Store(string name, Datum value, string evidenceSource)
         {
             name = Normalize(name);
             CheckName(name);
             if (!data.TryGetValue(name, out DataSlot slot)) slot = Allocate(name);
             slot.value = NormalizeReference(value);
+            CollectEvidence(slot.value, evidenceSource);
             Revision++;
         }
 
@@ -193,7 +196,7 @@ namespace Codetective.Operations
                 CheckOperationAccess(target, operation, locals);
                 Datum[] args = expression.Arguments.Select(e => Evaluate(e, locals, agent)).ToArray();
                 Validate(operation.Parameters, args, operation.Variadic);
-                return PlayerValue(Invoke(target, operation, args, agent), locals);
+                return ObserveEvidence(Invoke(target, operation, args, agent), locals, agent);
             }
             if (path.Length == 1)
             {
@@ -214,12 +217,12 @@ namespace Codetective.Operations
                 if (field != null)
                 {
                     CheckVariableAccess(target, field, locals);
-                    return PlayerValue(target.GetValue(field.Code), locals);
+                    return ObserveEvidence(target.GetValue(field.Code), locals, agent);
                 }
                 Operation property = target.Find(path.Last());
                 if (property == null || !property.Property) throw new CommandException("알 수 없는 데이터/속성입니다: " + path.Last());
                 CheckOperationAccess(target, property, locals);
-                return PlayerValue(Invoke(target, property, Array.Empty<Datum>(), agent), locals);
+                return ObserveEvidence(Invoke(target, property, Array.Empty<Datum>(), agent), locals, agent);
             }
         }
 

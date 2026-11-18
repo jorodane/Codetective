@@ -181,6 +181,8 @@ namespace Codetective.Operations
         public string[] authorities;
         public DataSlot[] data;
         public int nextDataId;
+        public EvidenceRecord[] evidence;
+        public int nextEvidenceNumber;
         public string[] protocols;
         public string[] recordedClues;
         public AgentSnapshot[] agents;

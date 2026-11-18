@@ -237,7 +237,7 @@ namespace Codetective.Gameplay
             MonitorPage definition = page.gameObject.AddComponent<MonitorPage>(); definition.Configure("operations", "작전 도구", false, "kernel");
             OverlayWidgets.Label(page, font, new Vector2(20, -16), new Vector2(1080, 50), "데이터 · Thread · 프로토콜", 32);
             OverlayWidgets.Button(page, font, new Vector2(840, -16), new Vector2(240, 50), "명령창으로", () => host.ShowPage("kernel"));
-            OverlayWidgets.Button(page, font, new Vector2(20, -100), new Vector2(320, 70), "확보 데이터", () => OpenModal("data"));
+            OverlayWidgets.Button(page, font, new Vector2(20, -100), new Vector2(320, 70), "확보 자료", () => host.ShowPage("evidence"));
             OverlayWidgets.Button(page, font, new Vector2(370, -100), new Vector2(320, 70), "Thread 상태 / 배정", () => OpenModal("threads"));
             OverlayWidgets.Button(page, font, new Vector2(720, -100), new Vector2(320, 70), "프로토콜 편집", () => OpenModal("protocol"));
             languageLabel = OverlayWidgets.Button(page, font, new Vector2(20, -210), new Vector2(320, 60), "", ToggleLanguage).GetComponentInChildren<Text>();

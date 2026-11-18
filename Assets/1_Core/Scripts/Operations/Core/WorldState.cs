@@ -80,7 +80,7 @@ namespace Codetective.Operations
             Datum value = Datum.Ref(line.kind, line.fact, line.keyword, line.sentence);
             if (!RecordedClues.Contains(line.fact))
             {
-                Store(line.dataName, value);
+                Store(line.dataName, value, "상담 단서");
                 RecordedClues.Add(line.fact);
                 Facts.Add(line.fact);
                 Report("새 데이터: " + line.dataName + " / " + line.keyword + " — 관련 권한을 확인하세요.");
@@ -121,6 +121,7 @@ namespace Codetective.Operations
                 dayPresentation = new DayPresentationState { day = dayPresentation.day, introduced = dayPresentation.introduced },
                 dayLedger = CopyLedger(dayLedger), dailyRecords = dailyRecords.Values.Select(r => r.Copy()).ToArray(),
                 data = data.Values.Select(CloneSlot).ToArray(), nextDataId = nextDataId, protocols = protocols.Values.Select(p => p.Source).ToArray(),
+                evidence = evidence.Values.Select(e => e.Copy()).ToArray(), nextEvidenceNumber = nextEvidenceNumber,
                 entities = entities.Values.Select(e => new EntitySnapshot
                 {
                     id = e.Id, label = e.Label, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
@@ -186,6 +187,7 @@ namespace Codetective.Operations
             protocols.Clear(); foreach (var pair in restoredProtocols) protocols.Add(pair.Key, pair.Value);
             Threads.Clear(); Threads.AddRange(restoredAgents);
             RestoreReservations(snapshot.confirmedReservations); RestoreClinic(snapshot); RestoreDailyRecord(snapshot);
+            RestoreEvidence(snapshot);
             Revision++;
         }
 
