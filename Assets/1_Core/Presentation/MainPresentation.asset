@@ -23,15 +23,26 @@ MonoBehaviour:
     fileID: 11400000
     guid: 661a5a09d0b7467e96d4db1c52e05fd0
     type: 2
-  menu: &id001
+  menu:
     fileID: 11400000
     guid: 52023de510124aa6906321ff10ef2016
     type: 2
-  day: *id001
-  visit: *id001
+  day:
+    fileID: 11400000
+    guid: 52023de510124aa6906321ff10ef2016
+    type: 2
+  visit:
+    fileID: 11400000
+    guid: 52023de510124aa6906321ff10ef2016
+    type: 2
   scene:
     fileID: 11400000
     guid: b785c871a3f64f628bf90a579c7f1b31
     type: 2
   terminalFocusOpacity: 0.995
   dayCardSeconds: 1.3
+  dayTitleWidth: 0.52
+  dayTitleFadeSeconds: 0.4
+  daySubtitleDelay: 0.25
+  daySubtitleFadeSeconds: 0.4
+  dayTextFadeSeconds: 0.9

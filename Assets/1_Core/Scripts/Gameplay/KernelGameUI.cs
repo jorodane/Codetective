@@ -50,12 +50,14 @@ namespace Codetective.Gameplay
         private int documentRevision;
         private GameObject nextDayButton;
         private TerminalDayView clinicDay;
+        private DayStartPresentation dayStart;
         private CanvasGroup interfaceInteraction;
         private GameObject saveNoticeRoot;
         private Text saveNotice;
         private float saveNoticeUntil;
         public bool IsInitialized { get; private set; }
         public bool SummaryVisible => clinicDay != null && clinicDay.SummaryVisible;
+        public bool DayStartVisible => dayStart != null && dayStart.IsVisible;
         public bool IsCompositionProtected => (protocolSource is CompletingInputField source && source.isFocused && source.IsCompositionProtected) ||
             (arguments is CompletingInputField args && args.isFocused && args.IsCompositionProtected);
 
@@ -97,6 +99,7 @@ namespace Codetective.Gameplay
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
             BuildSaveNotice();
+            dayStart = gameObject.AddComponent<DayStartPresentation>(); dayStart.Initialize(this.font, game.Transitions != null ? game.Transitions.Settings : null);
             if (game.Monitor != null)
             {
                 var dayRoot = new GameObject("TerminalDay", typeof(RectTransform)); dayRoot.transform.SetParent(game.Monitor.transform, false); dayRoot.layer = 5;
@@ -110,7 +113,7 @@ namespace Codetective.Gameplay
         {
             if (!IsInitialized) return;
             if (saveNoticeRoot.activeSelf && Time.unscaledTime >= saveNoticeUntil) saveNoticeRoot.SetActive(false);
-            bool inMenu = inspection.Mode == InspectionMode.Menu || inspection.PresentingOnTerminal;
+            bool inMenu = inspection.Mode == InspectionMode.Menu || inspection.PresentingOnTerminal || DayStartVisible || game.IsDateTransitioning;
             interfaceInteraction.alpha = inMenu ? 0 : 1;
             interfaceInteraction.blocksRaycasts = !inMenu;
             interfaceInteraction.interactable = !game.IsDateTransitioning && !game.IsVisitPresenting && !game.IsViewTransitioning && !inMenu;
@@ -318,6 +321,7 @@ namespace Codetective.Gameplay
             saveNotice.text = text; saveNoticeUntil = Time.unscaledTime + seconds; saveNoticeRoot.SetActive(true);
         }
         public void ShowDayIntro(string title, string subtitle) { clinicDay?.ShowIntro(title, subtitle); }
+        public IEnumerator PlayDayStart(int day, string subtitle, Action textFading) => dayStart.Play(day, subtitle, textFading);
         public void HideDay() { clinicDay?.Hide(); }
         public void ShowDaySummary(DailyRecord record) { HideContext(); clinicDay?.ShowSummary(record); }
         public void CloseDaySummary() { clinicDay?.Hide(); }

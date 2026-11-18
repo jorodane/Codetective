@@ -347,7 +347,7 @@ namespace Codetective.Tests.Operations
         {
             var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
             KernelRuntime runtime = scenario.CreateRuntime();
-            Assert.That(runtime.DaySubtitle, Is.EqualTo("문이 열리는 시간"));
+            Assert.That(runtime.DaySubtitle, Is.EqualTo("Kernel 프로젝트의 시작"));
             Assert.That(runtime.DailyAppointments.Select(a => a.startMinute), Is.EqualTo(new[] { 540, 660, 840 }));
             runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro"); runtime.MarkDayIntroSeen();
             runtime.Tick(1); AppointmentProgress visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase);

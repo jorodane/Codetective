@@ -309,6 +309,13 @@ namespace Codetective.Interaction
             if (ChangeAngle(overviewAngle, () => { DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); }))
                 activeTerminal?.SetInteractionEnabled(false);
         }
+        public bool SnapToOverview()
+        {
+            if (flow.Mode == InspectionMode.Menu || overviewAngle == null || views.AngleSet == null) return false;
+            Transitions?.CancelAngle();
+            if (!views.TryGoToIndex(views.AngleSet.IndexOf(overviewAngle), true)) return false;
+            DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); return true;
+        }
 
         public void HandleEscape()
         {

@@ -21,7 +21,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: ''
   plan:
     day: 1
-    subtitle: 문이 열리는 시간
+    subtitle: Kernel 프로젝트의 시작
     appointments:
     - id: morning
       profileId: client

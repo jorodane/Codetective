@@ -47,7 +47,7 @@ namespace Codetective.Operations
             }
         }
 
-        public void NextDay()
+        public void NextDay(bool deferMailUntilIntro = false)
         {
             if (!IsDayEnded) throw new CommandException("18시 이후 다음 날로 진행할 수 있습니다.");
             FinalizeDay();
@@ -55,7 +55,7 @@ namespace Codetective.Operations
             Minute = 540;
             IsDayEnded = false;
             ResponseMinutes = 0;
-            dayPresentation = new DayPresentationState { day = Day };
+            dayPresentation = new DayPresentationState { day = Day, mailDeferred = deferMailUntilIntro };
             InitializeClinicDay(); InitializeDailyRecord();
             DeliverNewspaper();
             Report("DAY " + Day + " — 09:00 업무 시작. 현장 상황이 이어집니다.");
@@ -118,7 +118,7 @@ namespace Codetective.Operations
                 quests = quests.Values.Select(q => q.Copy()).ToArray(),
                 newspapers = editions.Values.Select(e => e.Copy()).ToArray(),
                 clinicDay = clinicDay?.Copy(), heardConsultationLines = heardConsultationLines.ToArray(),
-                dayPresentation = new DayPresentationState { day = dayPresentation.day, introduced = dayPresentation.introduced },
+                dayPresentation = new DayPresentationState { day = dayPresentation.day, introduced = dayPresentation.introduced, mailDeferred = dayPresentation.mailDeferred },
                 dayLedger = CopyLedger(dayLedger), dailyRecords = dailyRecords.Values.Select(r => r.Copy()).ToArray(),
                 data = data.Values.Select(CloneSlot).ToArray(), nextDataId = nextDataId, protocols = protocols.Values.Select(p => p.Source).ToArray(),
                 evidence = evidence.Values.Select(e => e.Copy()).ToArray(), nextEvidenceNumber = nextEvidenceNumber,

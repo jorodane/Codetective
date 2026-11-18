@@ -14,5 +14,10 @@ namespace Codetective.Gameplay
         public TransitionPreset scene;
         [Range(0, 1)] public float terminalFocusOpacity = 0.995f;
         [Min(0)] public float dayCardSeconds = 1.3f;
+        [Range(0.3f, 0.8f)] public float dayTitleWidth = 0.52f;
+        [Min(0)] public float dayTitleFadeSeconds = 0.4f;
+        [Min(0)] public float daySubtitleDelay = 0.25f;
+        [Min(0)] public float daySubtitleFadeSeconds = 0.4f;
+        [Min(0)] public float dayTextFadeSeconds = 0.9f;
     }
 }

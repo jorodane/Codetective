@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Codetective.Operations
 {
-    [Serializable] public sealed class DayPresentationState { public int day; public bool introduced; }
+    [Serializable] public sealed class DayPresentationState { public int day; public bool introduced, mailDeferred; }
     [Serializable] public sealed class DailyLedger
     {
         public int day;
@@ -31,7 +31,11 @@ namespace Codetective.Operations
         private DayPresentationState dayPresentation = new DayPresentationState { day = 1 };
         private readonly Dictionary<int, DailyRecord> dailyRecords = new Dictionary<int, DailyRecord>();
         public bool DayIntroSeen => dayPresentation.day == Day && dayPresentation.introduced;
-        public void MarkDayIntroSeen() { dayPresentation = new DayPresentationState { day = Day, introduced = true }; NarrativeUpdated(); }
+        public void MarkDayIntroSeen()
+        {
+            if (DayIntroSeen && !DayMailDeferred) return;
+            dayPresentation = new DayPresentationState { day = Day, introduced = true }; Revision++; NarrativeUpdated();
+        }
         public void InitializeDailyRecord()
         {
             if (dayLedger?.day == Day) return;
@@ -56,7 +60,7 @@ namespace Codetective.Operations
         private void RestoreDailyRecord(KernelSnapshot snapshot)
         {
             dayLedger = CopyLedger(snapshot.dayLedger); InitializeDailyRecord();
-            dayPresentation = snapshot.dayPresentation != null ? new DayPresentationState { day = snapshot.dayPresentation.day, introduced = snapshot.dayPresentation.introduced } :
+            dayPresentation = snapshot.dayPresentation != null ? new DayPresentationState { day = snapshot.dayPresentation.day, introduced = snapshot.dayPresentation.introduced, mailDeferred = snapshot.dayPresentation.mailDeferred } :
                 new DayPresentationState { day = Day, introduced = true }; // Existing saves have already started their day.
             dailyRecords.Clear(); foreach (DailyRecord record in snapshot.dailyRecords ?? Array.Empty<DailyRecord>()) dailyRecords.Add(record.day, record.Copy());
         }

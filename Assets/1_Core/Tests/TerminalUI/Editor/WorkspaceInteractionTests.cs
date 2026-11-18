@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using System.Reflection;
 using Codetective.CameraViews;
@@ -17,6 +18,38 @@ namespace Codetective.Terminal.Tests.UI
 {
     public sealed class WorkspaceInteractionTests
     {
+        private static void Drain(IEnumerator routine)
+        { while (routine.MoveNext()) if (routine.Current is IEnumerator nested) Drain(nested); }
+        [Test]
+        public void DayStartsOverTheOfficeAndDeliversMailOnlyAfterBothTitleLinesAppear()
+        {
+            var system = new GameObject("Morning sequence"); system.SetActive(false);
+            var settings = ScriptableObject.CreateInstance<Codetective.Gameplay.PresentationSettings>();
+            GameObject card = null;
+            try
+            {
+                settings.dayTitleFadeSeconds = settings.daySubtitleDelay = settings.daySubtitleFadeSeconds = settings.dayCardSeconds = settings.dayTextFadeSeconds = 0;
+                Component sequence = system.AddComponent(FindType("Codetective.Gameplay.DayStartPresentation"));
+                Call(sequence, "Initialize", Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), settings);
+                card = (GameObject)sequence.GetType().GetField("root", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sequence);
+                Assert.That(card.GetComponentsInChildren<Image>(true), Is.Empty); Assert.That(card.GetComponent<GraphicRaycaster>(), Is.Null);
+                Text title = (Text)sequence.GetType().GetField("dayText", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sequence);
+                Assert.That(title.rectTransform.anchorMax.x - title.rectTransform.anchorMin.x, Is.EqualTo(0.52f).Within(0.001f));
+                KernelRuntime runtime = ClinicScenario.Create(); runtime.RegisterMail(new StoryMail { id = "morning", mailbox = Mailbox.Kernel, subject = "새 임무" }); runtime.DeferDayMailUntilIntro();
+                int deliveries = 0;
+                Action fading = () =>
+                {
+                    foreach (string field in new[] { "dayAlpha", "subtitleAlpha" })
+                        Assert.That(((CanvasGroup)sequence.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sequence)).alpha, Is.EqualTo(1));
+                    Assert.That(title.text, Is.EqualTo("DAY 1")); Assert.That(card.activeSelf, Is.True);
+                    Assert.That(runtime.Inbox(Mailbox.Kernel), Is.Empty); runtime.MarkDayIntroSeen(); deliveries++;
+                };
+                Drain((IEnumerator)Call(sequence, "Play", 1, "Kernel 프로젝트의 시작", fading));
+                Assert.That(deliveries, Is.EqualTo(1)); Assert.That(card.activeSelf, Is.False);
+                Assert.That(runtime.UnreadMailCount(Mailbox.Kernel), Is.EqualTo(1)); Assert.That(runtime.IsMailRead("morning"), Is.False);
+            }
+            finally { if (card != null) Object.DestroyImmediate(card); Object.DestroyImmediate(system); Object.DestroyImmediate(settings); }
+        }
         private static Type FindType(string name) => AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(name)).First(t => t != null);
         private static void Set(object target, string name, object value) => target.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).SetValue(target, value);
         private static object Call(object target, string name, params object[] args) => target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
@@ -317,6 +350,11 @@ namespace Codetective.Terminal.Tests.UI
             }
             finally
             {
+                if (ui != null)
+                {
+                    Component morning = (Component)ui.GetType().GetField("dayStart", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(ui);
+                    if (morning != null) Object.DestroyImmediate((GameObject)morning.GetType().GetField("root", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(morning));
+                }
                 if (ui != null) foreach (string name in new[] { "root", "saveNoticeRoot" })
                 {
                     var field = ui.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);

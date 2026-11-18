@@ -108,6 +108,7 @@ namespace Codetective.Gameplay
             ClinicScenario.EnsureKernelProfile(Runtime);
             int preferredLanguage = PlayerPrefs.GetInt(CommandLanguagePreference, (int)(scenario != null ? scenario.commandLanguage : CommandLocale.Korean));
             if (Enum.IsDefined(typeof(CommandLocale), preferredLanguage)) Runtime.Language = (CommandLocale)preferredLanguage;
+            if (IsSessionActive) Runtime.DeferDayMailUntilIntro();
             Runtime.SceneActionRequested += SceneAction;
             Runtime.DayEnded += AutoSave;
             Runtime.NarrativeChanged += QueueNarrativeSave;
@@ -355,28 +356,37 @@ namespace Codetective.Gameplay
         {
             IsDateTransitioning = true; inspection.NavigationBlocked = true;
             while (Transitions.IsBusy) yield return null;
-            ui.HideContext(); inspection.BeginTerminalPresentation(false);
-            ui.ShowDayIntro("DAY " + Runtime.Day, Runtime.DaySubtitle + "\n09:00  업무 시작");
-            yield return Transitions.Play(Transitions.Settings?.day, TransitionStyle.TerminalFade);
-            yield return SceneTransitionController.Hold(Transitions.Settings != null ? Transitions.Settings.dayCardSeconds : 1.3f);
-            Runtime.MarkDayIntroSeen(); AutoSave();
-            ui.HideDay(); inspection.EndTerminalPresentation(); inspection.NavigationBlocked = false; IsDateTransitioning = false;
+            ui.HideContext(); ui.HideDay(); inspection.SnapToOverview(); Runtime.DeferDayMailUntilIntro();
+            bool receivedMail = false;
+            yield return ui.PlayDayStart(Runtime.Day, Runtime.DaySubtitle, () =>
+            {
+                StoryMail[] incoming = Runtime.DeferredDayMail.ToArray();
+                Runtime.MarkDayIntroSeen();
+                if (incoming.Length > 0)
+                {
+                    int kernel = incoming.Count(m => m.mailbox == Mailbox.Kernel), clinic = incoming.Length - kernel;
+                    string subject = incoming[0].subject + (incoming.Length > 1 ? " 외 " + (incoming.Length - 1) + "건" : "");
+                    ui.ShowDayIntro("새 메일 수신", "Kernel " + kernel + "건 / 상담소 " + clinic + "건\n" + subject);
+                    receivedMail = true;
+                }
+                AutoSave();
+            });
+            if (receivedMail) yield return SceneTransitionController.Hold(0.4f);
+            ui.HideDay(); inspection.NavigationBlocked = false; IsDateTransitioning = false;
         }
         private IEnumerator ChangeDate()
         {
-            if (ui.SummaryVisible) CloseDaySummary();
             IsDateTransitioning = true; inspection.NavigationBlocked = true;
             ui.HideContext(); Carry.PutDown(); inspection.BeginTerminalPresentation(false);
             ui.ShowDayIntro("업무 종료", "다음 날을 준비합니다.");
             yield return Transitions.Play(Transitions.Settings?.day, TransitionStyle.TerminalFade, () =>
             {
+                ui.HideDay(); inspection.EndTerminalPresentation(); inspection.NavigationBlocked = true;
                 Carry.ReturnToDesk(newspaper.Item); Runtime.SetItemStorage(newspaper.Item.Id, null);
-                Runtime.NextDay(); newspaper.Refresh(Runtime); AutoSave();
-                ui.ShowDayIntro("DAY " + Runtime.Day, Runtime.DaySubtitle + "\n09:00  업무 시작");
+                Runtime.NextDay(true); newspaper.Refresh(Runtime);
+                inspection.SnapToOverview(); RefreshRoomTime(); AutoSave();
             });
-            yield return SceneTransitionController.Hold(Transitions.Settings != null ? Transitions.Settings.dayCardSeconds : 1.3f);
-            Runtime.MarkDayIntroSeen(); AutoSave();
-            ui.HideDay(); inspection.EndTerminalPresentation(); inspection.NavigationBlocked = false; IsDateTransitioning = false;
+            yield return IntroduceDay();
         }
         private void InitializeDrawers()
         {

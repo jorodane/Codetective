@@ -71,7 +71,17 @@ namespace Codetective.Operations
         public int UnreadMailCount(Mailbox box) => Inbox(box).Count(m => !IsMailRead(m.id));
         public bool IsMailRead(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.read;
         public bool IsMailAccepted(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.accepted;
-        private bool MailAvailable(StoryMail message) => message.day <= Day && (IsMailRead(message.id) || (message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this)));
+        public bool DayMailDeferred => dayPresentation.day == Day && !dayPresentation.introduced && dayPresentation.mailDeferred;
+        public void DeferDayMailUntilIntro()
+        {
+            if (IsDayEnded || DayIntroSeen || DayMailDeferred) return;
+            dayPresentation = new DayPresentationState { day = Day, mailDeferred = true }; Revision++; NarrativeUpdated();
+        }
+        public IReadOnlyList<StoryMail> DeferredDayMail => DayMailDeferred ? mail.Values
+            .Where(m => m.day == Day && !IsMailRead(m.id) && MailConditionsMet(m))
+            .OrderByDescending(m => m.mailbox).ThenBy(m => m.id, StringComparer.Ordinal).Select(m => m.Copy()).ToArray() : Array.Empty<StoryMail>();
+        private bool MailConditionsMet(StoryMail message) => message.day <= Day && (IsMailRead(message.id) || (message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this)));
+        private bool MailAvailable(StoryMail message) => MailConditionsMet(message) && (!DayMailDeferred || message.day != Day || IsMailRead(message.id));
         public void RegisterMail(StoryMail message)
         {
             if (message == null || string.IsNullOrWhiteSpace(message.id) || message.day < 1 || mail.ContainsKey(message.id))
