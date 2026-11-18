@@ -31,6 +31,7 @@ namespace Codetective.Interaction
         public bool HandleEscape() => view != null && view.HandleEscape();
         public void Hide() { if (view != null) view.Hide(); }
         public void ShowFeedback(string value) { if (view != null) view.ShowFeedback(value); }
+        public void RefreshSaveList() { if (view != null) view.RefreshSaveList(); }
         private void OnDestroy()
         { if (view != null) { if (Application.isPlaying) Destroy(view.gameObject); else DestroyImmediate(view.gameObject); } }
     }

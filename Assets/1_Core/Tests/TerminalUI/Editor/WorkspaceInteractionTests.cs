@@ -272,6 +272,12 @@ namespace Codetective.Terminal.Tests.UI
                 Set(game, "<Carry>k__BackingField", carry);
                 ui = system.GetComponent(FindType("Codetective.Gameplay.KernelGameUI"));
                 Call(ui, "Initialize", game, inspection, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+                Call(ui, "ShowSaveStatus", "빠른 저장 중...", 2f);
+                GameObject notice = (GameObject)ui.GetType().GetField("saveNoticeRoot", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ui);
+                Assert.That(notice.activeSelf, Is.True); Assert.That(notice.GetComponentsInChildren<GraphicRaycaster>(), Is.Empty);
+                Assert.That(notice.GetComponentsInChildren<Graphic>().All(g => !g.raycastTarget), Is.True);
+                Assert.That(notice.GetComponentInChildren<Text>().text, Is.EqualTo("빠른 저장 중..."));
+                Assert.That(notice.transform.GetChild(0).GetComponent<RectTransform>().anchorMax, Is.EqualTo(Vector2.one));
                 HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("paper", "신문", HeldItemUse.Newspaper);
                 Component document = paper.AddComponent(FindType("Codetective.Gameplay.PaperDocument"));
                 Call(document, "Initialize", item, carry, navigation.GetComponent<Camera>(), Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), new Vector2(0.44f, 0.28f));
@@ -306,7 +312,7 @@ namespace Codetective.Terminal.Tests.UI
             }
             finally
             {
-                if (ui != null) foreach (string name in new[] { "root", "dateRoot" })
+                if (ui != null) foreach (string name in new[] { "root", "dateRoot", "saveNoticeRoot" })
                 {
                     var field = ui.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
                     Object.DestroyImmediate((GameObject)field.GetValue(ui)); field.SetValue(ui, null);

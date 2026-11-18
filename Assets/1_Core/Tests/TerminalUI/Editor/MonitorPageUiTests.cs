@@ -46,15 +46,14 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void TitleLocksNavigationAndKeepsTheCommandDraftOutsidePageHistory()
         {
-            host.ShowPage("kernel"); input.SetTextWithoutNotify("save 작성중"); bool back = host.CanGoBack; int starts = 0, continues = 0;
-            var menu = SystemMenu(new SystemMenuActions { NewGame = () => starts++, Continue = () => continues++,
-                ReadSave = () => new SystemSaveInfo { Description = "저장된 기록이 없습니다." } });
+            host.ShowPage("kernel"); input.SetTextWithoutNotify("save 작성중"); bool back = host.CanGoBack; int starts = 0;
+            var menu = SystemMenu(new SystemMenuActions { NewGame = () => starts++, ReadSaves = () => Array.Empty<SystemSaveInfo>() });
             menu.Show(true);
             Assert.That(menu.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text), Is.EqualTo(new[] { "이어하기", "처음부터", "설정", "끝내기" }));
             Assert.That(menu.GetComponentInParent<Canvas>(), Is.SameAs(canvas.GetComponent<Canvas>()));
             Assert.That(terminal.PageVisible, Is.False); Assert.That(host.TryNavigate("mail"), Is.False); Assert.That(host.TryCycleTab(1), Is.False);
             host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel")); Assert.That(host.CanGoBack, Is.EqualTo(back));
-            Assert.That(MenuButton(menu, "이어하기").interactable, Is.False); MenuButton(menu, "이어하기").onClick.Invoke(); Assert.That(continues, Is.Zero);
+            Assert.That(MenuButton(menu, "이어하기").interactable, Is.False); MenuButton(menu, "이어하기").onClick.Invoke(); Assert.That(MenuButton(menu, "처음부터"), Is.Not.Null);
             MenuButton(menu, "처음부터").onClick.Invoke(); Assert.That(starts, Is.EqualTo(1));
             MenuButton(menu, "설정").onClick.Invoke(); Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.HandleEscape(), Is.True);
             menu.Hide(); Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel")); Assert.That(terminal.PageVisible, Is.True);
@@ -63,18 +62,52 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void PauseProvidesTheSaveSlotGuideAndSettingsWithoutExposingOtherPages()
         {
-            int loads = 0, resumes = 0, titles = 0;
-            var menu = SystemMenu(new SystemMenuActions { Load = () => loads++, Resume = () => resumes++, Title = () => titles++,
-                ReadSave = () => new SystemSaveInfo { Available = true, Description = "DAY 3 / 10:00 기록" } });
+            string loaded = null; int saves = 0, resumes = 0, titles = 0;
+            var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, Save = () => saves++, Resume = () => resumes++, Title = () => titles++,
+                ReadSaves = () => new[] { new SystemSaveInfo { Id = "latest", Available = true, Label = "Auto · DAY 3 / 10:00", Description = "상담 중\n저장: 2026-11-18 10:00:00" },
+                    new SystemSaveInfo { Id = "earlier", Available = true, Label = "수동 저장 · DAY 2 / 09:00", Description = "상담 대기\n저장: 2026-11-17 09:00:00" } } });
             menu.Show(false);
             Assert.That(menu.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text),
-                Is.EqualTo(new[] { "계속하기", "불러오기", "가이드", "설정", "타이틀 화면" }));
+                Is.EqualTo(new[] { "계속하기", "저장하기", "불러오기", "가이드", "설정", "타이틀 화면" }));
+            MenuButton(menu, "저장하기").onClick.Invoke(); Assert.That(saves, Is.EqualTo(1));
             MenuButton(menu, "불러오기").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("DAY 3 / 10:00")), Is.True);
-            MenuButton(menu, "이 기록 불러오기").onClick.Invoke(); Assert.That(loads, Is.EqualTo(1)); Assert.That(menu.HandleEscape(), Is.True);
+            menu.SelectSave("earlier"); MenuButton(menu, "이 기록 불러오기").onClick.Invoke(); Assert.That(loaded, Is.EqualTo("earlier")); Assert.That(menu.HandleEscape(), Is.True);
             MenuButton(menu, "가이드").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("Q 전체 보기")), Is.True);
             Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.HandleEscape(), Is.False);
             MenuButton(menu, "계속하기").onClick.Invoke(); Assert.That(resumes, Is.EqualTo(1));
             Button title = MenuButton(menu, "타이틀 화면"); menu.Hide(); title.onClick.Invoke(); Assert.That(titles, Is.Zero);
+        }
+        [Test]
+        public void ContinueOpensTenScrollableRecordsAndOnlyLoadsTheChosenAvailableId()
+        {
+            string loaded = null;
+            var slots = Enumerable.Range(0, 10).Select(i => new SystemSaveInfo { Id = "save" + i, Available = i != 2,
+                Label = (i % 2 == 0 ? "Auto" : "수동 저장") + " · DAY " + (10 - i), Description = "상담 중\n저장: 실제 시각 " + i }).ToArray();
+            var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, ReadSaves = () => slots }); menu.Show(true);
+            MenuButton(menu, "이어하기").onClick.Invoke(); Assert.That(loaded, Is.Null);
+            ScrollRect scroll = menu.GetComponentInChildren<CrtScrollRect>();
+            Assert.That(scroll.vertical, Is.True); Assert.That(scroll.content.rect.height, Is.GreaterThan(scroll.viewport.rect.height));
+            Assert.That(scroll.content.GetComponentsInChildren<Button>().Length, Is.EqualTo(10));
+            slots = new[] { new SystemSaveInfo { Id = "quick", Available = true, Label = "빠른 저장", Description = "새 기록\n저장: 방금" } }.Concat(slots.Take(9)).ToArray();
+            menu.RefreshSaveList(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("빠른 저장")), Is.True);
+            menu.SelectSave("save8"); menu.SelectSave("save2"); MenuButton(menu, "이 기록 불러오기").onClick.Invoke();
+            Assert.That(loaded, Is.EqualTo("save8")); Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.IsTitle, Is.True);
+        }
+        [Test]
+        public void HistoryEnvelopesPreservePlayableSnapshotsThroughUnityJsonSerialization()
+        {
+            string directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "codetective-unity-saves-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var history = new SaveHistory(directory, record => JsonUtility.ToJson(record), json => JsonUtility.FromJson<GameSaveRecord>(json));
+                runtime.Store("record", Datum.Ref(DataKind.Document, "case_record", "사건 기록", "인용: \"단서\"\n두 번째 줄"));
+                GameSaveSlot older = history.Save(JsonUtility.ToJson(runtime.Capture()), GameSaveKind.Manual, runtime.Day, runtime.Minute, "상담 중");
+                runtime.Free("record"); history.Save(JsonUtility.ToJson(runtime.Capture()), GameSaveKind.Quick, runtime.Day, runtime.Minute, "정리 중");
+                var restored = ClinicScenario.Create(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(history.Read(older.Id).snapshot));
+                Assert.That(restored.Data["record"].value.id, Is.EqualTo("case_record")); Assert.That(restored.Evidence.Single().Description, Does.Contain("\"단서\"\n두 번째 줄"));
+                Assert.That(history.Slots.Count, Is.EqualTo(2)); Assert.That(history.Slots[0].Record.kind, Is.EqualTo(GameSaveKind.Quick));
+            }
+            finally { if (System.IO.Directory.Exists(directory)) System.IO.Directory.Delete(directory, true); }
         }
         [Test]
         public void ScheduleHostsWaitingAndFinishingAndBlocksActionsOutsideTodaysActivePage()

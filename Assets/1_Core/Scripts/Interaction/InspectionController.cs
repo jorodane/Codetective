@@ -48,6 +48,7 @@ namespace Codetective.Interaction
         public event Action<CameraAnglePreset> AngleEntered;
         public event Action OverviewEntered;
         public Func<bool> BackHandler { get; set; }
+        public Action QuickSaveRequested { get; set; }
         public Func<Vector2, bool> PointerBlocked { get; set; }
         private bool modalInputBlocked;
         public bool ModalInputBlocked
@@ -117,6 +118,8 @@ namespace Codetective.Interaction
                 HandleEscape();
                 return;
             }
+            if (keyboard != null && keyboard.f5Key.wasPressedThisFrame && !TextInputFocused)
+            { QuickSaveRequested?.Invoke(); return; }
             if (flow.Mode == InspectionMode.Menu)
                 return;
             if (keyboard != null && keyboard.qKey.wasPressedThisFrame && !TextInputFocused)
@@ -140,6 +143,7 @@ namespace Codetective.Interaction
             {
                 for (int i = 0; i < Mathf.Min(12, views.AngleSet.Count); i++)
                 {
+                    if (i == 4) continue; // F5 belongs to quick save, never a camera angle.
                     if (!keyboard[(Key)((int)Key.F1 + i)].wasPressedThisFrame)
                         continue;
                     InspectAngle(views.AngleSet.Get(i));

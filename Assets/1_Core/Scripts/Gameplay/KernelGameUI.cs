@@ -54,6 +54,9 @@ namespace Codetective.Gameplay
         private Text dateSubtitle;
         private ClinicDayOverlay clinicDay;
         private CanvasGroup interfaceInteraction;
+        private GameObject saveNoticeRoot;
+        private Text saveNotice;
+        private float saveNoticeUntil;
         public bool IsInitialized { get; private set; }
         public bool SummaryVisible => clinicDay != null && clinicDay.SummaryVisible;
         public bool IsCompositionProtected => (protocolSource is CompletingInputField source && source.isFocused && source.IsCompositionProtected) ||
@@ -92,11 +95,12 @@ namespace Codetective.Gameplay
             if (dialogue == null) dialogue = gameObject.AddComponent<ConsultationOverlay>();
             dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation);
             BuildItemControls();
-            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 (입력 중 제외) · ESC 메뉴", 14);
+            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 · F5 빠른 저장 (입력 중 제외) · ESC 메뉴", 14);
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
             BuildDateTransition();
+            BuildSaveNotice();
             clinicDay = gameObject.AddComponent<ClinicDayOverlay>(); clinicDay.Initialize(game, root.transform, this.font);
             IsInitialized = true;
             if (context != null) ShowContext(context);
@@ -105,6 +109,7 @@ namespace Codetective.Gameplay
         private void Update()
         {
             if (!IsInitialized) return;
+            if (saveNoticeRoot.activeSelf && Time.unscaledTime >= saveNoticeUntil) saveNoticeRoot.SetActive(false);
             bool inMenu = inspection.Mode == InspectionMode.Menu;
             interfaceInteraction.alpha = inMenu ? 0 : 1;
             interfaceInteraction.blocksRaycasts = !inMenu;
@@ -312,6 +317,22 @@ namespace Codetective.Gameplay
             dateSubtitle.alignment = TextAnchor.MiddleCenter;
             dateFade = dateRoot.GetComponent<CanvasGroup>(); dateFade.alpha = 0; dateRoot.SetActive(false);
         }
+        private void BuildSaveNotice()
+        {
+            saveNoticeRoot = new GameObject("SaveNotification", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
+            Canvas canvas = saveNoticeRoot.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 3000;
+            CanvasScaler scaler = saveNoticeRoot.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1280, 720); scaler.matchWidthOrHeight = 0.5f;
+            RectTransform box = Box("SaveStatus", saveNoticeRoot.transform, new Vector2(-16, -14), new Vector2(300, 42), new Vector2(1, 1));
+            box.GetComponent<Image>().raycastTarget = false;
+            saveNotice = Label(box, new Vector2(12, -6), new Vector2(276, 30), "", 20); saveNotice.alignment = TextAnchor.MiddleRight;
+            saveNoticeRoot.SetActive(false);
+        }
+        public void ShowSaveStatus(string text, float seconds)
+        {
+            if (!IsInitialized || saveNoticeRoot == null) return;
+            saveNotice.text = text; saveNoticeUntil = Time.unscaledTime + seconds; saveNoticeRoot.SetActive(true);
+        }
         public IEnumerator FadeDate(float from, float to, float duration, string label, string subtitle = "")
         {
             dateRoot.SetActive(true); dateLabel.text = label; dateSubtitle.text = subtitle;
@@ -380,7 +401,7 @@ namespace Codetective.Gameplay
             {
                 ExecutionResult saved = game.Runtime.SaveProtocol(protocolSource.text);
                 feedback.text = saved.Message;
-                if (saved.Success) game.SaveNow();
+                if (saved.Success) game.AutoSave();
             });
             AddButton(new Vector2(195, -452), new Vector2(160, 40), "복사본 테스트", () =>
             {
@@ -574,6 +595,6 @@ namespace Codetective.Gameplay
             return text;
         }
 
-        private void OnDestroy() { IsInitialized = false; if (root != null) Destroy(root); if (dateRoot != null) Destroy(dateRoot); }
+        private void OnDestroy() { IsInitialized = false; if (root != null) Destroy(root); if (dateRoot != null) Destroy(dateRoot); if (saveNoticeRoot != null) Destroy(saveNoticeRoot); }
     }
 }
