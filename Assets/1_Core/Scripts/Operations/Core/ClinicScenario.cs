@@ -50,11 +50,11 @@ namespace Codetective.Operations
             var archive = new Entity("archive", "현장 자료실", archiveType) { Aliases = new[] { "자료실" } };
             archiveType.Operations.Add(new Operation { Code = "inspect", Label = "현장 자료 조사", Aliases = new[] { "조사" }, Minutes = 5,
                 ReturnKind = DataKind.Document, Access = new AccessRule { Facts = new[] { "basement_noise" } },
-                Invoke = c => { c.Runtime.Facts.Add("archive_inspected"); return Datum.Ref(DataKind.Document, "archive_record", "야간 출입 기록", "상담 진술과 대조할 수 있는 현장 자료"); } });
+                Invoke = c => { c.Runtime.GrantKnowledge(new[] { "archive_inspected" }, Array.Empty<string>()); return Datum.Ref(DataKind.Document, "archive_record", "야간 출입 기록", "상담 진술과 대조할 수 있는 현장 자료"); } });
             archiveType.Operations.Add(new Operation { Code = "analyze", Label = "자료 분석", Aliases = new[] { "분석" }, Minutes = 8,
                 Parameters = new[] { new Parameter("document", DataKind.Document) }, ReturnKind = DataKind.Analysis,
                 Access = new AccessRule { Facts = new[] { "archive_inspected" }, RequiredData = DataKind.Document },
-                Invoke = c => { c.Runtime.Facts.Add("record_analyzed"); return Datum.Ref(DataKind.Analysis, "record_analysis", "출입 기록 분석", c.Arguments[0].label + " 분석 완료"); } });
+                Invoke = c => { c.Runtime.GrantKnowledge(new[] { "record_analyzed" }, Array.Empty<string>()); return Datum.Ref(DataKind.Analysis, "record_analysis", "출입 기록 분석", c.Arguments[0].label + " 분석 완료"); } });
             ClinicCommandNames.Apply(archive);
             runtime.Register(archive);
             EntitySchema clientType = Define(runtime, "Client", "상담손님형", DataKind.Person);
@@ -64,10 +64,10 @@ namespace Codetective.Operations
             clientType.Operations.Add(new Operation { Code = "showEvidence", Label = "분석 결과를 보여준다", Aliases = new[] { "증거를보여준다" },
                 Parameters = new[] { new Parameter("evidence", DataKind.Analysis) }, ReturnKind = DataKind.Statement,
                 Access = new AccessRule { Facts = new[] { "record_analyzed" } },
-                Invoke = c => { c.Runtime.Facts.Add("testimony_crosschecked"); return Datum.Ref(DataKind.Statement, "revised_statement", "추가 진술", "분석 결과를 제시하여 새로운 진술을 확보했습니다."); } });
+                Invoke = c => { c.Runtime.GrantKnowledge(new[] { "testimony_crosschecked" }, Array.Empty<string>()); return Datum.Ref(DataKind.Statement, "revised_statement", "추가 진술", "분석 결과를 제시하여 새로운 진술을 확보했습니다."); } });
             ClinicCommandNames.Apply(client);
             runtime.Register(client);
-            clientType.Variables.Add(new VariableDefinition { Code = "occupation", Label = "직업", Kind = DataKind.Text, DefaultValue = Datum.Text("회사원"), Names = BuiltinSchemas.Ko("직업") });
+            clientType.Variables.Add(new VariableDefinition { Code = "occupation", Label = "직업", Kind = DataKind.Text, DefaultValue = Datum.Text("회사원"), Overrides = true, Names = BuiltinSchemas.Ko("직업") });
             clientType.Variables.Add(new VariableDefinition { Code = "internalAssessment", Label = "내부 평가", Kind = DataKind.Text,
                 DefaultValue = Datum.Text("현장지원과 전용 기록"), Access = new AccessRule { PlayerAccess = PlayerAccess.Internal } });
             clientType.Operations.Add(new OperationDefinition { Code = "askAboutFoundation", Label = "신문의 재단 기사에 대해 묻는다", Names = BuiltinSchemas.Ko("재단에대하여"),
@@ -97,6 +97,7 @@ namespace Codetective.Operations
                 runtime.Register(entity, "Thread" + id.Substring(6));
             }
             runtime.NotifySchemaChanged();
+            runtime.Discover(client.Id, "초기 작전망", true);
             runtime.Consultation.Add(new ConsultationLine { speaker = "상담 손님", sentence = "회사 지하실에서 밤마다 이상한 기계음이 들려요.",
                 keyword = "지하실 야간 소음", fact = "basement_noise", dataName = "basementNoise", kind = DataKind.Statement });
             runtime.Consultation.Add(new ConsultationLine { speaker = "상담 손님", sentence = "누군가 야간 출입 기록을 감추려는 것 같아요.",
@@ -115,7 +116,12 @@ namespace Codetective.Operations
                 if (kernel.GetVariableDefinition(field[0]) == null)
                     kernel.AddVariable(new VariableDefinition { Code = field[0], Label = field[1], Kind = DataKind.Text,
                         DefaultValue = Datum.Text(field[0] == "occupation" ? "심리상담가" : "[데이터 말소됨]") });
-            if (created) kernel.SetValue("description", Datum.Text("현재 코드네임: Kernel / 위장 신분: 개인 심리상담소 상담가"));
+            if (created)
+            {
+                kernel.SetValue("description", Datum.Text("현재 코드네임: Kernel / 위장 신분: 개인 심리상담소 상담가"));
+                kernel.SetValue("gender", Datum.Text("[데이터 말소됨]")); kernel.SetValue("occupation", Datum.Text("심리상담가"));
+                runtime.Discover(kernel.Id, "Kernel 초기 프로필", true);
+            }
         }
 
         private static EntitySchema Define(KernelRuntime runtime, string id, string korean, DataKind kind)

@@ -22,11 +22,22 @@ namespace Codetective.Operations
         {
             if (AwaitingAssignment || IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
             InitializeDailyRecord(); SyncClinicClock();
+            ApplyWorldSchedule();
             if (IsClinicTransitioning) return;
             double used = Math.Min(minutes, Math.Min(1080 - Minute, NextClinicBoundary - Minute));
             if (used <= 0) return;
             budget = 1024; depth = 0;
-            foreach (ThreadAgent agent in Threads.ToArray()) TickAgent(agent, used);
+            double previousMinute = Math.Floor(Minute);
+            foreach (ThreadAgent agent in Threads.ToArray()) TickAgent(agent, 0);
+            double remaining = used;
+            while (remaining > 0.0000001)
+            {
+                double step = Threads.Where(a => a.State == AgentState.Executing && a.Delay > 0).Select(a => a.Delay).DefaultIfEmpty(remaining).Min();
+                if (NextWorldBoundary > Minute) step = Math.Min(step, NextWorldBoundary - Minute);
+                step = Math.Min(step, remaining); Minute += step; remaining -= step;
+                ApplyWorldSchedule();
+                foreach (ThreadAgent agent in Threads.ToArray()) TickAgent(agent, step);
+            }
             if (CurrentConsultation != null)
             {
                 double previous = Math.Floor(ResponseMinutes / 5);
@@ -35,8 +46,6 @@ namespace Codetective.Operations
             }
             Exposure = Math.Min(1, Exposure + used * (1 + Suspicion * 0.1) / 5400);
             if (Exposure >= 1 && Facts.Add("enemy_at_clinic")) Report("상담소 위치가 노출되었습니다. 지휘소 방어 권한을 확인하세요.");
-            double previousMinute = Math.Floor(Minute);
-            Minute += used;
             SyncClinicClock();
             if (Math.Floor(Minute) != previousMinute) Revision++;
             if (Minute >= 1080)
@@ -56,6 +65,7 @@ namespace Codetective.Operations
             IsDayEnded = false;
             ResponseMinutes = 0;
             dayPresentation = new DayPresentationState { day = Day, mailDeferred = deferMailUntilIntro };
+            ApplyWorldSchedule();
             InitializeClinicDay(); InitializeDailyRecord();
             DeliverNewspaper();
             Report("DAY " + Day + " — 09:00 업무 시작. 현장 상황이 이어집니다.");
@@ -80,7 +90,9 @@ namespace Codetective.Operations
             Datum value = Datum.Ref(line.kind, line.fact, line.keyword, line.sentence);
             if (!RecordedClues.Contains(line.fact))
             {
-                Store(line.dataName, value, "상담 단서");
+                CollectEvidence(value, "상담 단서");
+                Observe(new ObservationDefinition { source = line.speaker, subjectId = Entity(ProfileOf(line)) != null ? ProfileOf(line) : "",
+                    statement = line.sentence, value = value });
                 RecordedClues.Add(line.fact);
                 Facts.Add(line.fact);
                 Report("새 데이터: " + line.dataName + " / " + line.keyword + " — 관련 권한을 확인하세요.");
@@ -122,6 +134,9 @@ namespace Codetective.Operations
                 dayLedger = CopyLedger(dayLedger), dailyRecords = dailyRecords.Values.Select(r => r.Copy()).ToArray(),
                 data = data.Values.Select(CloneSlot).ToArray(), nextDataId = nextDataId, protocols = protocols.Values.Select(p => p.Source).ToArray(),
                 evidence = evidence.Values.Select(e => e.Copy()).ToArray(), nextEvidenceNumber = nextEvidenceNumber,
+                discoveries = discoveries.Values.Select(d => d.Copy()).ToArray(), observations = observations.Select(o => o.Copy()).ToArray(),
+                worldEvents = worldEvents.Select(e => e.Copy()).ToArray(),
+                completedWorldEvents = completedWorldEvents.ToArray(),
                 entities = entities.Values.Select(e => new EntitySnapshot
                 {
                     id = e.Id, label = e.Label, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
@@ -133,6 +148,9 @@ namespace Codetective.Operations
                 agents = Threads.Select(a => new AgentSnapshot
                 {
                     id = a.Id, state = a.State, message = a.Message, location = a.Location, report = a.Report.Copy(), delay = a.Delay, sceneAction = a.SceneAction,
+                    observations = a.Observations.Select(o => o.Copy()).ToArray(), discoveries = a.Discoveries.ToArray(),
+                    cipherTable = a.CipherTable.Select(p => new DataSlot { name = p.Key, value = p.Value.Copy() }).ToArray(),
+                    knowledgeFlags = a.KnowledgeFlags.ToArray(), grantedAuthorities = a.GrantedAuthorities.ToArray(),
                     frames = a.Frames.Select(f => new FrameSnapshot { source = f.Protocol.Source, cursor = f.Cursor,
                         returnTarget = f.ReturnTarget, locals = f.Locals.Select(v => new DataSlot { name = v.Key, value = v.Value.Copy() }).ToArray() }).ToArray()
                 }).ToArray()
@@ -155,6 +173,10 @@ namespace Codetective.Operations
             {
                 var agent = new ThreadAgent(saved.id) { State = saved.state, Message = saved.message, Location = saved.location ?? "비공개 대기 지점",
                     Report = saved.report?.Copy() ?? Datum.Empty, Delay = saved.delay, SceneAction = saved.sceneAction };
+                agent.Observations.AddRange((saved.observations ?? Array.Empty<ObservationRecord>()).Select(o => o.Copy()));
+                agent.Discoveries.AddRange(saved.discoveries ?? Array.Empty<string>());
+                foreach (DataSlot entry in saved.cipherTable ?? Array.Empty<DataSlot>()) agent.CipherTable.Add(entry.name, entry.value.Copy());
+                agent.KnowledgeFlags.UnionWith(saved.knowledgeFlags ?? Array.Empty<string>()); agent.GrantedAuthorities.UnionWith(saved.grantedAuthorities ?? Array.Empty<string>());
                 foreach (FrameSnapshot frame in saved.frames ?? Array.Empty<FrameSnapshot>())
                 {
                     Protocol protocol = new CommandParser(frame.source).ReadProtocol(frame.source);
@@ -167,7 +189,7 @@ namespace Codetective.Operations
             }
             Day = snapshot.day; Minute = snapshot.minute; IsDayEnded = snapshot.dayEnded;
             RestoreStoryState(snapshot);
-            RestoreEntities(snapshot.entities);
+            RestoreEntities(snapshot.entities, snapshot.discoveries == null);
             Suspicion = snapshot.suspicion; Exposure = snapshot.exposure; ResponseMinutes = snapshot.responseMinutes;
             ConsultationIndex = Math.Max(0, Math.Min(snapshot.consultationIndex, Consultation.Count));
             CoffeeReceived = snapshot.coffeeReceived;
@@ -188,9 +210,11 @@ namespace Codetective.Operations
             Threads.Clear(); Threads.AddRange(restoredAgents);
             RestoreReservations(snapshot.confirmedReservations); RestoreClinic(snapshot); RestoreDailyRecord(snapshot);
             RestoreEvidence(snapshot);
+            RestoreKnowledge(snapshot);
+            completedWorldEvents.Clear(); completedWorldEvents.UnionWith(snapshot.completedWorldEvents ?? Array.Empty<string>());
             Revision++;
         }
 
-        private static DataSlot CloneSlot(DataSlot slot) => new DataSlot { id = slot.id, name = slot.name, value = slot.value.Copy() };
+        private static DataSlot CloneSlot(DataSlot slot) => new DataSlot { id = slot.id, name = slot.name, value = slot.value.Copy(), declaredType = slot.declaredType };
     }
 }

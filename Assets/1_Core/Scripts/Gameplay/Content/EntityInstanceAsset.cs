@@ -12,6 +12,10 @@ namespace Codetective.Gameplay
         public string displayName;
         public EntitySchemaAsset schema;
         public bool exposeRoot = true;
+        public int informationVersion = 2;
+        [Tooltip("Known to Kernel at the beginning. Hidden world objects can still exist and act before discovery.")]
+        public bool initiallyKnown = true;
+        public bool KnownOnStart => informationVersion < 2 || initiallyKnown;
         public string[] aliases = Array.Empty<string>();
         public LocalizedCommandName[] names = Array.Empty<LocalizedCommandName>();
         public AccessDefinition access = new AccessDefinition();

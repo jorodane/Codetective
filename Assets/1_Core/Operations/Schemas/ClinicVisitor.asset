@@ -51,7 +51,7 @@ MonoBehaviour:
       number: 0
       schemaId: ''
     writable: 0
-    overrides: 0
+    overrides: 1
     aliases: []
     names: []
     access:

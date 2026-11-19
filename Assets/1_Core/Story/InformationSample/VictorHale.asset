@@ -1,0 +1,86 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 853e59987727c5f7b5bcfca9f67b7954
+    type: 3
+  m_Name: VictorHale
+  m_EditorClassIdentifier: ''
+  instanceId: VictorHale
+  displayName: 빅터 헤일
+  schema:
+    fileID: 11400000
+    guid: 2a5fcd7e8c554b76b1c3f63d8e476366
+    type: 2
+  exposeRoot: 1
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names:
+  - language: 1
+    name: 빅터헤일
+    description: ''
+  initialValues:
+  - field: attended
+    value:
+      kind: 20
+      text: ''
+      number: 1
+      id: ''
+      label: ''
+      schemaId: ''
+    reference:
+      fileID: 0
+  functions: []
+  fields:
+  - code: attended
+    label: 행사 참석
+    kind: 20
+    defaultValue:
+      kind: 20
+      text: ''
+      number: 0
+      id: ''
+      label: ''
+      schemaId: ''
+    referenceType:
+      fileID: 0
+    typeName: ''
+    writable: 0
+    overrides: 0
+    aliases: []
+    names: []
+    access:
+      playerAccess: 0
+      story:
+        triggersOn: []
+        triggersOff: []
+        quests: []
+      requiredFacts: []
+      requiredAuthorities: []
+      forbiddenFacts: []
+  children: []
+  disabledVariables: []
+  disabledFunctions: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []

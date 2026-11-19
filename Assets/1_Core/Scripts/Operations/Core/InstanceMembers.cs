@@ -18,7 +18,7 @@ namespace Codetective.Operations
         internal IEnumerable<VariableDefinition> AllVariables => EntitySchema.Merge(
             (Schema?.EffectiveVariables ?? Enumerable.Empty<VariableDefinition>()).Concat(localVariables.Values), v => v.Code);
         internal IEnumerable<Operation> AllOperations => EntitySchema.Merge(
-            (Schema?.EffectiveOperations ?? Enumerable.Empty<Operation>()).Concat(Operations).Concat(localFunctions.Values), o => o.Code);
+            (Schema?.EffectiveOperations ?? Enumerable.Empty<Operation>()).Concat(Operations).Concat(localFunctions.Values), o => o.Key);
         /// <summary>System lookup includes disabled members, whose stored values still belong to this instance.</summary>
         public VariableDefinition GetVariableDefinition(string name) => AllVariables.FirstOrDefault(v => v.Matches(name));
 
@@ -50,20 +50,34 @@ namespace Codetective.Operations
             if (definition == null) throw new CommandException("인스턴스 함수 선언이 비어 있습니다.");
             OperationDefinition copy = definition.Copy();
             Operation operation = copy.Compile();
-            bool existed = localFunctions.TryGetValue(copy.Code ?? "", out Operation prior);
+            Operation inherited = Schema?.EffectiveOperations.FirstOrDefault(o => o.Key == operation.Key);
+            if (copy.Names.Length == 0 && inherited != null)
+            {
+                copy.Names = inherited.Names.Select(n => new LocalizedCommandName(n.language, n.name, n.description)).ToArray();
+                operation = copy.Compile();
+            }
+            bool existed = localFunctions.TryGetValue(operation.Key, out Operation prior);
             if (existed && !replace) throw new CommandException("이미 등록된 인스턴스 함수입니다: " + copy.Code);
-            localFunctions[copy.Code ?? ""] = operation;
+            Operation[] replaced = replace && !existed ? localFunctions.Values.Where(f => f.Code == copy.Code).ToArray() : Array.Empty<Operation>();
+            foreach (Operation old in replaced) localFunctions.Remove(old.Key);
+            localFunctions[operation.Key] = operation;
             try { ValidateMembers(); }
-            catch { if (existed) localFunctions[copy.Code ?? ""] = prior; else localFunctions.Remove(copy.Code ?? ""); throw; }
-            functionDefinitions[copy.Code] = copy;
+            catch
+            {
+                if (existed) localFunctions[operation.Key] = prior; else localFunctions.Remove(operation.Key);
+                foreach (Operation old in replaced) localFunctions[old.Key] = old;
+                throw;
+            }
+            foreach (Operation old in replaced) functionDefinitions.Remove(old.Key);
+            functionDefinitions[operation.Key] = copy;
             ValueChanged?.Invoke();
         }
 
         public bool RemoveFunction(string name)
         {
-            Operation function = localFunctions.Values.FirstOrDefault(f => f.Matches(name));
+            Operation function = localFunctions.Values.FirstOrDefault(f => f.Key == name || f.Matches(name));
             if (function == null) return false;
-            localFunctions.Remove(function.Code); functionDefinitions.Remove(function.Code); disabledFunctions.Remove(function.Code);
+            localFunctions.Remove(function.Key); functionDefinitions.Remove(function.Key); disabledFunctions.Remove(function.Code);
             playerAccess.Remove("function:" + function.Code);
             ValueChanged?.Invoke(); return true;
         }

@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Codetective.Operations
 {
-    public enum DataKind { Empty, Any, Number, Text, Person, Item, Statement, Photo, Document, Log, Place, Time, Analysis, Rule, Relationship, Clue, Protocol, Thread, Task, Entity, Boolean }
+    public enum DataKind { Empty, Any, Number, Text, Person, Item, Statement, Photo, Document, Log, Place, Time, Analysis, Rule, Relationship, Clue, Protocol, Thread, Task, Entity, Boolean, Array, Dictionary, Keyword, Event, Organization }
     public enum AgentState { Ready, Executing, Waiting, Disconnected }
 
     [Serializable]
@@ -16,16 +16,30 @@ namespace Codetective.Operations
         public string text = "";
         public double number;
         public string schemaId = "";
+        public CollectionValue collection;
+        public static Datum List(params Datum[] items) => CollectionValue.Create(DataKind.Array, items);
+        public static Datum Dict(params Datum[] keysAndValues) => CollectionValue.Create(DataKind.Dictionary, keysAndValues);
+        public Datum[] Elements
+        {
+            get
+            {
+                if (collection == null || collection.nodes == null || collection.nodes.Length == 0 || collection.nodes[0].kind != kind)
+                    throw new CommandException("자료 모음의 루트가 유효하지 않습니다.");
+                return collection.Elements();
+            }
+        }
         public bool CanReferenceEntity => kind != DataKind.Empty && kind != DataKind.Number && kind != DataKind.Text &&
-            kind != DataKind.Boolean && kind != DataKind.Protocol && kind != DataKind.Task;
+            kind != DataKind.Boolean && kind != DataKind.Protocol && kind != DataKind.Task && kind != DataKind.Array && kind != DataKind.Dictionary;
         public static Datum Empty => new Datum();
         public static Datum Ref(DataKind kind, string id, string label, string text = "") =>
             new Datum { kind = kind, id = id, label = label, text = text };
         public static Datum Text(string text) => new Datum { kind = DataKind.Text, text = text, label = text };
         public static Datum Number(double value) => new Datum { kind = DataKind.Number, number = value, label = value.ToString(System.Globalization.CultureInfo.InvariantCulture) };
         public static Datum Boolean(bool value) => new Datum { kind = DataKind.Boolean, number = value ? 1 : 0, label = value ? "true" : "false" };
-        public Datum Copy() => (Datum)MemberwiseClone();
+        public Datum Copy() { var copy = (Datum)MemberwiseClone(); copy.collection = kind == DataKind.Array || kind == DataKind.Dictionary ? collection?.Copy() : null; return copy; }
         public override string ToString() => kind == DataKind.Empty ? "비어 있음" :
+            kind == DataKind.Array ? "[" + string.Join(", ", Elements.Select(e => e.ToString())) + "]" :
+            kind == DataKind.Dictionary ? "{" + string.Join(", ", Elements.Select(e => e.ToString())) + "}" :
             string.IsNullOrEmpty(text) || text == label ? label : label + " — " + text;
     }
 
@@ -34,6 +48,7 @@ namespace Codetective.Operations
     {
         public int id;
         public string name;
+        public string declaredType = "";
         public Datum value = Datum.Empty;
     }
 
@@ -65,9 +80,9 @@ namespace Codetective.Operations
         {
             if (!ignorePlayerAccess && PlayerAccess == PlayerAccess.Internal) return "현재 제공되지 않는 항목입니다.";
             if (Story != null && !Story.Matches(runtime)) return "현재 이야기 진행 상태에서는 사용할 수 없습니다.";
-            if (Facts.Any(f => !runtime.Facts.Contains(f))) return "아직 필요한 정보를 알지 못합니다.";
-            if (Authorities.Any(a => !runtime.Authorities.Contains(a))) return "작전 권한이 없습니다.";
-            if (ForbiddenFacts.Any(runtime.Facts.Contains)) return "현재 금지된 권한입니다.";
+            if (Facts.Any(f => !runtime.KnowsFlag(f))) return "아직 필요한 정보를 알지 못합니다.";
+            if (Authorities.Any(a => !runtime.HasAuthority(a))) return "작전 권한이 없습니다.";
+            if (ForbiddenFacts.Any(runtime.KnowsFlag)) return "현재 금지된 권한입니다.";
             if (RequiredData != DataKind.Empty && !runtime.Data.Values.Any(v => v.value.kind == RequiredData) &&
                 !(locals ?? Array.Empty<Datum>()).Any(v => v.kind == RequiredData))
                 return "필요한 데이터를 보유하고 있지 않습니다.";
@@ -93,6 +108,8 @@ namespace Codetective.Operations
         public double Minutes;
         public AccessRule Access = new AccessRule();
         public Func<Invocation, Datum> Invoke;
+        public bool DispatchToThread;
+        public string Key => Code + (Property ? ":property" : "(" + string.Join(",", Parameters.Select(p => p.Kind + ":" + p.SchemaId)) + (Variadic ? ",..." : "") + ")");
         public string Signature => Property ? Code : Code + "(" +
             string.Join(", ", Parameters.Select(p => p.TypeName(CommandLocale.English) + " " + p.Name)) + (Variadic ? ", ..." : "") + ")";
         public string NameFor(CommandLocale language) => CommandVocabulary.Name(Code, Names, language);
@@ -187,6 +204,10 @@ namespace Codetective.Operations
         public string[] recordedClues;
         public AgentSnapshot[] agents;
         public EntitySnapshot[] entities;
+        public DiscoveryRecord[] discoveries;
+        public ObservationRecord[] observations;
+        public WorldEventRecord[] worldEvents;
+        public string[] completedWorldEvents;
         public ConsultationNote[] consultationNotes;
         public int nextConsultationNoteId;
         public MailProgress[] mailProgress;
@@ -232,6 +253,10 @@ namespace Codetective.Operations
         public Datum report;
         public double delay;
         public string sceneAction;
+        public DataSlot[] cipherTable;
+        public string[] knowledgeFlags, grantedAuthorities;
+        public ObservationRecord[] observations;
+        public string[] discoveries;
         public FrameSnapshot[] frames;
     }
 

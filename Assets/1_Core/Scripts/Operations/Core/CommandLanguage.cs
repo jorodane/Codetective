@@ -11,6 +11,8 @@ namespace Codetective.Operations
         public Datum Literal;
         public string[] Path;
         public List<Expression> Arguments;
+        public List<Expression> Elements;
+        public bool Dictionary;
         public bool IsCall => Arguments != null;
     }
 
@@ -20,6 +22,7 @@ namespace Codetective.Operations
         public string[] AssignPath;
         public bool ValidateOnly;
         public bool Return;
+        public string DeclaredType;
         public Expression Value;
     }
 
@@ -89,7 +92,7 @@ namespace Codetective.Operations
                     tokens.Add(source.Substring(start, i - start));
                     continue;
                 }
-                if (".,=();{}".IndexOf(c) >= 0) { tokens.Add(c.ToString()); i++; continue; }
+                if (".,=();{}[]<>:".IndexOf(c) >= 0) { tokens.Add(c.ToString()); i++; continue; }
                 throw new CommandException($"지원하지 않는 문자: {c}");
             }
             tokens.Add("");
@@ -126,10 +129,10 @@ namespace Codetective.Operations
             {
                 do
                 {
-                    string type = Name();
+                    string type = TypeName();
                     string parameter = Name();
                     if (parameters.Any(p => p.Name == parameter)) throw new CommandException("입력 이름이 중복됩니다.");
-                    parameters.Add(CommandVocabulary.TryKind(type, out DataKind kind) ? new Parameter(parameter, kind) : new Parameter(parameter, DataKind.Any, type));
+                    parameters.Add(DataTypes.Parameter(parameter, type));
                 } while (Match(","));
                 Require(")");
             }
@@ -171,16 +174,17 @@ namespace Codetective.Operations
 
         private static void LowerArguments(Expression expression, List<Statement> steps, ref int temporary)
         {
-            if (!expression.IsCall) return;
-            for (int i = 0; i < expression.Arguments.Count; i++)
+            List<Expression> arguments = expression.Elements ?? expression.Arguments;
+            if (arguments == null) return;
+            for (int i = 0; i < arguments.Count; i++)
             {
-                Expression argument = expression.Arguments[i];
+                Expression argument = arguments[i];
                 LowerArguments(argument, steps, ref temporary);
                 if (!argument.IsCall) continue;
                 // This name cannot be authored by a player and cannot collide with a local.
                 string name = "\u0001" + temporary++;
                 steps.Add(new Statement { Assign = name, Value = argument });
-                expression.Arguments[i] = new Expression { Path = new[] { name } };
+                arguments[i] = new Expression { Path = new[] { name } };
             }
         }
 
@@ -203,6 +207,8 @@ namespace Codetective.Operations
                 return statement;
             }
             MatchKeyword("var");
+            if (IsIdentifier(Peek) && index + 1 < tokens.Count && (IsIdentifier(tokens[index + 1]) || tokens[index + 1] == "[" || tokens[index + 1] == "<"))
+                statement.DeclaredType = TypeName();
             int start = index;
             if (IsIdentifier(Peek))
             {
@@ -219,9 +225,29 @@ namespace Codetective.Operations
             return statement;
         }
 
+        private string TypeName(int depth = 0)
+        {
+            if (depth > 32) throw new CommandException("자료형 중첩 깊이(32)를 초과했습니다.");
+            string name = Name();
+            if (Match("<")) { name += "<" + TypeName(depth + 1); Require(","); name += "," + TypeName(depth + 1); Require(">"); name += ">"; }
+            while (Match("[")) { Require("]"); name += "[]"; if (++depth > 32) throw new CommandException("자료형 중첩 깊이(32)를 초과했습니다."); }
+            return name;
+        }
+
         private Expression ReadExpression(int depth)
         {
             if (depth > 32) throw new CommandException("호출 중첩이 너무 깊습니다.");
+            if (Peek == "[" || Peek == "{")
+            {
+                bool dictionary = Take() == "{"; string close = dictionary ? "}" : "]";
+                var values = new List<Expression>();
+                if (!Match(close))
+                {
+                    do { values.Add(ReadExpression(depth + 1)); if (dictionary) { Require(":"); values.Add(ReadExpression(depth + 1)); } } while (Match(","));
+                    Require(close);
+                }
+                return new Expression { Elements = values, Dictionary = dictionary };
+            }
             if (IsAllocationKeyword(Peek)) throw new CommandException("유저 코드는 기존 개체의 참조만 사용할 수 있습니다. 생성/메모리 할당은 지원하지 않습니다.");
             if (CommandVocabulary.Keyword(Peek) == "true" || CommandVocabulary.Keyword(Peek) == "false")
                 return new Expression { Literal = Datum.Boolean(CommandVocabulary.Keyword(Take()) == "true") };

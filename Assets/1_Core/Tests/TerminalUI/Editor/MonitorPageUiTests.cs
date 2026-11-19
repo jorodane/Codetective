@@ -38,6 +38,26 @@ namespace Codetective.Terminal.Tests.UI
         }
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
         [Test]
+        public void SerializedCase01SampleRetainsContradictoryReportsThroughUnityJsonSaving()
+        {
+            var sample = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Story/InformationSample/Case01InformationSample.asset");
+            Assert.That(sample, Is.Not.Null); KernelRuntime world = sample.CreateRuntime();
+            Assert.That(world.IsDiscovered("VictorHale"), Is.False);
+            Assert.That(world.Execute("매기.대화하기()").Success, Is.True); world.Tick(2);
+            Assert.That(world.Execute("암호 피해자 = VictorHale").Success, Is.True);
+            Assert.That(world.Execute("참석기록.read()").Success, Is.True); world.Tick(2);
+            Assert.That(world.Execute("피해자.attended").Value.number, Is.Zero);
+            Assert.That(world.Entity("VictorHale").GetValue("attended").number, Is.EqualTo(1));
+            Assert.That(world.Execute("암호 참석여부 = 행사참석").Success, Is.True);
+            Assert.That(world.Execute("레이첼.질문하기(참석여부)").Success, Is.True); world.Tick(2);
+            Assert.That(world.Execute("에블린.질문하기(참석여부)").Success, Is.True); world.Tick(2);
+            KernelRuntime loaded = sample.CreateRuntime(); loaded.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(world.Capture())));
+            Assert.That(loaded.Observations.Count(o => o.subjectId == "VictorHale" && o.field == "attended"), Is.EqualTo(3));
+            Assert.That(loaded.Observations.Any(o => o.source == "Evelyn" && o.statement.Contains("공식 참석자")), Is.True);
+            Assert.That(loaded.LastKnownValue("VictorHale", "attended").number, Is.EqualTo(1));
+            Assert.That(loaded.Data.Keys, Is.EquivalentTo(new[] { "피해자", "참석여부" }));
+        }
+        [Test]
         public void ClosingASystemMenuKeepsTheDayScreenAndItsSuspendedDraft()
         {
             host.ShowPage("kernel"); input.SetTextWithoutNotify("save draft");
@@ -130,6 +150,7 @@ namespace Codetective.Terminal.Tests.UI
             {
                 var history = new SaveHistory(directory, record => JsonUtility.ToJson(record), json => JsonUtility.FromJson<GameSaveRecord>(json));
                 runtime.Store("record", Datum.Ref(DataKind.Document, "case_record", "사건 기록", "인용: \"단서\"\n두 번째 줄"));
+                runtime.CollectEvidence(runtime.Data["record"].value, "현장 확보");
                 GameSaveSlot older = history.Save(JsonUtility.ToJson(runtime.Capture()), GameSaveKind.Manual, runtime.Day, runtime.Minute, "상담 중");
                 runtime.Free("record"); history.Save(JsonUtility.ToJson(runtime.Capture()), GameSaveKind.Quick, runtime.Day, runtime.Minute, "정리 중");
                 var restored = ClinicScenario.Create(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(history.Read(older.Id).snapshot));
@@ -161,6 +182,7 @@ namespace Codetective.Terminal.Tests.UI
         public void KernelEvidenceBrowserKeepsTheCommandDraftAndReconnectsFreedReferences()
         {
             terminal.SetInteractionEnabled(true); runtime.Store("record", Datum.Ref(DataKind.Document, "case_record", "사건 기록", "조사에서 얻은 상세 기록")); runtime.Free("record");
+            runtime.CollectEvidence(runtime.Reference(runtime.Entity("case_record")), "현장 확보");
             host.ShowPage("kernel"); input.SetTextWithoutNotify("save 작성중");
             host.CurrentPage.GetComponentsInChildren<Button>().Single(b => b.GetComponentInChildren<Text>()?.text == "확보 자료").onClick.Invoke();
             Assert.That(host.CurrentPage.Id, Is.EqualTo("evidence")); Assert.That(host.CurrentMenuId, Is.EqualTo("kernel"));
@@ -175,8 +197,9 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void EvidenceFiltersSearchAndAccessChangesRemoveStaleDetails()
         {
-            runtime.Store("key", Datum.Ref(DataKind.Item, "security_key", "보안 열쇠", "문을 여는 도구"));
-            runtime.Store("record", Datum.Ref(DataKind.Document, "security_record", "문서", "security 연구 기록"));
+            Entity key = runtime.CreateInstance("Item", "security_key", "보안 열쇠", false);
+            key.SetValue("description", Datum.Text("문을 여는 도구")); runtime.CollectEvidence(runtime.Reference(key), "현장 확보");
+            runtime.CollectEvidence(Datum.Ref(DataKind.Document, "security_record", "문서", "security 연구 기록"), "현장 확보");
             terminal.SetInteractionEnabled(true); host.ShowPage("evidence"); EvidenceMonitorPage page = host.CurrentPage.GetComponent<EvidenceMonitorPage>();
             Invoke(page, "ChangeFilter", 1);
             Assert.That(Field<RectTransform>(page, "rows").GetComponentsInChildren<Button>().Length, Is.EqualTo(1));

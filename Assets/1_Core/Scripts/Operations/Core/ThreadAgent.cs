@@ -22,6 +22,11 @@ namespace Codetective.Operations
         internal readonly List<ProtocolFrame> Frames = new List<ProtocolFrame>();
         internal double Delay = -1;
         internal string SceneAction;
+        internal readonly List<ObservationRecord> Observations = new List<ObservationRecord>();
+        internal readonly List<string> Discoveries = new List<string>();
+        internal readonly Dictionary<string, Datum> CipherTable = new Dictionary<string, Datum>(StringComparer.Ordinal);
+        internal readonly HashSet<string> KnowledgeFlags = new HashSet<string>(StringComparer.Ordinal);
+        internal readonly HashSet<string> GrantedAuthorities = new HashSet<string>(StringComparer.Ordinal);
         public string ProtocolName => Frames.Count > 0 ? Frames[0].Protocol.Name : SceneAction ?? "";
         public string CurrentCommand
         {
@@ -44,8 +49,11 @@ namespace Codetective.Operations
             ThreadAgent agent = Agent(id);
             if (agent == null || agent.State != AgentState.Ready) throw new CommandException("해당 Thread는 대기 상태가 아닙니다.");
             if (!protocols.TryGetValue(protocolName, out Protocol protocol)) throw new CommandException("저장된 프로토콜이 없습니다: " + protocolName);
-            Dictionary<string, Datum> locals = Bind(protocol, arguments);
+            agent.CipherTable.Clear(); foreach (var pair in data) agent.CipherTable[pair.Key] = pair.Value.value.Copy();
+            Dictionary<string, Datum> locals = Bind(protocol, arguments, agent.CipherTable);
             agent.Frames.Clear();
+            agent.Observations.Clear(); agent.Discoveries.Clear();
+            agent.KnowledgeFlags.Clear(); agent.GrantedAuthorities.Clear();
             // Each running operation keeps its authored source, independently of later edits.
             Protocol snapshot = new CommandParser(protocol.Source).ReadProtocol(protocol.Source);
             agent.Frames.Add(new ProtocolFrame { Protocol = snapshot, Locals = locals });
@@ -90,6 +98,8 @@ namespace Codetective.Operations
             if (agent.SceneAction != null) throw new CommandException("현장 전달 중에는 완료 보고를 기다리세요.");
             agent.Frames.Clear();
             agent.State = AgentState.Ready;
+            agent.Observations.Clear(); agent.Discoveries.Clear(); agent.CipherTable.Clear();
+            agent.KnowledgeFlags.Clear(); agent.GrantedAuthorities.Clear();
             agent.Message = "복귀 완료";
         }
 
@@ -106,13 +116,18 @@ namespace Codetective.Operations
                 {
                     if (agent.Delay < 0)
                     {
-                        agent.Delay = Duration(statement, frame.Locals);
-                        Expression action = statement.Value;
-                        if (action.IsCall && action.Path.Length > 1)
+                        string previous = executingAgent; executingAgent = agent.Id;
+                        try
                         {
-                            Entity target = ResolveEntity(action.Path.Take(action.Path.Length - 1).ToArray(), frame.Locals);
-                            if (target.Kind == DataKind.Place) agent.Location = target.Label;
+                            agent.Delay = Duration(statement, frame.Locals);
+                            Expression action = statement.Value;
+                            if (action.IsCall && action.Path.Length > 1)
+                            {
+                                Entity target = ResolveEntity(action.Path.Take(action.Path.Length - 1).ToArray(), frame.Locals);
+                                if (target.Kind == DataKind.Place) agent.Location = target.Label;
+                            }
                         }
+                        finally { executingAgent = previous; }
                         agent.Message = "수행 중: " + agent.CurrentCommand;
                     }
                     if (agent.Delay > minutes) { agent.Delay -= minutes; return; }
@@ -122,8 +137,11 @@ namespace Codetective.Operations
                     if (!statement.Return && call.IsCall && call.Path.Length == 1 && protocols.TryGetValue(call.Path[0], out Protocol child))
                     {
                         if (agent.Frames.Count >= 24) throw new CommandException("프로토콜 호출 깊이(24)를 초과했습니다.");
-                        Datum[] args = call.Arguments.Select(e => Evaluate(e, frame.Locals, agent.Id)).ToArray();
-                        var locals = Bind(child, args);
+                        Datum[] args;
+                        string previous = executingAgent; executingAgent = agent.Id;
+                        try { args = call.Arguments.Select(e => Evaluate(e, frame.Locals, agent.Id)).ToArray(); }
+                        finally { executingAgent = previous; }
+                        var locals = Bind(child, args, agent.CipherTable);
                         frame.Cursor++;
                         agent.Frames.Add(new ProtocolFrame { Protocol = new CommandParser(child.Source).ReadProtocol(child.Source),
                             Locals = locals, ReturnTarget = statement.Assign });
@@ -157,6 +175,7 @@ namespace Codetective.Operations
 
         private void FinishAgent(ThreadAgent agent, Datum value)
         {
+            DeliverAgentKnowledge(agent);
             if (dayLedger != null) dayLedger.completedThreadTasks++;
             agent.Frames.Clear();
             agent.State = AgentState.Ready;
@@ -164,10 +183,7 @@ namespace Codetective.Operations
             agent.Message = "수행 완료: " + value;
             if (value.kind != DataKind.Empty)
             {
-                string name = agent.Id + "_report";
-                int suffix = 2;
-                while (roots.ContainsKey(name) || protocols.ContainsKey(name)) name = agent.Id + "_report_" + suffix++;
-                Store(name, value);
+                CollectEvidence(value, agent.Id, true, true, false);
             }
             Report(agent.Id + ": " + agent.Message);
         }

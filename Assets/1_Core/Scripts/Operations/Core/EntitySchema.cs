@@ -56,7 +56,7 @@ namespace Codetective.Operations
         }
         public bool IsA(EntitySchema expected) => Lineage().Any(s => s == expected || s.Id == expected.Id);
         public IEnumerable<VariableDefinition> EffectiveVariables => Merge(Lineage().SelectMany(s => s.Variables), v => v.Code);
-        public IEnumerable<Operation> EffectiveOperations => Merge(Lineage().SelectMany(s => s.Operations), o => o.Code);
+        public IEnumerable<Operation> EffectiveOperations => Merge(Lineage().SelectMany(s => s.Operations), o => o.Key);
         public VariableDefinition FindVariable(string name) => EffectiveVariables.FirstOrDefault(v => v.Matches(name));
         public Operation FindOperation(string name) => EffectiveOperations.FirstOrDefault(o => o.Matches(name));
         internal static IEnumerable<T> Merge<T>(IEnumerable<T> members, Func<T, string> key)
@@ -104,14 +104,14 @@ namespace Codetective.Operations
                 Register(schema);
                 foreach (VariableDefinition variable in schema.Variables)
                 {
-                    if (!string.IsNullOrEmpty(variable.SchemaId)) Require(variable.SchemaId);
+                    if (!string.IsNullOrEmpty(variable.SchemaId)) ValidateType(variable.SchemaId);
                     if (variable.DefaultValue.kind != DataKind.Empty && !Accepts(variable.Kind, variable.SchemaId, variable.DefaultValue, null))
                         throw new CommandException("변수 기본값의 자료형이 맞지 않습니다: " + schema.Id + "." + variable.Code);
                 }
                 foreach (Operation operation in schema.Operations)
                 {
-                    if (!string.IsNullOrEmpty(operation.ReturnSchemaId)) Require(operation.ReturnSchemaId);
-                    foreach (Parameter parameter in operation.Parameters) if (!string.IsNullOrEmpty(parameter.SchemaId)) Require(parameter.SchemaId);
+                    if (!string.IsNullOrEmpty(operation.ReturnSchemaId)) ValidateType(operation.ReturnSchemaId);
+                    foreach (Parameter parameter in operation.Parameters) if (!string.IsNullOrEmpty(parameter.SchemaId)) ValidateType(parameter.SchemaId);
                 }
             }
         }
@@ -131,9 +131,9 @@ namespace Codetective.Operations
             }
             foreach (Operation operation in schema.Operations)
             {
-                if (!CommandParser.IsIdentifier(operation.Code) || !own.Add(operation.Code)) throw new CommandException("함수 이름이 유효하지 않거나 중복됩니다: " + operation.Code);
+                if (!CommandParser.IsIdentifier(operation.Code) || own.Contains(operation.Code) || !own.Add(operation.Key)) throw new CommandException("함수 이름/입력 자료형이 유효하지 않거나 중복됩니다: " + operation.Code);
                 if (schema.Parent?.FindVariable(operation.Code) != null) throw new CommandException("함수 이름이 상속 변수와 충돌합니다: " + operation.Code);
-                Operation inherited = schema.Parent?.FindOperation(operation.Code);
+                Operation inherited = schema.Parent?.EffectiveOperations.FirstOrDefault(o => o.Key == operation.Key);
                 if (inherited != null && (!operation.Overrides || !SameSignature(inherited, operation)))
                     throw new CommandException("상속 함수 재정의의 입력/반환 자료형이 호환되지 않습니다: " + schema.Id + "." + operation.Code);
                 if (inherited == null && operation.Overrides) throw new CommandException("재정의할 부모 함수가 없습니다: " + operation.Code);
@@ -150,17 +150,31 @@ namespace Codetective.Operations
         }
 
         private static bool SameSignature(Operation a, Operation b) => a.Property == b.Property && a.Variadic == b.Variadic &&
-            a.ReturnKind == b.ReturnKind && a.ReturnSchemaId == b.ReturnSchemaId && a.Parameters.Length == b.Parameters.Length &&
+            (a.ReturnKind == DataKind.Any || a.ReturnKind == b.ReturnKind && a.ReturnSchemaId == b.ReturnSchemaId) && a.Parameters.Length == b.Parameters.Length &&
             a.Parameters.Zip(b.Parameters, (x, y) => x.Kind == y.Kind && x.SchemaId == y.SchemaId).All(v => v);
 
         public bool Accepts(DataKind kind, string schemaId, Datum value, Func<string, Entity> resolve)
         {
+            if (DataTypes.IsArray(schemaId)) return value.kind == DataKind.Array && value.Elements.All(v => AcceptsType(schemaId.Substring(0, schemaId.Length - 2), v, resolve));
+            string[] pair = DataTypes.DictionaryTypes(schemaId);
+            if (pair != null) return value.kind == DataKind.Dictionary && value.Elements.Select((v, i) => AcceptsType(pair[i % 2], v, resolve)).All(v => v);
             EntitySchema actual = value.CanReferenceEntity && !string.IsNullOrEmpty(value.id) ? resolve?.Invoke(value.id)?.Schema : null;
             if (actual == null && value.CanReferenceEntity && !string.IsNullOrEmpty(value.schemaId)) actual = Find(value.schemaId);
             if (!string.IsNullOrEmpty(schemaId)) return actual != null && actual.IsA(Require(schemaId));
             if (kind == DataKind.Any) return true;
             if (actual != null && actual.Lineage().Any(s => s.Kind == kind)) return true;
             return value.kind == kind;
+        }
+        private bool AcceptsType(string type, Datum value, Func<string, Entity> resolve)
+        { Parameter p = DataTypes.Parameter("item", type); return Accepts(p.Kind, p.SchemaId, value, resolve); }
+        public void ValidateType(string type) => ValidateType(type, 0);
+        private void ValidateType(string type, int depth)
+        {
+            if (depth > 32) throw new CommandException("자료형 중첩 깊이(32)를 초과했습니다.");
+            if (DataTypes.IsArray(type)) { ValidateType(type.Substring(0, type.Length - 2), depth + 1); return; }
+            string[] pair = DataTypes.DictionaryTypes(type);
+            if (pair != null) { ValidateType(pair[0], depth + 1); ValidateType(pair[1], depth + 1); return; }
+            if (!CommandVocabulary.TryKind(type, out _)) Require(type);
         }
     }
 
@@ -170,9 +184,10 @@ namespace Codetective.Operations
         internal Func<VariableDefinition, Datum, bool> ValueValidator;
         internal Func<Datum, Datum> ValueNormalizer;
         internal Action ValueChanged;
+        internal Action<string, Datum, Datum> FieldChanged;
         private readonly Dictionary<string, Datum> values = new Dictionary<string, Datum>(StringComparer.Ordinal);
         public IEnumerable<VariableDefinition> Variables => AllVariables.Where(v => !disabledVariables.Contains(v.Code));
-        public IEnumerable<Operation> EffectiveOperations => AllOperations.Where(o => !disabledFunctions.Contains(o.Code));
+        public IEnumerable<Operation> EffectiveOperations => AllOperations.Where(o => !disabledFunctions.Contains(o.Code) && (Kind != DataKind.Thread || !o.DispatchToThread));
         public IEnumerable<AccessRule> AccessRules => (Schema?.Lineage().Select(s => s.Access) ?? Enumerable.Empty<AccessRule>()).Concat(new[] { Access });
         public Entity(string id, string label, EntitySchema schema) : this(id, label, schema.Kind) { Schema = schema; }
         public VariableDefinition FindVariable(string name) => Variables.FirstOrDefault(v => v.Matches(name));
@@ -190,13 +205,15 @@ namespace Codetective.Operations
             if (value != null && value.kind != DataKind.Empty && ValueValidator != null && !ValueValidator(field, value))
                 throw new CommandException("변수에 저장할 자료형이 맞지 않습니다: " + field.Code);
             Datum stored = (value ?? Datum.Empty).Copy();
+            Datum before = GetValue(field.Code);
             values[field.Code] = ValueNormalizer != null ? ValueNormalizer(stored) : stored;
+            FieldChanged?.Invoke(field.Code, before, values[field.Code]);
             ValueChanged?.Invoke();
         }
         internal IEnumerable<AccessRule> VariableRules(VariableDefinition field) => (Schema?.Lineage().SelectMany(s => s.Variables) ?? Enumerable.Empty<VariableDefinition>()).Concat(localVariables.Values)
             .Where(v => v.Code == field.Code).Select(v => v.Access);
         internal IEnumerable<AccessRule> OperationRules(Operation operation) => (Schema?.Lineage().SelectMany(s => s.Operations) ?? Enumerable.Empty<Operation>())
-            .Concat(Operations).Concat(localFunctions.Values).Where(o => o.Code == operation.Code).Select(o => o.Access);
+            .Concat(Operations).Concat(localFunctions.Values).Where(o => o.Key == operation.Key).Select(o => o.Access);
         internal DataSlot[] CaptureValues() => values.Select(p => new DataSlot { name = p.Key, value = p.Value.Copy() }).ToArray();
         internal void ClearValues() => values.Clear();
     }

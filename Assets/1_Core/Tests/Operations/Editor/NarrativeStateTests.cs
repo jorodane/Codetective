@@ -109,11 +109,13 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime runtime = ClinicScenario.Create(); Entity person = runtime.Entity("client");
             person.AddVariable(new VariableDefinition { Code = "legalName", Kind = DataKind.Text, DefaultValue = Datum.Text("이서현") });
-            person.AddVariable(new VariableDefinition { Code = "gender", Kind = DataKind.Text, DefaultValue = Datum.Text("여성") });
-            person.AddVariable(new VariableDefinition { Code = "age", Kind = DataKind.Number, DefaultValue = Datum.Number(31) });
+            person.AddVariable(new VariableDefinition { Code = "gender", Kind = DataKind.Text, Overrides = true, DefaultValue = Datum.Text("여성") });
+            person.AddVariable(new VariableDefinition { Code = "age", Kind = DataKind.Number, Overrides = true, DefaultValue = Datum.Number(31) });
             person.AddVariable(new VariableDefinition { Code = "birthDate", Kind = DataKind.Text, DefaultValue = Datum.Text("1962.04.17") });
             person.AddVariable(new VariableDefinition { Code = "family", Kind = DataKind.Text, DefaultValue = Datum.Text("배우자, 자녀 1명"),
                 Access = new AccessRule { Story = new StoryCondition { triggersOn = new[] { "family.known" } } } });
+            runtime.Discover(person.Id, "초기 작전망", true);
+            runtime.Observe(new ObservationDefinition { subjectId = person.Id, field = "family", useCurrentField = true, source = "제한된 초기 자료" });
             PersonProfile profile = runtime.ProfileCard("client");
             Assert.That(profile.Name, Is.EqualTo("이서현")); Assert.That(profile.Gender, Is.EqualTo("여성"));
             Assert.That(profile.Age, Is.EqualTo("31")); Assert.That(profile.Birthday, Is.EqualTo("1962.04.17"));
@@ -134,6 +136,7 @@ namespace Codetective.Tests.Operations
             Assert.That(kernel.Age, Is.EqualTo("[데이터 말소됨]")); Assert.That(kernel.Birthday, Is.EqualTo("[데이터 말소됨]"));
             Assert.That(kernel.Family, Is.EqualTo("[데이터 말소됨]")); Assert.That(kernel.Occupation, Is.EqualTo("심리상담가"));
             runtime.Entity("kernel").SetValue("legalName", Datum.Text("확인한 과거 이름")); ClinicScenario.EnsureKernelProfile(runtime);
+            runtime.Observe(new ObservationDefinition { subjectId = "kernel", field = "legalName", useCurrentField = true, source = "복원 기록" });
             Assert.That(runtime.ProfileCard("kernel").Name, Is.EqualTo("확인한 과거 이름"));
         }
         [Test]

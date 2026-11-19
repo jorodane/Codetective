@@ -1,0 +1,131 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 853e59987727c5f7b5bcfca9f67b7954
+    type: 3
+  m_Name: Rachel
+  m_EditorClassIdentifier: ''
+  instanceId: Rachel
+  displayName: 레이첼
+  schema:
+    fileID: 11400000
+    guid: 2a5fcd7e8c554b76b1c3f63d8e476366
+    type: 2
+  exposeRoot: 1
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names:
+  - language: 1
+    name: 레이첼
+    description: ''
+  initialValues: []
+  functions:
+  - code: ask
+    label: ask
+    overrides: 1
+    dispatchToThread: 1
+    minutes: 2
+    parameters:
+    - name: topic
+      kind: 23
+      typeName: ''
+      referenceType:
+        fileID: 0
+    result:
+      kind: 0
+      text: ''
+      number: 0
+      id: ''
+      label: ''
+      schemaId: ''
+    reports: []
+    discoveries: []
+    responses:
+    - argumentIds:
+      - Attendance
+      reports:
+      - subjectId: VictorHale
+        keywordId: Attendance
+        field: attended
+        sourceId: Rachel
+        source: Rachel
+        statement: Victor에게 직접 명찰을 전달했어요.
+        value:
+          kind: 20
+          text: ''
+          number: 1
+          id: ''
+          label: ''
+          schemaId: ''
+        role: 1
+        useCurrentField: 0
+      discoveries:
+      - Evelyn
+      condition:
+        triggersOn: []
+        triggersOff: []
+        quests: []
+      world: []
+      writes: []
+      effects:
+        triggers: []
+        quests: []
+      result:
+        kind: 0
+        id: ''
+        label: ''
+        text: ''
+        number: 0
+        schemaId: ''
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    storyEffects:
+      triggers: []
+      quests: []
+    aliases: []
+    names: []
+    property: 0
+    needsReadyThread: 0
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+    requiredData: 0
+    unlockFacts: []
+    grantAuthorities: []
+    returnField: ''
+    returnInstance:
+      fileID: 0
+    fieldWrites: []
+    memberChanges: []
+    incidents: []
+  fields: []
+  children: []
+  disabledVariables: []
+  disabledFunctions: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []

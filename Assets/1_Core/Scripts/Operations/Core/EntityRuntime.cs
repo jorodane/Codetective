@@ -9,7 +9,12 @@ namespace Codetective.Operations
         public SchemaRegistry Schemas { get; }
         public IReadOnlyDictionary<string, Entity> Entities => entities;
         private EntitySnapshot[] scenarioEntityDefaults = Array.Empty<EntitySnapshot>();
-        public void CaptureScenarioEntityDefaults() => scenarioEntityDefaults = Capture().entities;
+        private DiscoveryRecord[] scenarioDiscoveryDefaults = Array.Empty<DiscoveryRecord>();
+        public void CaptureScenarioEntityDefaults()
+        {
+            KernelSnapshot snapshot = Capture(); scenarioEntityDefaults = snapshot.entities;
+            scenarioDiscoveryDefaults = snapshot.discoveries.Select(d => d.Copy()).ToArray();
+        }
         public KernelRuntime(SchemaRegistry schemas = null) { Schemas = schemas ?? BuiltinSchemas.Create(); }
 
         /// <summary>System/designer API only. No constructor or allocator is registered in the command language.</summary>
@@ -34,6 +39,7 @@ namespace Codetective.Operations
 
         public string TypeName(Datum value)
         {
+            if (value.kind == DataKind.Array || value.kind == DataKind.Dictionary) return string.IsNullOrEmpty(value.schemaId) ? KindName(value.kind) : value.schemaId;
             EntitySchema schema = value.CanReferenceEntity ? ReferenceTarget(value)?.Schema ?? Schemas.Find(value.schemaId) : null;
             return schema != null ? schema.NameFor(Language) : KindName(value.kind);
         }
@@ -43,6 +49,7 @@ namespace Codetective.Operations
             entity.ValueValidator = (field, value) => Schemas.Accepts(field.Kind, field.SchemaId, value, Entity);
             entity.ValueNormalizer = TagReference;
             entity.ValueChanged = () => { Revision++; NarrativeUpdated(); };
+            entity.FieldChanged = (field, before, after) => RecordWorldChange(entity, field, before, after);
             entity.MemberValidator = ValidateInstanceMembers;
         }
         public void NotifySchemaChanged()
@@ -56,15 +63,15 @@ namespace Codetective.Operations
         {
             foreach (VariableDefinition field in entity.LocalVariables)
             {
-                if (!string.IsNullOrEmpty(field.SchemaId)) Schemas.Require(field.SchemaId);
+                if (!string.IsNullOrEmpty(field.SchemaId)) Schemas.ValidateType(field.SchemaId);
                 if (!CommandParser.IsIdentifier(field.Code) || CommandParser.IsAllocationKeyword(field.Code) ||
                     (field.DefaultValue.kind != DataKind.Empty && !Schemas.Accepts(field.Kind, field.SchemaId, field.DefaultValue, resolve)))
                     throw new CommandException("인스턴스 변수 선언/기본값이 유효하지 않습니다: " + field.Code);
             }
             foreach (Operation operation in entity.LocalFunctions)
             {
-                if (!string.IsNullOrEmpty(operation.ReturnSchemaId)) Schemas.Require(operation.ReturnSchemaId);
-                foreach (Parameter parameter in operation.Parameters) if (!string.IsNullOrEmpty(parameter.SchemaId)) Schemas.Require(parameter.SchemaId);
+                if (!string.IsNullOrEmpty(operation.ReturnSchemaId)) Schemas.ValidateType(operation.ReturnSchemaId);
+                foreach (Parameter parameter in operation.Parameters) if (!string.IsNullOrEmpty(parameter.SchemaId)) Schemas.ValidateType(parameter.SchemaId);
             }
             foreach (DataSlot stored in entity.CaptureValues())
             {
@@ -78,11 +85,17 @@ namespace Codetective.Operations
         private Entity ReferenceTarget(Datum value) => value.CanReferenceEntity ? Entity(value.id) : null;
         private Datum PlayerValue(Datum value, Dictionary<string, Datum> locals)
         {
+            if (value.kind == DataKind.Array || value.kind == DataKind.Dictionary)
+            {
+                foreach (Datum item in value.Elements) PlayerValue(item, locals);
+                return value.Copy();
+            }
             Entity target = ReferenceTarget(value);
             if (target != null) CheckEntityAccess(target, locals);
             return value.Copy();
         }
         private bool PlayerValueVisible(Datum value, Dictionary<string, Datum> locals) =>
+            value.kind == DataKind.Array || value.kind == DataKind.Dictionary ? value.Elements.All(v => PlayerValueVisible(v, locals)) :
             ReferenceTarget(value) == null || EntityDenial(ReferenceTarget(value), locals) == null;
         public bool IsPlayerVisible(Datum value) => value != null && PlayerValueVisible(value, null);
         public bool IsPlayerVisible(Entity entity) => entity != null && EntityDenial(entity) == null;
@@ -94,17 +107,28 @@ namespace Codetective.Operations
         }
         private Datum Invoke(Entity target, Operation operation, Datum[] arguments, string agent)
         {
-            Datum result = NormalizeReference(operation.Invoke(new Invocation { Runtime = this, Target = target, Arguments = arguments, AgentId = agent }));
+            bool fieldAction = operation.DispatchToThread;
+            if (fieldAction && string.IsNullOrEmpty(agent) && !DryRun)
+            {
+                ThreadAgent ready = Threads.FirstOrDefault(t => t.State == AgentState.Ready) ?? throw new CommandException("활동 가능한 Thread가 없습니다.");
+                return DispatchAction(ready.Id, target, operation.Code, arguments);
+            }
+            Datum result;
+            bool previous = invokingAction; invokingAction = true;
+            try { result = NormalizeReference(operation.Invoke(new Invocation { Runtime = this, Target = target, Arguments = arguments, AgentId = agent })); }
+            finally { invokingAction = previous; }
             if (result.kind != DataKind.Empty && !string.IsNullOrEmpty(operation.ReturnSchemaId) && !Schemas.Accepts(operation.ReturnKind, operation.ReturnSchemaId, result, Entity))
                 throw new CommandException("함수의 반환 자료형이 맞지 않습니다: " + operation.Code);
             return result;
         }
         private void CheckEntityAccess(Entity entity, Dictionary<string, Datum> locals = null)
         {
+            if (string.IsNullOrEmpty(executingAgent) && !string.IsNullOrEmpty(entity.Id) && !IsDiscovered(entity.Id)) throw new CommandException("아직 발견하지 않은 대상입니다.");
             if (!entity.Exposed("entity", "", entity.AccessRules)) throw new CommandException("현재 제공되지 않는 대상입니다.");
             foreach (AccessRule rule in entity.AccessRules) CheckAccess(rule, locals, entity);
         }
         private string EntityDenial(Entity entity, Dictionary<string, Datum> locals = null) =>
+            string.IsNullOrEmpty(executingAgent) && !IsDiscovered(entity.Id) ? "아직 발견하지 않은 대상입니다." :
             !entity.Exposed("entity", "", entity.AccessRules) ? "현재 제공되지 않는 대상입니다." : entity.AccessRules.Select(r => r.Denial(this, locals?.Values, entity, true)).FirstOrDefault(d => d != null);
         private void CheckOperationAccess(Entity target, Operation operation, Dictionary<string, Datum> locals)
         {
@@ -133,6 +157,10 @@ namespace Codetective.Operations
         {
             if (value == null) return Datum.Empty;
             value = value.Copy();
+            if (value.kind == DataKind.Array || value.kind == DataKind.Dictionary)
+            {
+                Datum normalized = CollectionValue.Create(value.kind, value.Elements.Select(NormalizeReference)); normalized.schemaId = value.schemaId; return normalized;
+            }
             if (string.IsNullOrEmpty(value.id) || value.kind == DataKind.Task || value.kind == DataKind.Protocol) return value;
             Entity target = Entity(value.id);
             if (target == null && IsRecord(value.kind))
@@ -154,6 +182,7 @@ namespace Codetective.Operations
             foreach (EntitySchema schema in Schemas.All) registry.Register(schema);
             var copy = new KernelRuntime(registry) { DryRun = true, Language = Language, StoryStartFact = StoryStartFact };
             foreach (StoryMail message in mail.Values) copy.mail.Add(message.id, message.Copy());
+            foreach (var entry in worldSchedule) copy.worldSchedule.Add(entry.Key, entry.Value.Copy());
             foreach (NewsArticle article in news.Values) copy.RegisterNews(article);
             foreach (Entity original in entities.Values)
             {
@@ -177,13 +206,13 @@ namespace Codetective.Operations
         private void ValidateProtocolTypes(Protocol protocol)
         {
             foreach (Parameter parameter in protocol.Parameters)
-                if (!string.IsNullOrEmpty(parameter.SchemaId)) Schemas.Require(parameter.SchemaId);
+                if (!string.IsNullOrEmpty(parameter.SchemaId)) Schemas.ValidateType(parameter.SchemaId);
         }
 
         private EntitySchema SchemaOf(Datum value) => value.CanReferenceEntity ? ReferenceTarget(value)?.Schema ?? Schemas.Find(value.schemaId) ??
             Schemas.Find(value.kind.ToString()) : null;
 
-        private void RestoreEntities(EntitySnapshot[] savedEntities)
+        private void RestoreEntities(EntitySnapshot[] savedEntities, bool legacyKnowledge = false)
         {
             if (savedEntities == null) return; // Version 1 saves made before schemas retain the scenario defaults.
             var savedIds = new HashSet<string>(savedEntities.Select(e => e.id), StringComparer.Ordinal);
@@ -205,8 +234,23 @@ namespace Codetective.Operations
             foreach (EntitySnapshot saved in savedEntities)
             {
                 Entity original = Entity(saved.id);
-                restored[saved.id].RestoreMembers(saved.localVariables ?? original?.CaptureLocalVariables(),
-                    saved.localFunctions ?? original?.CaptureLocalFunctions(), saved.disabledVariables ?? original?.CaptureDisabledVariables(),
+                VariableDefinition[] fields = (saved.localVariables ?? original?.CaptureLocalVariables() ?? Array.Empty<VariableDefinition>()).Select(f => f.Copy()).ToArray();
+                OperationDefinition[] functions = (saved.localFunctions ?? original?.CaptureLocalFunctions() ?? Array.Empty<OperationDefinition>()).Select(f => f.Copy()).ToArray();
+                if (legacyKnowledge)
+                {
+                    foreach (VariableDefinition field in fields)
+                    {
+                        VariableDefinition inherited = restored[saved.id].Schema.FindVariable(field.Code);
+                        if (inherited == null) continue;
+                        if (field.Code == "age" && field.Kind == DataKind.Text && inherited.Kind == DataKind.Number)
+                        { field.Kind = DataKind.Number; field.DefaultValue = double.TryParse(field.DefaultValue.text, out double age) ? Datum.Number(age) : Datum.Empty; }
+                        if (field.Kind == inherited.Kind && field.SchemaId == inherited.SchemaId) { field.Overrides = true; field.Writable &= inherited.Writable; }
+                    }
+                    foreach (OperationDefinition function in functions)
+                        if (restored[saved.id].Schema.EffectiveOperations.Any(o => o.Key == function.Compile().Key)) function.Overrides = true;
+                }
+                restored[saved.id].RestoreMembers(fields,
+                    functions, saved.disabledVariables ?? original?.CaptureDisabledVariables(),
                     saved.disabledFunctions ?? original?.CaptureDisabledFunctions());
                 restored[saved.id].RestorePlayerAccess(saved.playerAccess ?? original?.CapturePlayerAccess());
             }
@@ -217,9 +261,12 @@ namespace Codetective.Operations
                 foreach (DataSlot value in saved.values ?? Array.Empty<DataSlot>())
                 {
                     VariableDefinition field = entity.GetVariableDefinition(value.name) ?? throw new CommandException("저장된 변수의 스키마가 없습니다: " + value.name);
-                    if (value.value.kind != DataKind.Empty && !Schemas.Accepts(field.Kind, field.SchemaId, value.value,
+                    Datum datum = value.value;
+                    if (legacyKnowledge && field.Code == "age" && field.Kind == DataKind.Number && datum.kind == DataKind.Text)
+                        datum = double.TryParse(datum.text, out double age) ? Datum.Number(age) : Datum.Empty;
+                    if (datum.kind != DataKind.Empty && !Schemas.Accepts(field.Kind, field.SchemaId, datum,
                         id => restored.TryGetValue(id, out Entity target) ? target : null)) throw new CommandException("저장된 변수의 자료형이 다릅니다: " + value.name);
-                    entity.SetValue(field.Code, value.value);
+                    entity.SetValue(field.Code, datum);
                 }
                 foreach (EntityChildSnapshot child in saved.children ?? Array.Empty<EntityChildSnapshot>())
                     entity.Children.Add(child.name, restored.TryGetValue(child.id, out Entity target) ? target : throw new CommandException("저장된 개체 참조를 찾을 수 없습니다: " + child.id));

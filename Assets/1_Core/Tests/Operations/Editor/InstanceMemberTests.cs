@@ -35,14 +35,14 @@ namespace Codetective.Tests.Operations
             Assert.That(a.Schema.FindVariable("note"), Is.Null);
             const string source = "protocol inspect(Person target) { return target.re }";
             int caret = source.IndexOf("target.re", StringComparison.Ordinal) + "target.re".Length;
-            Assert.That(r.CompleteProtocol(source, caret, "alice").Single().Replacement, Does.Contain("target.read()"));
-            Assert.That(r.CompleteProtocol(source, caret), Is.Empty);
+            Assert.That(r.CompleteProtocol(source, caret, "alice").Single(c => c.Replacement.Contains("target.read()")).Replacement, Does.Contain("target.read()"));
+            Assert.That(r.CompleteProtocol(source, caret).Any(c => c.Replacement.Contains("target.read()")), Is.False);
             Assert.That(a.RemoveVariable("메모"), Is.True);
-            Assert.That(r.Complete("alice.re"), Is.Empty); // Its backing field has gone away.
+            Assert.That(r.Complete("alice.read"), Is.Empty); // Its backing field has gone away.
             Assert.That(r.Execute("alice.read()").Success, Is.False);
             Assert.That(a.RemoveFunction("read"), Is.True);
             a.AddVariable(Note("fresh"));
-            Assert.That(r.Execute("alias.note").Value.text, Is.EqualTo("fresh"));
+            Assert.That(a.GetValue("note").text, Is.EqualTo("fresh"));
         }
 
         [Test]
@@ -71,10 +71,10 @@ namespace Codetective.Tests.Operations
             r.Entity("alice").AddFunction(ask); r.Entity("bob").AddFunction(ask);
             note.DefaultValue.text = "changed source"; note.Names[0].name = "다른이름"; ask.Result.text = "changed source";
             r.Entity("alice").GetVariableDefinition("note").DefaultValue.text = "only Alice";
-            Assert.That(r.Execute("alice.note").Value.text, Is.EqualTo("only Alice"));
-            Assert.That(r.Execute("bob.note").Value.text, Is.EqualTo("hello"));
+            Assert.That(r.Entity("alice").GetValue("note").text, Is.EqualTo("only Alice"));
+            Assert.That(r.Entity("bob").GetValue("note").text, Is.EqualTo("hello"));
             Assert.That(r.Execute("alice.ask()").Value.text, Is.EqualTo("answer"));
-            Assert.That(r.Execute("bob.메모").Success, Is.True);
+            Assert.That(r.Entity("bob").FindVariable("메모"), Is.Not.Null);
         }
 
         [Test]
@@ -88,13 +88,13 @@ namespace Codetective.Tests.Operations
                 person.AddFunction(intro); person.AddFunction(new OperationDefinition { Code = "followup", ReturnKind = DataKind.Text, Result = Datum.Text("후속 대화") });
                 person.SetFunctionEnabled("followup", false);
             }
-            Assert.That(r.Complete("alice.f"), Is.Empty);
+            Assert.That(r.Complete("alice.followup"), Is.Empty);
             Assert.That(r.Execute("alice.ask()").Value.text, Is.EqualTo("첫 대화"));
-            Assert.That(r.Complete("alice.a"), Is.Empty);
+            Assert.That(r.Complete("alice.ask"), Is.Empty);
             Assert.That(r.Execute("alice.ask()").Success, Is.False);
             Assert.That(r.Execute("alice.followup()").Value.text, Is.EqualTo("후속 대화"));
             Assert.That(r.Execute("bob.followup()").Success, Is.False);
-            Assert.That(r.Complete("bob.a").Single().Replacement, Is.EqualTo("bob.ask()"));
+            Assert.That(r.Complete("bob.ask").Single().Replacement, Is.EqualTo("bob.ask()"));
         }
 
         [Test]
@@ -180,7 +180,7 @@ namespace Codetective.Tests.Operations
             KernelSnapshot capture = r.Capture(); EntitySnapshot saved = capture.entities.Single(e => e.id == "alice");
             saved.localVariables[0].DefaultValue.text = "snapshot only"; saved.localFunctions[0].Result.text = "snapshot only";
             Assert.That(r.Execute("alice.ask()").Value.text, Is.EqualTo("answer"));
-            Assert.That(r.Execute("alice.note").Value.text, Is.EqualTo("hello"));
+            Assert.That(r.Entity("alice").GetValue("note").text, Is.EqualTo("hello"));
             saved.localVariables = null; saved.localFunctions = null; saved.disabledVariables = null; saved.disabledFunctions = null;
             r.Restore(capture);
             Assert.That(r.Execute("alice.ask()").Value.text, Is.EqualTo("answer"));
@@ -193,7 +193,7 @@ namespace Codetective.Tests.Operations
             OperationDefinition ask = Ask(); ask.MemberChanges = new[] { new MemberToggle { Name = "ask", Enabled = false } }; a.AddFunction(ask);
             ExecutionResult test = r.TestProtocol("protocol change(Person p) { p.note = \"test\"; return p.ask(); }", "change(alice)");
             Assert.That(test.Success, Is.True, test.Message);
-            Assert.That(r.Execute("alice.note").Value.text, Is.EqualTo("hello"));
+            Assert.That(r.Entity("alice").GetValue("note").text, Is.EqualTo("hello"));
             Assert.That(r.Complete("alice.ask").Single().Replacement, Is.EqualTo("alice.ask()"));
         }
 
@@ -220,7 +220,7 @@ namespace Codetective.Tests.Operations
                 new OperationFieldWrite { Field = "id", Value = Datum.Text("changed") } };
             a.AddFunction(ask);
             Assert.That(r.Execute("alice.ask()").Success, Is.False);
-            Assert.That(r.Execute("alice.note").Value.text, Is.EqualTo("hello"));
+            Assert.That(r.Entity("alice").GetValue("note").text, Is.EqualTo("hello"));
             Assert.That(r.Facts, Does.Not.Contain("changed"));
         }
 

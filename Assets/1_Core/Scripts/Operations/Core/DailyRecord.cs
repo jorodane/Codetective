@@ -9,6 +9,7 @@ namespace Codetective.Operations
     {
         public int day;
         public int[] dataIds = Array.Empty<int>();
+        public string[] evidenceIds;
         public int[] noteIds = Array.Empty<int>();
         public string[] readMailIds = Array.Empty<string>();
         public string[] authorities = Array.Empty<string>();
@@ -39,7 +40,7 @@ namespace Codetective.Operations
         public void InitializeDailyRecord()
         {
             if (dayLedger?.day == Day) return;
-            dayLedger = new DailyLedger { day = Day, dataIds = data.Values.Select(s => s.id).ToArray(), noteIds = notes.Select(n => n.id).ToArray(),
+            dayLedger = new DailyLedger { day = Day, dataIds = data.Values.Select(s => s.id).ToArray(), evidenceIds = evidence.Keys.ToArray(), noteIds = notes.Select(n => n.id).ToArray(),
                 readMailIds = mailProgress.Values.Where(m => m.read).Select(m => m.id).ToArray(), authorities = Authorities.ToArray() };
         }
         public DailyRecord FinalizeDay()
@@ -49,13 +50,14 @@ namespace Codetective.Operations
             AppointmentProgress[] visits = DailyAppointments.ToArray();
             foreach (AppointmentProgress visit in visits.Where(v => v.phase == VisitPhase.Waiting)) { visit.phase = VisitPhase.Finished; visit.outcome = VisitOutcome.Missed; }
             var record = new DailyRecord { day = Day, subtitle = DaySubtitle, visits = visits,
-                newData = data.Values.Where(s => !dayLedger.dataIds.Contains(s.id) && IsPlayerVisible(s.value)).Select(s => s.name).ToArray(),
+                newData = Evidence.Where(e => !(dayLedger.evidenceIds ?? Array.Empty<string>()).Contains(e.Id) && e.Day == Day &&
+                    !observations.Any(o => !string.IsNullOrEmpty(o.statement) && o.value.CanReferenceEntity && o.value.id == e.Id)).Select(e => e.Name).ToArray(),
                 newAuthorities = Authorities.Except(dayLedger.authorities).ToArray(), notesWritten = notes.Count(n => !dayLedger.noteIds.Contains(n.id)),
                 mailRead = mailProgress.Values.Count(m => m.read && !dayLedger.readMailIds.Contains(m.id)), completedThreadTasks = dayLedger.completedThreadTasks };
             dailyRecords[Day] = record; NarrativeUpdated(); return record.Copy();
         }
         public DailyRecord DayRecord(int day) => dailyRecords.TryGetValue(day, out DailyRecord record) ? record.Copy() : null;
-        private static DailyLedger CopyLedger(DailyLedger ledger) => ledger == null ? null : new DailyLedger { day = ledger.day, dataIds = ledger.dataIds.ToArray(),
+        private static DailyLedger CopyLedger(DailyLedger ledger) => ledger == null ? null : new DailyLedger { day = ledger.day, dataIds = ledger.dataIds.ToArray(), evidenceIds = ledger.evidenceIds?.ToArray(),
             noteIds = ledger.noteIds.ToArray(), readMailIds = ledger.readMailIds.ToArray(), authorities = ledger.authorities.ToArray(), completedThreadTasks = ledger.completedThreadTasks };
         private void RestoreDailyRecord(KernelSnapshot snapshot)
         {

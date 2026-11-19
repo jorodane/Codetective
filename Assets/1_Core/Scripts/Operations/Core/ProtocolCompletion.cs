@@ -55,6 +55,7 @@ namespace Codetective.Operations
 
         private Datum Preview(Expression expression, Dictionary<string, Datum> locals)
         {
+            if (expression.Elements != null) return CollectionValue.Create(expression.Dictionary ? DataKind.Dictionary : DataKind.Array, expression.Elements.Select(e => Preview(e, locals)));
             if (expression.Literal != null) return expression.Literal.Copy();
             string[] path = expression.Path;
             if (path.Length == 1)

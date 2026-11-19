@@ -72,7 +72,7 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Agent("thread01").State, Is.EqualTo(AgentState.Executing));
             r.Tick(1);
             Assert.That(r.Agent("thread01").State, Is.EqualTo(AgentState.Ready));
-            Assert.That(r.Data["thread01_report"].value.kind, Is.EqualTo(DataKind.Document));
+            Assert.That(r.Agent("thread01").Report.kind, Is.EqualTo(DataKind.Document));
         }
 
         [Test]
@@ -171,7 +171,7 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Suspicion, Is.EqualTo(2));
             r.RecordClue(0); r.RecordClue(0);
             Assert.That(r.RecordedClues.Count, Is.EqualTo(1));
-            Assert.That(r.Data.Count, Is.EqualTo(1));
+            Assert.That(r.Data.Count, Is.Zero);
             r.Reply();
             Assert.That(r.ResponseMinutes, Is.Zero);
         }
@@ -216,13 +216,14 @@ namespace Codetective.Tests.Operations
             var loaded = ClinicScenario.Create();
             loaded.Restore(r.Capture());
             loaded.Tick(1);
-            Assert.That(loaded.Facts, Does.Contain("archive_inspected"));
+            Assert.That(loaded.Facts, Does.Not.Contain("archive_inspected")); // Still private to the investigating Thread.
             Assert.That(loaded.Agent("thread01").Location, Is.EqualTo("현장 자료실"));
             loaded.Tick(7);
             Assert.That(loaded.Agent("thread01").State, Is.EqualTo(AgentState.Executing));
             loaded.Tick(1);
             Assert.That(loaded.Agent("thread01").Report.kind, Is.EqualTo(DataKind.Analysis));
             Assert.That(loaded.Agent("thread01").State, Is.EqualTo(AgentState.Ready));
+            Assert.That(loaded.Facts, Does.Contain("archive_inspected"));
         }
 
         [Test]
@@ -235,7 +236,7 @@ namespace Codetective.Tests.Operations
             Completion candidate = r.CompleteProtocol(source, caret, "archive").Single(c => c.Label.Contains("inspect"));
             Assert.That(candidate.Replacement, Does.Contain("return target.inspect()\n}"));
             Assert.That(r.Facts, Does.Not.Contain("archive_inspected"));
-            Assert.That(r.Data.Count, Is.EqualTo(1));
+            Assert.That(r.Data.Count, Is.Zero);
             Assert.That(r.Protocols.ContainsKey("authored"), Is.False);
         }
 
@@ -293,7 +294,7 @@ namespace Codetective.Tests.Operations
             r.Execute("thread01.run(recon, archive);");
             r.Tick(5);
             Assert.That(r.Agent("thread01").State, Is.EqualTo(AgentState.Ready));
-            Assert.That(r.Data["thread01_report_2"].value.kind, Is.EqualTo(DataKind.Document));
+            Assert.That(r.Agent("thread01").Report.kind, Is.EqualTo(DataKind.Document));
         }
 
         [Test]

@@ -53,10 +53,11 @@ namespace Codetective.Gameplay
                 foreach (string name in asset.disabledVariables) entity.SetVariableEnabled(name, false);
                 foreach (string name in asset.disabledFunctions) entity.SetFunctionEnabled(name, false);
                 entity.ValidateMembers();
-                if (asset.exposeRoot) runtime.Register(entity);
+                if (asset.exposeRoot) runtime.Register(entity, false);
             }
             foreach (EntityDefinition legacy in legacyObjects ?? Array.Empty<EntityDefinition>()) runtime.Register(compiler.Legacy(legacy, 0));
             runtime.NotifySchemaChanged();
+            foreach (EntityInstanceAsset asset in compiler.objects.Where(a => a.KnownOnStart)) runtime.Discover(asset.instanceId, "초기 작전망", true);
         }
 
         private void Collect(EntitySchemaAsset asset)
@@ -91,8 +92,9 @@ namespace Codetective.Gameplay
             foreach (FieldDefinition field in asset.fields)
                 compiled[asset].Variables.Add(Field(field));
         }
-        private VariableDefinition Field(FieldDefinition field) => new VariableDefinition { Code = field.code, Label = field.label, Kind = field.kind,
-                    SchemaId = field.referenceType != null ? field.referenceType.schemaId : "", DefaultValue = field.defaultValue.Copy(),
+        private VariableDefinition Field(FieldDefinition field) => new VariableDefinition { Code = field.code, Label = field.label,
+                    Kind = string.IsNullOrEmpty(field.typeName) ? field.kind : DataTypes.Parameter(field.code, field.typeName).Kind,
+                    SchemaId = !string.IsNullOrEmpty(field.typeName) ? DataTypes.Parameter(field.code, field.typeName).SchemaId : field.referenceType != null ? field.referenceType.schemaId : "", DefaultValue = field.defaultValue.Copy(),
                     Writable = field.writable, Overrides = field.overrides, Aliases = field.aliases, Names = field.names, Access = field.access.Compile() };
         private void Collect(ActionDefinition function)
         {
@@ -112,17 +114,23 @@ namespace Codetective.Gameplay
                 ReturnKind = returned?.Kind ?? (action.returnInstance != null ? DataKind.Entity : action.result.kind),
                 ReturnSchemaId = returned?.SchemaId ?? (action.returnInstance != null ? action.returnInstance.schema.schemaId : ""),
                 Property = action.property, Overrides = action.overrides,
-                Parameters = Array.ConvertAll(action.parameters, p => new OperationInput { Name = p.name, Kind = p.kind, SchemaId = p.referenceType != null ? p.referenceType.schemaId : "" }),
+                Parameters = Array.ConvertAll(action.parameters, p => new OperationInput { Name = p.name,
+                    Kind = string.IsNullOrEmpty(p.typeName) ? p.kind : DataTypes.Parameter(p.name, p.typeName).Kind,
+                    SchemaId = !string.IsNullOrEmpty(p.typeName) ? DataTypes.Parameter(p.name, p.typeName).SchemaId : p.referenceType != null ? p.referenceType.schemaId : "" }),
                 Minutes = action.minutes, Access = new AccessRule { Facts = action.requiredFacts, Authorities = action.requiredAuthorities,
                     ForbiddenFacts = action.forbiddenFacts, RequiredData = action.requiredData, NeedsReadyThread = action.needsReadyThread,
                     PlayerAccess = action.playerAccess, Story = action.story?.Copy() ?? new StoryCondition() }, StoryEffects = action.storyEffects?.Copy() ?? new StoryEffects(),
                 Result = action.result.Copy(), ReturnField = action.returnField, ReturnEntityId = action.returnInstance != null ? action.returnInstance.instanceId : "",
                 UnlockFacts = action.unlockFacts, GrantAuthorities = action.grantAuthorities, MemberChanges = action.memberChanges,
+                DispatchToThread = action.dispatchToThread, Reports = (action.reports ?? Array.Empty<ObservationDefinition>()).Select(r => r.Copy()).ToArray(), Discoveries = (action.discoveries ?? Array.Empty<string>()).ToArray(),
+                Incidents = (action.incidents ?? Array.Empty<string>()).ToArray(), Responses = (action.responses ?? Array.Empty<ActionResponseDefinition>()).Select(r => r.Copy()).ToArray(),
                 FieldWrites = action.fieldWrites.Select(w => new OperationFieldWrite { Field = w.field, ArgumentIndex = w.argumentIndex,
+                    TargetArgumentIndex = w.useArgumentTarget ? w.targetArgumentIndex : -1,
                     Value = w.reference != null ? new Datum { kind = DataKind.Entity, id = w.reference.instanceId, label = w.reference.displayName,
                         schemaId = w.reference.schema != null ? w.reference.schema.schemaId : "" } : w.value.Copy() }).ToArray() };
             foreach (FieldWriteDefinition write in action.fieldWrites)
             {
+                if (write.useArgumentTarget) continue;
                 VariableDefinition field = findField(write.field) ?? throw new CommandException("함수가 변경할 변수가 없습니다: " + write.field);
                 if (field.Getter != null || write.argumentIndex < -1 || write.argumentIndex >= action.parameters.Length)
                     throw new CommandException("변수 변경 설정이 유효하지 않습니다: " + write.field);

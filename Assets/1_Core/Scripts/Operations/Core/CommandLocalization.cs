@@ -23,11 +23,11 @@ namespace Codetective.Operations
         private static readonly Dictionary<string, string[]> Keywords = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             { "save", new[] { "저장" } }, { "free", new[] { "삭제", "해제" } }, { "help", new[] { "도움말" } },
-            { "protocol", new[] { "프로토콜" } }, { "return", new[] { "반환" } }, { "var", new[] { "변수" } },
+            { "protocol", new[] { "프로토콜" } }, { "return", new[] { "반환" } }, { "var", new[] { "변수", "암호" } },
             { "true", new[] { "참" } }, { "false", new[] { "거짓" } }
         };
         private static readonly string[] KoreanKinds =
-        { "비어있음", "데이터", "숫자", "문자열", "인물", "물건", "증언", "사진", "문서", "기록", "장소", "시간", "분석", "규칙", "관계", "단서", "프로토콜", "스레드", "작업", "개체", "논리" };
+        { "비어있음", "데이터", "숫자", "문자열", "인물", "물건", "증언", "사진", "문서", "기록", "장소", "시간", "분석", "규칙", "관계", "단서", "프로토콜", "스레드", "작업", "개체", "논리", "배열", "사전", "키워드", "사건", "조직" };
 
         public static string Keyword(string input) => Keywords.FirstOrDefault(p => p.Key == input || p.Value.Contains(input)).Key;
         public static string KeywordName(string canonical, CommandLocale language) =>
@@ -78,7 +78,7 @@ namespace Codetective.Operations
             "프로토콜 정찰(장소 대상)\n{\n    반환 대상.조사();\n}" :
             "protocol recon(Place target)\n{\n    return target.inspect();\n}";
         public string HelpForLanguage => Language == CommandLocale.Korean ?
-            "저장 <이름> : 데이터 공간 할당\n삭제 <이름> : 데이터 공간 해제\n도움말 : 명령어 목록\n\n" +
+            "암호 이름 = 대상 : 치환 참조 등록\n저장 <이름> : 빈 치환문 등록\n삭제 <이름> : 치환 규칙 폐기\n도움말 : 명령어 목록\n\n" +
             "기존 개체를 참조해 사용합니다. new/malloc은 지원하지 않습니다.\n" +
             "대상. → 현재 권한 목록\n이름 = 대상;\n이름.변수 = 값;\n이름 = 대상.명령(입력);\n" +
             "예: 지휘소.커피요청();\n문서 = 자료실.조사();\n스레드01.프로토콜실행(정찰, 자료실);\n\n" + ExampleProtocol : Help;

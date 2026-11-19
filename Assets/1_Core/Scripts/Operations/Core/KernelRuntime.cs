@@ -15,6 +15,7 @@ namespace Codetective.Operations
         private int nextDataId = 1;
         private int budget;
         private int depth;
+        private const string FrozenCipherScope = "\u0001cipher";
         public int Revision { get; private set; }
 
         public readonly HashSet<string> Facts = new HashSet<string>(StringComparer.Ordinal);
@@ -30,13 +31,14 @@ namespace Codetective.Operations
         public event Action DayEnded;
 
         public const string Help = "save <name> / free <name> / help\n" +
-            "save allocates a data slot; free releases it.\n" +
+            "save registers a substitution; free discards its binding, preserving the world and acquired information.\n" +
             "Assign references to existing objects; new/malloc are unavailable.\n" +
             "object. lists currently available commands.\nname = object.command(input);\n" +
             "Examples: hq.requestCoffee();\ndoc = archive.inspect();\nthread01.run(recon, archive);\n" +
             "Protocol editor: protocol recon(Place target) { return target.inspect(); }";
 
-        public void Register(Entity entity, params string[] rootAliases)
+        public void Register(Entity entity, params string[] rootAliases) => Register(entity, true, rootAliases);
+        public void Register(Entity entity, bool initiallyKnown, params string[] rootAliases)
         {
             foreach (string alias in entity.AllNames.Concat(rootAliases))
             {
@@ -46,13 +48,23 @@ namespace Codetective.Operations
             }
             IndexEntity(entity, new HashSet<Entity>());
             foreach (string alias in entity.AllNames.Concat(rootAliases)) roots[alias] = entity;
+            if (initiallyKnown)
+            {
+                var pending = new Stack<Entity>(); var visited = new HashSet<Entity>(); pending.Push(entity);
+                while (pending.Count > 0)
+                {
+                    Entity initial = pending.Pop(); if (!visited.Add(initial)) continue;
+                    Discover(initial.Id, "초기 작전망", true);
+                    foreach (Entity child in initial.Children.Values) pending.Push(child);
+                }
+            }
             Revision++;
         }
 
         private void IndexEntity(Entity entity, HashSet<Entity> visited)
         {
             if (!visited.Add(entity)) return;
-            if (!CommandParser.IsIdentifier(entity.Id)) throw new CommandException("객체 ID가 유효하지 않습니다: " + entity.Id);
+            if (string.IsNullOrWhiteSpace(entity.Id) || entity.Id.Length > 256) throw new CommandException("객체 ID가 유효하지 않습니다: " + entity.Id);
             if (entity.Schema == null) entity.Schema = Schemas.ForKind(entity.Kind);
             Schemas.Register(entity.Schema);
             if (entities.TryGetValue(entity.Id, out Entity other) && other != entity) throw new CommandException("객체 ID가 중복됩니다: " + entity.Id);
@@ -89,8 +101,12 @@ namespace Codetective.Operations
             name = Normalize(name);
             CheckName(name);
             if (!data.TryGetValue(name, out DataSlot slot)) slot = Allocate(name);
+            if (!string.IsNullOrEmpty(slot.declaredType))
+            {
+                Parameter type = DataTypes.Parameter(name, slot.declaredType);
+                if (!Accepts(type, value)) throw new CommandException("치환 대상의 자료형이 다릅니다: " + slot.declaredType);
+            }
             slot.value = NormalizeReference(value);
-            CollectEvidence(slot.value, evidenceSource);
             Revision++;
         }
 
@@ -117,8 +133,8 @@ namespace Codetective.Operations
                 if (keyword == "save" || keyword == "free")
                 {
                     if (words.Length != 2) return ExecutionResult.Error($"사용법: {words[0]} 이름");
-                    if (keyword == "save") { Allocate(words[1]); return ExecutionResult.Ok($"'{words[1]}' 데이터 공간을 할당했습니다."); }
-                    return Free(words[1]) ? ExecutionResult.Ok($"'{words[1]}' 데이터 공간을 해제했습니다.") :
+                    if (keyword == "save") { Allocate(words[1]); return ExecutionResult.Ok($"'{words[1]}' 치환문을 등록했습니다."); }
+                    return Free(words[1]) ? ExecutionResult.Ok($"'{words[1]}' 치환 규칙을 폐기했습니다.") :
                         ExecutionResult.Error($"'{words[1]}'에 할당된 데이터가 없습니다.");
                 }
                 budget = 1024; depth = 0;
@@ -154,8 +170,15 @@ namespace Codetective.Operations
 
         internal Datum ExecuteStatement(Statement statement, Dictionary<string, Datum> locals, string agent)
         {
+            string previous = executingAgent; executingAgent = agent;
+            try { return ExecuteStatementCore(statement, locals, agent); }
+            finally { executingAgent = previous; }
+        }
+        private Datum ExecuteStatementCore(Statement statement, Dictionary<string, Datum> locals, string agent)
+        {
             if (--budget < 0) throw new CommandException("한 번의 실행 예산(1024단계)을 초과했습니다.");
             if (locals == null && statement.Assign != null) CheckName(statement.Assign);
+            if (!string.IsNullOrEmpty(statement.DeclaredType)) Schemas.ValidateType(statement.DeclaredType);
             Entity assignedEntity = null;
             VariableDefinition assignedField = null;
             if (statement.AssignPath != null)
@@ -165,23 +188,33 @@ namespace Codetective.Operations
             }
             if (statement.ValidateOnly) return Datum.Empty;
             Datum value = Evaluate(statement.Value, locals, agent);
+            if (!string.IsNullOrEmpty(statement.DeclaredType) && !Accepts(DataTypes.Parameter(statement.Assign, statement.DeclaredType), value))
+                throw new CommandException("선언한 치환 자료형과 대상이 다릅니다: " + statement.DeclaredType);
             if (assignedField != null)
             {
                 if (value.kind != DataKind.Empty && !Schemas.Accepts(assignedField.Kind, assignedField.SchemaId, value, Entity))
                     throw new CommandException("변수에 저장할 자료형이 맞지 않습니다: " + assignedField.Code);
                 assignedEntity.SetValue(assignedField.Code, value);
+                Observe(new ObservationDefinition { subjectId = assignedEntity.Id, field = assignedField.Code, value = value, source = agent ?? "Kernel 명령" });
                 Revision++;
             }
             if (statement.Assign != null)
             {
                 if (locals != null) locals[statement.Assign] = value.Copy();
-                else Store(statement.Assign, value);
+                else
+                {
+                    Store(statement.Assign, value);
+                    if (!string.IsNullOrEmpty(statement.DeclaredType)) data[statement.Assign].declaredType = statement.DeclaredType;
+                    if ((value.kind == DataKind.Array || value.kind == DataKind.Dictionary) && !string.IsNullOrEmpty(data[statement.Assign].declaredType))
+                        data[statement.Assign].value.schemaId = data[statement.Assign].declaredType;
+                }
             }
             return value;
         }
 
         internal Datum Evaluate(Expression expression, Dictionary<string, Datum> locals, string agent)
         {
+            if (expression.Elements != null) return CollectionValue.Create(expression.Dictionary ? DataKind.Dictionary : DataKind.Array, expression.Elements.Select(e => Evaluate(e, locals, agent)));
             if (expression.Literal != null) return expression.Literal.Copy();
             string[] path = expression.Path;
             if (expression.IsCall && path.Length == 1 && protocols.TryGetValue(path[0], out Protocol protocol))
@@ -190,18 +223,15 @@ namespace Codetective.Operations
             {
                 if (path.Length < 2) throw new CommandException("알 수 없는 프로토콜/명령입니다: " + path[0]);
                 Entity target = ResolveEntity(path.Take(path.Length - 1).ToArray(), locals);
-                Operation operation = target.Find(path.Last());
-                if (operation == null || operation.Property) throw new CommandException("존재하지 않는 호출입니다: " + path.Last());
                 if (IsDayEnded && !DryRun) throw new CommandException("오늘의 업무 시간이 끝났습니다. 다음 날로 진행하세요.");
-                CheckOperationAccess(target, operation, locals);
                 Datum[] args = expression.Arguments.Select(e => Evaluate(e, locals, agent)).ToArray();
-                Validate(operation.Parameters, args, operation.Variadic);
-                return ObserveEvidence(Invoke(target, operation, args, agent), locals, agent);
+                Operation operation = ResolveOperation(target, path.Last(), args, locals);
+                return ObserveEvidence(Invoke(target, operation, args, agent), locals, agent, true);
             }
             if (path.Length == 1)
             {
                 if (locals != null && locals.TryGetValue(path[0], out Datum local)) return PlayerValue(local, locals);
-                if (data.TryGetValue(path[0], out DataSlot slot)) return PlayerValue(slot.value, locals);
+                if ((locals == null || !locals.ContainsKey(FrozenCipherScope)) && data.TryGetValue(path[0], out DataSlot slot)) return PlayerValue(slot.value, locals);
                 if (protocols.ContainsKey(path[0])) return Datum.Ref(DataKind.Protocol, path[0], path[0]);
             }
             try
@@ -217,12 +247,12 @@ namespace Codetective.Operations
                 if (field != null)
                 {
                     CheckVariableAccess(target, field, locals);
-                    return ObserveEvidence(target.GetValue(field.Code), locals, agent);
+                    return ObserveEvidence(ReadPlayerField(target, field), locals, agent);
                 }
                 Operation property = target.Find(path.Last());
                 if (property == null || !property.Property) throw new CommandException("알 수 없는 데이터/속성입니다: " + path.Last());
                 CheckOperationAccess(target, property, locals);
-                return ObserveEvidence(Invoke(target, property, Array.Empty<Datum>(), agent), locals, agent);
+                return ObserveEvidence(Invoke(target, property, Array.Empty<Datum>(), agent), locals, agent, true);
             }
         }
 
@@ -231,17 +261,18 @@ namespace Codetective.Operations
             if (path.Length == 0) throw new CommandException("대상을 지정하세요.");
             Entity entity = null;
             if (locals != null && locals.TryGetValue(path[0], out Datum local)) entity = ReferenceTarget(local);
-            else if (data.TryGetValue(path[0], out DataSlot slot)) entity = ReferenceTarget(slot.value);
+            else if ((locals == null || !locals.ContainsKey(FrozenCipherScope)) && data.TryGetValue(path[0], out DataSlot slot)) entity = ReferenceTarget(slot.value);
             else roots.TryGetValue(path[0], out entity);
+            if (entity == null && IsDiscovered(path[0])) entity = Entity(path[0]);
             if (entity == null) throw new CommandException("알 수 없거나 비어 있는 대상입니다: " + path[0]);
             CheckEntityAccess(entity, locals);
             for (int i = 1; i < path.Length; i++)
             {
-                Entity child = entity.Child(path[i]);
+                Entity child = string.IsNullOrEmpty(executingAgent) ? KnownChildren(entity).FirstOrDefault(p => p.Key == path[i] || p.Value.AllNames.Contains(path[i])).Value : entity.Child(path[i]);
                 if (child == null && entity.FindVariable(path[i]) is VariableDefinition field)
                 {
                     CheckVariableAccess(entity, field, locals);
-                    child = ReferenceTarget(entity.GetValue(field.Code));
+                    child = ReferenceTarget(ReadPlayerField(entity, field));
                 }
                 entity = child;
                 if (entity == null) throw new CommandException("알 수 없는 대상 경로입니다: " + path[i]);
@@ -255,7 +286,7 @@ namespace Codetective.Operations
             if (++depth > 24) { depth--; throw new CommandException("프로토콜 호출 깊이(24)를 초과했습니다."); }
             try
             {
-                Dictionary<string, Datum> locals = Bind(protocol, arguments);
+                Dictionary<string, Datum> locals = Bind(protocol, arguments, string.IsNullOrEmpty(agent) ? null : Agent(agent)?.CipherTable);
                 foreach (Statement statement in protocol.Body)
                 {
                     Datum value = ExecuteStatement(statement, locals, agent);
@@ -266,10 +297,11 @@ namespace Codetective.Operations
             finally { depth--; }
         }
 
-        internal Dictionary<string, Datum> Bind(Protocol protocol, Datum[] arguments)
+        internal Dictionary<string, Datum> Bind(Protocol protocol, Datum[] arguments, Dictionary<string, Datum> cipher = null)
         {
             Validate(protocol.Parameters, arguments, false);
-            var locals = new Dictionary<string, Datum>(StringComparer.Ordinal);
+            var locals = cipher == null ? new Dictionary<string, Datum>(StringComparer.Ordinal) : cipher.ToDictionary(p => p.Key, p => p.Value.Copy(), StringComparer.Ordinal);
+            if (cipher != null) locals[FrozenCipherScope] = Datum.Empty;
             for (int i = 0; i < arguments.Length; i++) locals[protocol.Parameters[i].Name] = arguments[i].Copy();
             return locals;
         }
@@ -294,7 +326,8 @@ namespace Codetective.Operations
             Expression e = statement.Value;
             if (!e.IsCall || e.Path.Length < 2) return 0;
             Entity target = ResolveEntity(e.Path.Take(e.Path.Length - 1).ToArray(), locals);
-            return Math.Max(0, target.Find(e.Path.Last())?.Minutes ?? 0);
+            Datum[] arguments = e.Arguments.Select(a => Evaluate(a, locals, executingAgent)).ToArray();
+            return Math.Max(0, ResolveOperation(target, e.Path.Last(), arguments, locals).Minutes);
         }
 
         public IReadOnlyList<Completion> Complete(string source, bool composing = false) => Complete(source, composing, null);
@@ -315,17 +348,22 @@ namespace Codetective.Operations
                 string before = leading + input.Substring(0, start) + input.Substring(start, input.Substring(start).Length - prefix.Length);
                 if (prefix.Contains("."))
                     return Complete(prefix, composing, locals).Select(c => new Completion(c.Label, before + c.Replacement)).ToArray();
-                Parameter expected = new Parameter("input", DataKind.Any);
+                Parameter[] expected = { new Parameter("input", DataKind.Any) };
                 try
                 {
                     string[] call = input.Substring(0, open).Trim().Split('.');
-                    Parameter[] parameters = call.Length == 1 && protocols.TryGetValue(call[0], out Protocol p) ? p.Parameters :
-                        call.Length > 1 ? ResolveCompletionEntity(call.Take(call.Length - 1).ToArray(), locals).Find(call.Last())?.Parameters : null;
                     int argumentIndex = input.Substring(open + 1).Count(c => c == ',');
-                    if (parameters != null && argumentIndex < parameters.Length) expected = parameters[argumentIndex];
+                    if (call.Length == 1 && protocols.TryGetValue(call[0], out Protocol p) && argumentIndex < p.Parameters.Length) expected = new[] { p.Parameters[argumentIndex] };
+                    else if (call.Length > 1)
+                    {
+                        Entity target = ResolveCompletionEntity(call.Take(call.Length - 1).ToArray(), locals);
+                        Parameter[] options = target.EffectiveOperations.Where(o => o.Matches(call.Last()) && OperationDenial(target, o, locals) == null && argumentIndex < o.Parameters.Length)
+                            .Select(o => o.Parameters[argumentIndex]).ToArray();
+                        if (options.Length > 0) expected = options;
+                    }
                 }
                 catch (CommandException) { }
-                return AvailableValues(locals, prefix, composing).Where(v => Accepts(expected, v.Value) && Prefix(v.Key, prefix, composing))
+                return AvailableValues(locals, prefix, composing).Where(v => expected.Any(p => Accepts(p, v.Value)) && Prefix(v.Key, prefix, composing))
                     .Select(v => new Completion(v.Key + " : " + TypeName(v.Value), before + v.Key)).ToArray();
             }
             int dot = input.LastIndexOf('.');
@@ -337,7 +375,7 @@ namespace Codetective.Operations
                 {
                     Entity entity = ResolveCompletionEntity(objectPath.Split('.'), locals);
                     var output = new List<Completion>();
-                    foreach (var child in entity.Children)
+                    foreach (var child in KnownChildren(entity))
                     {
                         string preferred = CommandVocabulary.Name(child.Key, child.Value.Names, Language);
                         string name = CommandVocabulary.Match(preferred, child.Value.AllNames.Concat(new[] { child.Key }), prefix, composing);
@@ -348,7 +386,7 @@ namespace Codetective.Operations
                     {
                         string name = CommandVocabulary.Match(field.NameFor(Language), field.AllNames, prefix, composing);
                         if (name != null && VariableDenial(entity, field, locals) == null)
-                            output.Add(new Completion(name + " : " + (string.IsNullOrEmpty(field.SchemaId) ? KindName(field.Kind) : Schemas.Require(field.SchemaId).NameFor(Language)) +
+                            output.Add(new Completion(name + " : " + (string.IsNullOrEmpty(field.SchemaId) ? KindName(field.Kind) : DataTypes.IsArray(field.SchemaId) || DataTypes.DictionaryTypes(field.SchemaId) != null ? field.SchemaId : Schemas.Require(field.SchemaId).NameFor(Language)) +
                                 " · " + field.LabelFor(Language), leading + objectPath + "." + name));
                     }
                     foreach (Operation op in entity.EffectiveOperations)
@@ -370,7 +408,8 @@ namespace Codetective.Operations
         {
             if (locals != null) foreach (var local in locals) if (!local.Key.StartsWith("\u0001", StringComparison.Ordinal) && PlayerValueVisible(local.Value, locals)) yield return local;
             foreach (var slot in data) if ((locals == null || !locals.ContainsKey(slot.Key)) && PlayerValueVisible(slot.Value.value, locals)) yield return new KeyValuePair<string, Datum>(slot.Key, slot.Value.value);
-            foreach (var root in roots)
+            foreach (var root in roots.Concat(entities.Where(e => IsDiscovered(e.Key) && !roots.ContainsKey(e.Key) && discoveries[e.Key].source != "초기 작전망" &&
+                !data.Values.Any(s => s.value.CanReferenceEntity && s.value.id == e.Key))))
                 if (root.Key == root.Value.Id && EntityDenial(root.Value) == null)
                 {
                     string name = CommandVocabulary.Match(root.Value.NameFor(Language), root.Value.AllNames.Concat(roots.Where(r => r.Value == root.Value).Select(r => r.Key)), prefix, composing);

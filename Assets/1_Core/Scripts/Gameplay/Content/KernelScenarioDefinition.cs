@@ -21,6 +21,9 @@ namespace Codetective.Gameplay
         public string storyStartFact = "";
         public PresentationSettings presentation;
         public ProfileCatalog profiles;
+        public string[] initialDiscoveries = Array.Empty<string>();
+        public ObservationDefinition[] initialObservations = Array.Empty<ObservationDefinition>();
+        public WorldScheduleEntry[] worldEvents = Array.Empty<WorldScheduleEntry>();
 
         public KernelRuntime CreateRuntime()
         {
@@ -33,11 +36,15 @@ namespace Codetective.Gameplay
             profiles?.ApplyDescriptions(runtime);
             runtime.StoryStartFact = storyStartFact;
             runtime.ApplyStoryEffects(initialStoryState);
+            runtime.RefreshInitialKnowledge();
             foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);
             runtime.DeliverNewspaper();
             foreach (ClinicDayPlanAsset item in clinicDays) if (item != null) runtime.RegisterClinicDay(item.plan);
             foreach (StoryMailAsset item in mail) if (item != null) runtime.RegisterMail(item.message);
             runtime.InitializeClinicDay(); runtime.InitializeDailyRecord();
+            foreach (string id in initialDiscoveries ?? Array.Empty<string>()) runtime.Discover(id, "초기 작전 자료");
+            foreach (ObservationDefinition report in initialObservations ?? Array.Empty<ObservationDefinition>()) runtime.Observe(report);
+            foreach (WorldScheduleEntry entry in worldEvents ?? Array.Empty<WorldScheduleEntry>()) runtime.RegisterWorldEvent(entry);
             runtime.CaptureScenarioEntityDefaults();
             return runtime;
         }
@@ -60,6 +67,7 @@ namespace Codetective.Gameplay
     {
         public string name;
         public DataKind kind = DataKind.Any;
+        public string typeName = "";
         public EntitySchemaAsset referenceType;
     }
     [Serializable] public sealed class ActionDefinition
@@ -89,5 +97,10 @@ namespace Codetective.Gameplay
         public FieldWriteDefinition[] fieldWrites = Array.Empty<FieldWriteDefinition>();
         [Tooltip("Change available fields or conversation functions on the target instance after this action.")]
         public MemberToggle[] memberChanges = Array.Empty<MemberToggle>();
+        public bool dispatchToThread;
+        public ObservationDefinition[] reports = Array.Empty<ObservationDefinition>();
+        public string[] discoveries = Array.Empty<string>();
+        public string[] incidents = Array.Empty<string>();
+        public ActionResponseDefinition[] responses = Array.Empty<ActionResponseDefinition>();
     }
 }

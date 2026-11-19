@@ -15,6 +15,7 @@ namespace Codetective.Tests.Operations
             p.AddVariable(new VariableDefinition { Code = "note", Label = "메모", Kind = DataKind.Text, Writable = true,
                 DefaultValue = Datum.Text("기밀"), Access = new AccessRule { Story = Gate() } });
             p.AddFunction(new OperationDefinition { Code = "ask", ReturnKind = DataKind.Text, ReturnField = "note", Access = new AccessRule { Story = Gate() } });
+            r.Observe(new ObservationDefinition { subjectId = p.Id, field = "note", value = Datum.Text("기밀"), source = "초기 자료" });
             return r;
         }
         private static void Open(KernelRuntime r) { r.SetTrigger("known", true); r.SetQuestStage("case", 10); }
@@ -55,6 +56,7 @@ namespace Codetective.Tests.Operations
                 Access = new AccessRule { PlayerAccess = PlayerAccess.Internal } });
             Assert.That(p.GetValue("privateNote").text, Is.EqualTo("hidden")); Assert.That(p.Find("privateTalk"), Is.Not.Null);
             Assert.That(r.Complete("person.private"), Is.Empty);
+            r.Observe(new ObservationDefinition { subjectId = p.Id, field = "privateNote", useCurrentField = true, source = "기존 제한 자료" });
             p.SetVariableAccess("privateNote", PlayerAccess.Public); p.SetFunctionAccess("privateTalk", PlayerAccess.Public);
             Assert.That(r.Execute("person.privateNote").Value.text, Is.EqualTo("hidden")); Assert.That(r.Execute("person.privateTalk()").Success, Is.True);
             p.SetVariableAccess("privateNote", PlayerAccess.Inherit); p.SetFunctionAccess("privateTalk", PlayerAccess.Internal);
@@ -78,6 +80,7 @@ namespace Codetective.Tests.Operations
             r.Schemas.Register(parent); var child = new EntitySchema("Child", "자식", DataKind.Person, parent); r.Schemas.Register(child);
             Entity a = r.CreateInstance("Child", "a", "A"), b = r.CreateInstance("Child", "b", "B");
             a.SetVariableAccess("secret", PlayerAccess.Public);
+            r.Observe(new ObservationDefinition { subjectId = a.Id, field = "secret", value = Datum.Text("value"), source = "기존 제한 자료" });
             Assert.That(r.Execute("a.secret").Success, Is.False); r.SetTrigger("parent", true);
             Assert.That(r.Execute("a.secret").Success, Is.True); Assert.That(r.Execute("b.secret").Success, Is.False);
         }

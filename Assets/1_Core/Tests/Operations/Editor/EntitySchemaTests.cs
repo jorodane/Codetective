@@ -138,7 +138,7 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Complete("study."), Is.Empty);
             r.Authorities.Add("rooms");
             Assert.That(r.Execute("study.note = \"hidden\"").Success, Is.False);
-            Assert.That(r.Complete("study.re"), Is.Empty);
+            Assert.That(r.Complete("study.read"), Is.Empty);
             Assert.That(r.Execute("study.read()").Success, Is.False);
             r.Facts.UnionWith(new[] { "note_known", "read_allowed" });
             Assert.That(r.Execute("study.read()").Value.text, Is.EqualTo("override"));
@@ -264,8 +264,8 @@ namespace Codetective.Tests.Operations
         [Test]
         public void PreSchemaSavesKeepScenarioDefaultsAndMigrateRecordReferences()
         {
-            KernelRuntime r = ClinicScenario.Create(); r.RecordClue(0);
-            KernelSnapshot legacy = r.Capture(); legacy.entities = null;
+            KernelRuntime r = ClinicScenario.Create(); r.RecordClue(0); r.ReferenceEvidence("basement_noise", "basementNoise");
+            KernelSnapshot legacy = r.Capture(); legacy.entities = null; legacy.discoveries = null; legacy.observations = null;
             foreach (DataSlot slot in legacy.data) slot.value.schemaId = "";
             var restored = ClinicScenario.Create(); restored.Restore(legacy);
             Assert.That(restored.Execute("basementNoise.description").Value.text, Does.Contain("기계음"));

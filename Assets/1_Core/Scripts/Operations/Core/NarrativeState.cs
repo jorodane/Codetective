@@ -167,7 +167,7 @@ namespace Codetective.Operations
             if (person != null)
                 foreach (VariableDefinition field in person.Variables.Where(f => f.Code != "id" && f.Code != "name" && VariableDenial(person, f, null) == null))
                 {
-                    Datum value = person.GetValue(field.Code);
+                    Datum value = LastKnownValue(person.Id, field.Code);
                     if (value.kind != DataKind.Empty && !(value.kind == DataKind.Text && string.IsNullOrEmpty(value.text)) && IsPlayerVisible(value))
                         text.Append(string.IsNullOrEmpty(field.Label) ? field.NameFor(Language) : field.Label).Append(": ").Append(value).Append('\n');
                 }

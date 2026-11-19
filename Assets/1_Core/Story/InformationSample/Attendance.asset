@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 853e59987727c5f7b5bcfca9f67b7954
+    type: 3
+  m_Name: Attendance
+  m_EditorClassIdentifier: ''
+  instanceId: Attendance
+  displayName: 행사 참석
+  schema:
+    fileID: 11400000
+    guid: 89d9b7effc584bd7abd44ab708063dbf
+    type: 2
+  exposeRoot: 1
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names:
+  - language: 1
+    name: 행사참석
+    description: ''
+  initialValues: []
+  functions: []
+  fields: []
+  children: []
+  disabledVariables: []
+  disabledFunctions: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []

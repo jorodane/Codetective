@@ -17,6 +17,7 @@ namespace Codetective.Tests.Operations
         public void FreeReleasesReferencesWithoutRemovingCollectedEvidence()
         {
             KernelRuntime runtime = ClinicScenario.Create();
+            runtime.CollectEvidence(Datum.Ref(DataKind.Document, "case_record", "사건 기록", "핵심 증거의 설명"), "현장 확보");
             runtime.Store("first", Datum.Ref(DataKind.Document, "case_record", "사건 기록", "핵심 증거의 설명"));
             runtime.Store("second", runtime.Data["first"].value); runtime.Free("first"); runtime.Free("second");
             EvidenceEntry entry = runtime.Evidence.Single();
@@ -58,6 +59,8 @@ namespace Codetective.Tests.Operations
             key.SetEntityAccess(PlayerAccess.Internal); Assert.That(runtime.Evidence, Is.Empty);
             Assert.That(() => runtime.ReferenceEvidence("key", "newReference"), Throws.TypeOf<CommandException>());
             key.SetEntityAccess(PlayerAccess.Public); key.SetVariableAccess("description", PlayerAccess.Public); key.SetValue("description", Datum.Text("갱신된 설명"));
+            Assert.That(runtime.Evidence.Single().Description, Is.EqualTo("기밀 설명"));
+            runtime.Observe(new ObservationDefinition { subjectId = key.Id, field = "description", useCurrentField = true, source = "재조사" });
             Assert.That(runtime.Evidence.Single().Description, Is.EqualTo("갱신된 설명"));
         }
         [Test]
@@ -75,12 +78,13 @@ namespace Codetective.Tests.Operations
         [Test]
         public void CollectionSnapshotsDoNotShareValuesAndKeepFirstAcquisitionTimes()
         {
-            KernelRuntime runtime = ClinicScenario.Create(); runtime.RecordClue(0); runtime.Tick(5); runtime.Store("copy", runtime.Data["basementNoise"].value);
+            KernelRuntime runtime = ClinicScenario.Create(); runtime.RecordClue(0); runtime.ReferenceEvidence("basement_noise", "basementNoise"); runtime.Tick(5); runtime.Store("copy", runtime.Data["basementNoise"].value);
             KernelSnapshot saved = runtime.Capture(); KernelRuntime restored = ClinicScenario.Create(); restored.Restore(saved);
             saved.evidence[0].value.label = "changed"; saved.evidence[0].day = 99;
-            Assert.That(restored.Evidence.Single().Name, Is.EqualTo("지하실 야간 소음")); Assert.That(restored.Evidence.Single().Day, Is.EqualTo(1));
-            Assert.That(restored.Evidence.Single().Minute, Is.EqualTo(540));
-            restored.Free("copy"); restored.Free("basementNoise"); Assert.That(restored.Evidence.Count, Is.EqualTo(1));
+            EvidenceEntry original = restored.Evidence.Single(e => e.Id == "basement_noise");
+            Assert.That(original.Name, Is.EqualTo("지하실 야간 소음")); Assert.That(original.Day, Is.EqualTo(1));
+            Assert.That(original.Minute, Is.EqualTo(540));
+            restored.Free("copy"); restored.Free("basementNoise"); Assert.That(restored.Evidence.Count(e => e.Id == "basement_noise"), Is.EqualTo(1));
         }
         [Test]
         public void OlderSavesRecoverStoredAndRecordedCluesWithoutInventingAcquisitionTimes()
@@ -101,7 +105,8 @@ namespace Codetective.Tests.Operations
         [Test]
         public void DetachedItemsRetainTheirOpaqueIdentifiers()
         {
-            KernelRuntime runtime = ClinicScenario.Create(); runtime.Store("item", Datum.Ref(DataKind.Item, "item-01", "휴대 도구", "현장에서 확보")); runtime.Free("item");
+            KernelRuntime runtime = ClinicScenario.Create(); Entity item = runtime.CreateInstance("Item", "item-01", "휴대 도구", false);
+            runtime.CollectEvidence(runtime.Reference(item), "현장에서 확보"); runtime.Store("item", runtime.Reference(item)); runtime.Free("item");
             KernelRuntime restored = ClinicScenario.Create(); restored.Restore(runtime.Capture());
             restored.ReferenceEvidence("item-01", "tool"); Assert.That(restored.Execute("tool").Value.id, Is.EqualTo("item-01"));
         }
@@ -122,7 +127,9 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.SaveProtocol("protocol investigate(Place target) { doc = target.inspect(); result = target.analyze(doc); return result; }").Success, Is.True);
             Assert.That(runtime.Execute("thread01.run(investigate, archive)").Success, Is.True);
             runtime.Tick(6); Assert.That(runtime.Agent("thread01").State, Is.EqualTo(AgentState.Executing)); Assert.That(runtime.Evidence, Is.Empty);
-            runtime.Tick(10); Assert.That(runtime.Evidence.Single().Value.kind, Is.EqualTo(DataKind.Analysis));
+            runtime.Tick(10);
+            Assert.That(runtime.Evidence.Select(e => e.Value.kind), Is.EquivalentTo(new[] { DataKind.Document, DataKind.Analysis }));
+            Assert.That(runtime.Data, Is.Empty);
         }
         [Test]
         public void ProtocolTestsCompletionAndFailedCommandsCannotGrantRealEvidence()

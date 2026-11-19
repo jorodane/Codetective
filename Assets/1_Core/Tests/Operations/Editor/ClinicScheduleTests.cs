@@ -59,7 +59,7 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = World(); r.Facts.Add("basement_noise"); r.Execute("thread01.run(recon, archive)");
             r.WaitForNextAppointment(); Assert.That(r.Agent("thread01").State, Is.EqualTo(AgentState.Ready));
-            Assert.That(r.Data.ContainsKey("thread01_report"), Is.True); Advance(r);
+            Assert.That(r.Agent("thread01").Report.kind, Is.EqualTo(DataKind.Document)); Advance(r);
             Assert.That(() => r.WaitForNextAppointment(), Throws.TypeOf<CommandException>());
             Assert.That(() => r.WaitUntilClosing(), Throws.TypeOf<CommandException>());
         }
@@ -142,11 +142,12 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.CurrentConsultation, Is.Null); Assert.That(restored.CanWaitForNextAppointment, Is.True);
         }
         [Test]
-        public void FreedDataIdsAreNotReusedAfterReloadAndNewAllocationsRemainVisibleInTheReport()
+        public void FreedReferenceIdsAreNotReusedAndWorkingAliasesDoNotCountAsNewFindings()
         {
             var r = new KernelRuntime(); r.Allocate("old"); r.InitializeDailyRecord(); r.Free("old");
             var restored = new KernelRuntime(); restored.Restore(r.Capture()); restored.Store("newData", Datum.Text("new"));
-            restored.Tick(540); Assert.That(restored.FinalizeDay().newData, Is.EqualTo(new[] { "newData" }));
+            Assert.That(restored.Data["newData"].id, Is.GreaterThan(1));
+            restored.Tick(540); Assert.That(restored.FinalizeDay().newData, Is.Empty);
         }
     }
 }

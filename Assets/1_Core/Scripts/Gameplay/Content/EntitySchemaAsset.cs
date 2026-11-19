@@ -40,6 +40,8 @@ namespace Codetective.Gameplay
         public string code;
         public string label;
         public DataKind kind = DataKind.Text;
+        [Tooltip("Optional collection/custom type, e.g. Person[], Dict<Physical,Relationship[]>.")]
+        public string typeName = "";
         public EntitySchemaAsset referenceType;
         public Datum defaultValue = new Datum();
         public bool writable;
@@ -54,6 +56,9 @@ namespace Codetective.Gameplay
         public string field;
         [Tooltip("-1 uses Value / Reference; 0 and above use that function argument.")]
         public int argumentIndex = -1;
+        [Tooltip("-1 modifies this object. An argument index modifies that object, or every object in an array argument.")]
+        public int targetArgumentIndex = -1;
+        public bool useArgumentTarget;
         public Datum value = new Datum();
         public EntityInstanceAsset reference;
     }

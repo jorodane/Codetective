@@ -40,22 +40,31 @@ namespace Codetective.Operations
             return schema == null || thread == null || !schema.IsA(thread);
         }
         public bool CollectEvidence(Datum value, string source = "명령 결과") => CollectEvidence(value, source, true, true);
-        private bool CollectEvidence(Datum value, string source, bool acquiredTime, bool notify)
+        private bool CollectEvidence(Datum value, string source, bool acquiredTime, bool notify, bool observeFields = true)
         {
             if (!EvidenceKind(value)) return false;
             Datum reference = NormalizeReference(value);
             if (!EvidenceKind(reference) || evidence.ContainsKey(reference.id)) return false;
+            if (Entity(reference.id) != null) Discover(reference.id, source, observeFields, false);
             evidence.Add(reference.id, new EvidenceRecord { number = nextEvidenceNumber++, day = Day, minute = Minute,
                 hasAcquiredTime = acquiredTime, source = source ?? "", value = reference.Copy() });
             if (notify) { Revision++; NarrativeUpdated(); }
             return true;
         }
-        private Datum ObserveEvidence(Datum value, Dictionary<string, Datum> locals, string agent)
+        private Datum ObserveEvidence(Datum value, Dictionary<string, Datum> locals, string agent, bool actionResult = false)
         {
-            Datum result = PlayerValue(value, locals);
             // A Thread's local findings reach Kernel through its final report, not while its protocol is still running.
-            if (string.IsNullOrEmpty(agent)) CollectEvidence(result);
-            return result;
+            if (string.IsNullOrEmpty(agent)) CollectEvidence(value);
+            else if (actionResult && EvidenceKind(value) && Entity(value.id) is Entity result)
+            {
+                Discover(result.Id, agent);
+                // A received document's content is observed now. Returning an object reference
+                // alone does not inspect all of that object's otherwise unknown state.
+                if (IsRecord(value.kind))
+                    foreach (VariableDefinition field in result.Variables.Where(f => VariableDenial(result, f, locals) == null))
+                        Observe(new ObservationDefinition { subjectId = result.Id, field = field.Code, useCurrentField = true, source = agent });
+            }
+            return PlayerValue(value, locals);
         }
         private EvidenceEntry EvidenceView(EvidenceRecord record)
         {
@@ -64,7 +73,7 @@ namespace Codetective.Operations
             {
                 VariableDefinition field = target.FindVariable("description");
                 bool allowed = field != null && VariableDenial(target, field, null) == null;
-                Datum visible = allowed ? target.GetValue(field.Code) : Datum.Empty;
+                Datum visible = allowed ? LastKnownValue(target.Id, field.Code) : Datum.Empty;
                 description = !allowed || !IsPlayerVisible(visible) ? "" : visible.kind == DataKind.Empty || visible.kind == DataKind.Text && string.IsNullOrWhiteSpace(visible.text) ? record.value.text : visible.ToString();
             }
             string name = target?.Label ?? record.value.label;
@@ -110,6 +119,9 @@ namespace Codetective.Operations
                     item.day < 1 || item.day > Day || double.IsNaN(item.minute) || double.IsInfinity(item.minute) || item.minute < 0 || item.minute > 1440 || evidence.ContainsKey(item.value.id))
                     throw new CommandException("저장된 확보 자료가 유효하지 않거나 중복됩니다.");
                 EvidenceRecord restored = item.Copy(); restored.value = NormalizeReference(restored.value); evidence.Add(restored.value.id, restored);
+                Entity legacy = Entity(restored.value.id);
+                if (snapshot.entities == null && legacy != null && IsRecord(restored.value.kind) && !string.IsNullOrEmpty(restored.value.text) && string.IsNullOrEmpty(legacy.GetValue("description").text))
+                    legacy.SetValue("description", Datum.Text(restored.value.text));
             }
             nextEvidenceNumber = Math.Max(snapshot.nextEvidenceNumber, evidence.Count == 0 ? 1 : evidence.Values.Max(e => e.number) + 1);
             if (snapshot.evidence != null) return;

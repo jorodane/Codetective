@@ -35,9 +35,9 @@ namespace Codetective.Operations
                 VariableDefinition field = person.FindVariable(candidate) ?? person.GetVariableDefinition(candidate);
                 if (field == null) continue;
                 if (!person.Variables.Any(v => v.Code == field.Code) || VariableDenial(person, field, null) != null) return "[접근 제한]";
-                Datum value = person.GetValue(field.Code);
+                Datum value = LastKnownValue(person.Id, field.Code);
                 if (!IsPlayerVisible(value)) return "[접근 제한]";
-                return value.kind == DataKind.Empty || value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text) ? fallback : value.ToString();
+                return value.kind == DataKind.Empty || value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text) ? person.Id == "kernel" ? "[데이터 말소됨]" : fallback : value.ToString();
             }
             return fallback;
         }
@@ -46,18 +46,22 @@ namespace Codetective.Operations
 
         public string ProfileFindings(string profileId)
         {
-            RequireVisibleProfile(profileId); Entity person = Entity(profileId); var text = new StringBuilder();
+            RequireVisibleProfile(profileId); Entity person = Entity(profileId); var text = new StringBuilder("마지막 보고된 정보\n");
             var basic = new HashSet<string>(profileFields.SelectMany(f => f).Concat(new[] { "id" }), StringComparer.Ordinal);
             if (person != null)
                 foreach (VariableDefinition field in person.Variables.Where(f => !basic.Contains(f.Code) && VariableDenial(person, f, null) == null))
                 {
-                    Datum value = person.GetValue(field.Code);
+                    Datum value = LastKnownValue(person.Id, field.Code);
                     if (value.kind != DataKind.Empty && !(value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text)) && IsPlayerVisible(value))
                         text.Append(field.Label ?? field.Code).Append(": ").Append(value).Append('\n');
                 }
+            foreach (ObservationRecord report in Observations.Where(o => o.subjectId == profileId && !string.IsNullOrWhiteSpace(o.statement)))
+                text.Append("[관측 · ").Append(report.source).Append(" / DAY ").Append(report.observedDay).Append(" ").Append(TimeOfDay(report.observedMinute))
+                    .Append(" → 수신 DAY ").Append(report.receivedDay).Append(" ").Append(TimeOfDay(report.receivedMinute)).Append("]\n").Append(report.statement).Append("\n\n");
             foreach (ConsultationLine line in Consultation.Where(l => ProfileOf(l) == profileId && RecordedClues.Contains(l.fact)).GroupBy(l => l.fact).Select(g => g.First()))
-                text.Append("● ").Append(line.keyword).Append('\n').Append(line.sentence).Append("\n\n");
-            return text.Length == 0 ? "기록한 단서가 없습니다." : text.ToString().TrimEnd();
+                if (!observations.Any(o => o.subjectId == profileId && o.statement == line.sentence))
+                    text.Append("● ").Append(line.keyword).Append('\n').Append(line.sentence).Append("\n\n");
+            return text.ToString().TrimEnd();
         }
         public string ProfileJournalText(string profileId, int pageIndex)
         {

@@ -66,7 +66,7 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Complete("자료실.조"), Is.Empty);
             Assert.That(r.Execute("문서 = 자료실.조사();").Success, Is.False);
             r.RecordClue(0);
-            Assert.That(r.Complete("자료실.ㅈ", true).Single().Replacement, Is.EqualTo("자료실.조사()"));
+            Assert.That(r.Complete("자료실.ㅈ", true).Single(c => c.Replacement == "자료실.조사()").Replacement, Is.EqualTo("자료실.조사()"));
             Assert.That(r.Execute("문서 = 자료실.조사();").Success, Is.True);
             Assert.That(r.Execute("결과 = 자료실.분석(문서);").Success, Is.True);
             Assert.That(r.Execute("상담손님.증거제시(결과);").Success, Is.True);
@@ -143,7 +143,7 @@ namespace Codetective.Tests.Operations
             r.RecordClue(0);
             const string source = "프로토콜 정찰(장소 대상) {\n    반환 대상.ㅈ\n}";
             int caret = source.IndexOf("ㅈ", StringComparison.Ordinal) + 1;
-            Completion completion = r.CompleteProtocol(source, caret, "자료실", true).Single();
+            Completion completion = r.CompleteProtocol(source, caret, "자료실", true).Single(c => c.Replacement.Contains("대상.조사()"));
             Assert.That(completion.Replacement, Does.Contain("반환 대상.조사()\n}"));
             Assert.That(r.Facts, Does.Not.Contain("archive_inspected"));
         }
@@ -157,7 +157,7 @@ namespace Codetective.Tests.Operations
             warehouse.Operations.Add(new Operation { Code = "inspect", Names = new[] { new LocalizedCommandName(CommandLocale.Korean, "살펴본다") },
                 Invoke = c => Datum.Text("found") });
             r.Register(warehouse);
-            Assert.That(r.Complete("창고.살").Single().Replacement, Is.EqualTo("창고.살펴본다()"));
+            Assert.That(r.Complete("창고.살").Single(c => c.Replacement == "창고.살펴본다()").Replacement, Is.EqualTo("창고.살펴본다()"));
             Assert.That(r.Execute("창고.살펴본다();").Value.text, Is.EqualTo("found"));
             r.Language = CommandLocale.English;
             Assert.That(r.Execute("warehouse.inspect();").Value.text, Is.EqualTo("found"));

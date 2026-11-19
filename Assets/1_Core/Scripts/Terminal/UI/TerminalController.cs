@@ -232,10 +232,10 @@ namespace Codetective.Terminal
 
         private void RefreshMemory()
         {
-            memoryHeading.text = (session.Runtime.Language == CommandLocale.Korean ? "데이터 / " : "DATA / ") + session.Count;
+            memoryHeading.text = (session.Runtime.Language == CommandLocale.Korean ? "치환 참조 / " : "REFERENCES / ") + session.Count;
             if (session.Count == 0)
             {
-                memoryList.text = session.Runtime.Language == CommandLocale.Korean ? "할당된 공간 없음\n\n저장 이름\n명령으로 공간을\n만들어 보세요." : "No allocated data\n\nsave name\nallocates a new slot.";
+                memoryList.text = session.Runtime.Language == CommandLocale.Korean ? "등록된 치환문 없음\n\n확보한 자료를 선택해\n참조를 등록하거나\n암호 이름 = 대상\n형식으로 작성하세요." : "No substitutions\n\nSelect acquired evidence\nor enter var name = target.";
                 return;
             }
 
