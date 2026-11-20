@@ -37,26 +37,30 @@ namespace Codetective.Tests.Interaction
         [Test]
         public void MenuBlocksDrawerClickNavigationUntilResumed()
         {
-            var flow = new InspectionFlow(); flow.Inspect(); flow.Escape();
+            var flow = new InspectionFlow(); flow.Inspect(); flow.OpenMenu();
             Assert.That(flow.CanInspectByPointer("drawer"), Is.False);
             flow.Resume(); Assert.That(flow.CanInspectByPointer("drawer"), Is.True);
         }
 
         [Test]
-        public void EscapeWhileInspectingOpensTheMenuImmediately()
+        public void EscapeReturnsToOverviewBeforeTheNextEscapeOpensTheMenu()
         {
             var flow = new InspectionFlow();
             Assert.That(flow.Inspect(), Is.True);
+            Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.ReturnToOverview));
+            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Overview));
             Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.OpenMenu));
             Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Menu));
+            Assert.That(flow.Resume(), Is.True);
+            Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Overview));
         }
 
         [Test]
-        public void EscapeClosesTheMenuAndRestoresTheInspectedView()
+        public void DirectPresentationMenuRestoresTheInspectedView()
         {
             var flow = new InspectionFlow();
             flow.Inspect();
-            Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.OpenMenu));
+            flow.OpenMenu();
             Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Menu));
             Assert.That(flow.Escape(), Is.EqualTo(EscapeAction.CloseMenu));
             Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Inspecting));
@@ -85,7 +89,7 @@ namespace Codetective.Tests.Interaction
         {
             var flow = new InspectionFlow();
             flow.Inspect();
-            flow.Escape();
+            flow.OpenMenu();
             Assert.That(flow.Resume(), Is.True);
             Assert.That(flow.Mode, Is.EqualTo(InspectionMode.Inspecting));
             Assert.That(flow.Resume(), Is.False);

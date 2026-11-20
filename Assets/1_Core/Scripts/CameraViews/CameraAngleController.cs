@@ -84,13 +84,15 @@ namespace Codetective.CameraViews
         public void SnapToIndex(int index) => TryGoToIndex(index, true);
 
         public bool TryGoToIndex(int index, bool instant = false)
+            => TryGoToIndex(index, instant, -1, null);
+        public bool TryGoToIndex(int index, bool instant, float durationOverride, AnimationCurve curveOverride)
         {
             CameraAnglePreset preset = angleSet != null ? angleSet.Get(index) : null;
             if (preset == null || (angleOrigin != null &&
                                   (angleOrigin == transform || angleOrigin.IsChildOf(transform))))
                 return false;
 
-            CameraAngleTransition next = new CameraAngleTransition(CapturePose(), ControlledCamera.fieldOfView, preset);
+            CameraAngleTransition next = new CameraAngleTransition(CapturePose(), ControlledCamera.fieldOfView, preset, durationOverride, curveOverride);
             activeAngle = preset;
             transition = next;
             if (Application.isPlaying)

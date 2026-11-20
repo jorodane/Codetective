@@ -17,14 +17,15 @@ namespace Codetective.CameraViews
         public float CurrentFieldOfView { get; private set; }
         public bool IsComplete => elapsed >= duration;
 
-        public CameraAngleTransition(Pose from, float fromFov, CameraAnglePreset target)
+        public CameraAngleTransition(Pose from, float fromFov, CameraAnglePreset target, float durationOverride = -1, AnimationCurve curveOverride = null)
         {
             this.from = from;
             this.fromFov = fromFov;
             to = target.Pose;
             toFov = target.FieldOfView;
-            duration = target.TransitionDuration;
-            curve = target.BlendCurve != null ? new AnimationCurve(target.BlendCurve.keys) : null;
+            duration = durationOverride >= 0 ? durationOverride : target.TransitionDuration;
+            AnimationCurve authored = curveOverride != null && curveOverride.length > 0 ? curveOverride : target.BlendCurve;
+            curve = authored != null ? new AnimationCurve(authored.keys) : null;
             CurrentPose = from;
             CurrentFieldOfView = fromFov;
             Step(0f);

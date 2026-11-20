@@ -34,6 +34,21 @@ namespace Codetective.Tests.CameraViews
         }
 
         [Test]
+        public void TransitionEffectsCanOverrideMovementTimingWithoutEditingTheAngle()
+        {
+            var preset = Preset("profile", new Vector3(10, 0, 0), Vector3.zero);
+            AnimationCurve effectCurve = AnimationCurve.Linear(0, 0, 1, 1);
+            var blend = new CameraAngleTransition(Pose.identity, 60, preset, 2f, effectCurve);
+            effectCurve.keys = AnimationCurve.Linear(0, 0, 1, 0).keys;
+            blend.Step(1f);
+            Assert.That(blend.IsComplete, Is.False); Assert.That(blend.CurrentPose.position.x, Is.EqualTo(5).Within(0.0001f));
+            blend.Step(1f); Assert.That(blend.IsComplete, Is.True); AssertPose(blend.CurrentPose, preset.Pose);
+            Assert.That(preset.TransitionDuration, Is.EqualTo(1f));
+            var instant = new CameraAngleTransition(Pose.identity, 60, preset, 0f);
+            Assert.That(instant.IsComplete, Is.True); AssertPose(instant.CurrentPose, preset.Pose);
+        }
+
+        [Test]
         public void RetargetingStartsAtTheIntermediateViewWithoutJumping()
         {
             var first = new CameraAngleTransition(Pose.identity, 60,

@@ -30,8 +30,10 @@ namespace Codetective.Gameplay
         [SerializeField] private Font font;
         [SerializeField] private DialoguePresentationDefinition dialoguePresentation;
         [SerializeField] private Transform newspaperAnchor;
-        [Tooltip("Paper stack opening the acquired-person profile archive from the profile angle.")]
+        [Tooltip("Left paper stack used when exchanging person profiles.")]
         [SerializeField] private Transform profileArchiveStack;
+        [Tooltip("Existing desk sheet used as the physical profile interface.")]
+        [SerializeField] private Transform profileSheet;
         [Tooltip("Lights controlled by the headquarters light-off command.")]
         [SerializeField] private Light[] sceneLights = Array.Empty<Light>();
 
@@ -54,6 +56,7 @@ namespace Codetective.Gameplay
         }
         private string selectedProfile = "client";
         private DeskNewspaper newspaper;
+        private DeskProfilePresenter profilePaper;
         private int newspaperRevision = -1;
         private readonly List<ItemPlacementSurface> storageSurfaces = new List<ItemPlacementSurface>();
         private ClinicVisitPresentation visits;
@@ -153,7 +156,7 @@ namespace Codetective.Gameplay
             newspaper = gameObject.AddComponent<DeskNewspaper>();
             newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry, scenario != null ? scenario.newspaper : null); newspaper.Refresh(Runtime);
             newspaper.Document.AreaClicked += ReadPrintedArea;
-            InitializeProfileArchive();
+            InitializeProfileSheet();
             RestoreStoredItems();
             initialLights = Array.ConvertAll(sceneLights, light => light != null && light.enabled);
             if (Runtime.Facts.Contains("turnOffLights")) SetLightsOff();
@@ -213,11 +216,13 @@ namespace Codetective.Gameplay
 
         private void EnterView(CameraAnglePreset angle)
         {
+            if (angle.Id != "profile" && profilePaper != null) profilePaper.CancelSwap();
             CurrentView = angle.Id; pendingView = angle.Id;
             if (ui != null) ui.HideContext();
         }
         private void LeaveView()
         {
+            if (profilePaper != null) profilePaper.CancelSwap();
             CurrentView = "overview"; pendingView = null;
             if (ui != null) ui.HideContext();
         }
@@ -249,27 +254,21 @@ namespace Codetective.Gameplay
             if (!document.Item.IsHeld) Carry.TryPickup(document.Item);
             else ui.ShowDocument(document, index);
         }
-        private void InitializeProfileArchive()
+        private void InitializeProfileSheet()
         {
-            if (profileArchiveStack == null) return;
-            ProfileArchiveTarget target = profileArchiveStack.GetComponent<ProfileArchiveTarget>();
-            if (target == null) target = profileArchiveStack.gameObject.AddComponent<ProfileArchiveTarget>();
-            target.Initialize(this);
-            if (profileArchiveStack.GetComponentsInChildren<Collider>(true).Length == 0)
-            {
-                Bounds bounds = LocalBounds(profileArchiveStack, profileArchiveStack.GetComponentsInChildren<Renderer>(true));
-                BoxCollider collider = profileArchiveStack.gameObject.AddComponent<BoxCollider>();
-                collider.center = bounds.center; collider.size = new Vector3(bounds.size.x, Mathf.Max(0.02f, bounds.size.y), bounds.size.z);
-                collider.isTrigger = true;
-            }
+            if (profileSheet == null) return;
+            profilePaper = gameObject.AddComponent<DeskProfilePresenter>();
+            profilePaper.Initialize(Runtime, profileSheet, profileArchiveStack, views.ControlledCamera, font, SelectedProfileId,
+                id => Monitor != null ? Monitor.PortraitFor(id) : null, () => CanReadProfile,
+                () => inspection.Mode == InspectionMode.Menu || inspection.NavigationBlocked || IsDateTransitioning || IsVisitPresenting || IsViewTransitioning,
+                id => SelectedProfileId = id);
         }
-        public bool CanOpenProfileArchive => presentationInitialized && IsSessionActive && CurrentView == "profile" && inspection != null &&
+        public string DisplayedProfileId => profilePaper != null ? profilePaper.ProfileId : null;
+        public bool CanReadProfile => presentationInitialized && IsSessionActive && CurrentView == "profile" && inspection != null &&
             inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !IsViewTransitioning &&
             !IsDateTransitioning && !IsVisitPresenting && Carry != null && Carry.HeldItem == null;
-        public void OpenProfileArchive()
-        {
-            if (CanOpenProfileArchive) ui.ShowProfileArchive();
-        }
+        public bool CanSelectProfile => CanReadProfile && profilePaper != null && !profilePaper.IsSwapping;
+        public bool SelectProfile(string id) => CanSelectProfile && profilePaper.SelectProfile(id);
         private void RestoreStoredItems()
         {
             foreach (StoredItemState state in Runtime.StoredItems)
@@ -528,6 +527,7 @@ namespace Codetective.Gameplay
         {
             if (initialized && (narrativeDirty || quickSaving)) TrySave(GameSaveKind.Auto);
             StopAllCoroutines();
+            if (profilePaper != null) profilePaper.CancelSwap();
             if (sceneLights != null && initialLights != null) for (int i = 0; i < Math.Min(sceneLights.Length, initialLights.Length); i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;
             if (Carry != null) { Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; Carry.EndSession(); }

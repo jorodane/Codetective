@@ -56,32 +56,35 @@ namespace Codetective.Terminal.Tests.UI
             .Single(m => m.Name == name && m.GetParameters().Length == args.Length).Invoke(target, args);
 
         [Test]
-        public void TheProfileStackOpensAnArchiveWithoutSpawningAHoldableProfileSheet()
+        public void SelectingAProfilePrintsOnTheAuthoredSheetWithoutAHoldableCopy()
         {
             var system = new GameObject("Profile archive system"); system.SetActive(false);
             var stack = GameObject.CreatePrimitive(PrimitiveType.Cube); stack.name = "Upper-left paper stack";
             var camera = new GameObject("Reference camera", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); camera.SetActive(false);
             var carryRoot = new GameObject("Carry");
+            var sheet = GameObject.CreatePrimitive(PrimitiveType.Cube);
             try
             {
                 Component game = system.AddComponent(FindType("Codetective.Gameplay.KernelGameController"));
                 Component inspection = camera.AddComponent(FindType("Codetective.Interaction.InspectionController"));
                 ItemCarryController carry = carryRoot.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
-                Set(game, "profileArchiveStack", stack.transform); Set(game, "inspection", inspection); Set(game, "<Carry>k__BackingField", carry);
-                Call(game, "InitializeProfileArchive");
-                Component target = stack.GetComponent(FindType("Codetective.Gameplay.ProfileArchiveTarget")); Assert.That(target, Is.Not.Null);
+                Set(game, "profileArchiveStack", stack.transform); Set(game, "profileSheet", sheet.transform);
+                Set(game, "inspection", inspection); Set(game, "views", camera.GetComponent<CameraAngleController>()); Set(game, "<Carry>k__BackingField", carry);
+                Set(game, "<Runtime>k__BackingField", ClinicScenario.Create()); Call(game, "InitializeProfileSheet");
+                Assert.That(sheet.GetComponentInChildren<ProfileFormView>(), Is.Not.Null);
                 Assert.That(system.GetComponentsInChildren<HoldableItem>(true), Is.Empty);
-                Assert.That(Call(target, "CanInteract", "profile"), Is.False);
+                Assert.That(Call(game, "SelectProfile", "kernel"), Is.False);
                 Set(game, "presentationInitialized", true); Set(game, "<IsSessionActive>k__BackingField", true); Set(game, "<CurrentView>k__BackingField", "profile");
-                Assert.That(Call(target, "CanInteract", "profile"), Is.True); Assert.That(Call(target, "CanInteract", "overview"), Is.False);
+                Assert.That(Call(game, "SelectProfile", "kernel"), Is.True);
+                Assert.That(game.GetType().GetProperty("DisplayedProfileId").GetValue(game), Is.EqualTo("kernel"));
                 inspection.GetType().GetProperty("ModalInputBlocked").SetValue(inspection, true);
-                Assert.That(Call(target, "CanInteract", "profile"), Is.False);
+                Assert.That(Call(game, "SelectProfile", "client"), Is.False);
             }
-            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(stack); Object.DestroyImmediate(camera); Object.DestroyImmediate(carryRoot); }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(stack); Object.DestroyImmediate(camera); Object.DestroyImmediate(carryRoot); Object.DestroyImmediate(sheet); }
         }
 
         [Test]
-        public void EscapeSnapsToTheTerminalAndResumeRestoresTheExactWorkingView()
+        public void EscapeReturnsToOverviewBeforeOpeningTheInstantTerminalMenu()
         {
             var root = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); root.SetActive(false);
             var canvas = new GameObject("Monitor", typeof(RectTransform), typeof(Canvas));
@@ -119,19 +122,24 @@ namespace Codetective.Terminal.Tests.UI
                     Call(inspection, "InspectTarget", target);
                     Assert.That(views.ActiveAngle, Is.SameAs(presets[workingTerminal ? index : 2]), "Clicking the monitor must keep the working angle.");
                     Call(inspection, "InspectAngle", presets[index]); Call(inspection, "LateUpdate");
-                    Pose before = views.CapturePose(); float beforeFov = views.ControlledCamera.fieldOfView;
                     host.ShowPage("kernel");
                     monitor.GetComponentInChildren<TerminalInputField>(true).SetTextWithoutNotify("save draft");
                     Call(inspection, "HandleEscape");
+                    if (index != 0)
+                    {
+                        Assert.That(views.ActiveAngle, Is.SameAs(presets[0]));
+                        Assert.That(host.SystemMenuVisible, Is.False); Assert.That(Time.timeScale, Is.EqualTo(oldTime));
+                        Call(inspection, "HandleEscape");
+                    }
                     Assert.That(views.ActiveAngle, Is.SameAs(presets[1])); Assert.That(views.IsTransitioning, Is.False);
                     Assert.That(Vector3.Distance(views.CapturePose().position, presets[1].Pose.position), Is.LessThan(0.0001f));
                     Assert.That(terminal.InteractionEnabled, Is.True); Assert.That(terminal.PageVisible, Is.False);
                     Assert.That(host.SystemMenuVisible, Is.True); Assert.That(Time.timeScale, Is.Zero);
                     Call(inspection, "Resume"); Call(inspection, "LateUpdate");
-                    Assert.That(views.ActiveAngle, Is.SameAs(presets[index])); Assert.That(views.IsTransitioning, Is.False);
-                    Assert.That(Vector3.Distance(views.CapturePose().position, before.position), Is.LessThan(0.0001f));
-                    Assert.That(views.ControlledCamera.fieldOfView, Is.EqualTo(beforeFov)); Assert.That(Time.timeScale, Is.EqualTo(oldTime));
-                    Assert.That(terminal.InteractionEnabled, Is.EqualTo(workingTerminal)); Assert.That(host.SystemMenuVisible, Is.False);
+                    Assert.That(views.ActiveAngle, Is.SameAs(presets[0])); Assert.That(views.IsTransitioning, Is.False);
+                    Assert.That(Vector3.Distance(views.CapturePose().position, presets[0].Pose.position), Is.LessThan(0.0001f));
+                    Assert.That(views.ControlledCamera.fieldOfView, Is.EqualTo(presets[0].FieldOfView)); Assert.That(Time.timeScale, Is.EqualTo(oldTime));
+                    Assert.That(terminal.InteractionEnabled, Is.False); Assert.That(host.SystemMenuVisible, Is.False);
                     Assert.That(monitor.GetComponentInChildren<TerminalInputField>(true).text, Is.EqualTo("save draft"));
                 }
                 Assert.That(Call(inspection, "TryInspectNumber", 4), Is.True); Assert.That(views.ActiveAngle.Id, Is.EqualTo("drawer"));
@@ -148,6 +156,34 @@ namespace Codetective.Terminal.Tests.UI
                 Call(inspection, "PrepareForSceneChange"); Assert.That(Time.timeScale, Is.EqualTo(oldTime));
             }
             finally { Object.DestroyImmediate(root); Object.DestroyImmediate(canvas); Object.DestroyImmediate(hotspot); Object.DestroyImmediate(set); foreach (var angle in presets) Object.DestroyImmediate(angle); Time.timeScale = oldTime; }
+        }
+
+        [Test]
+        public void ReturnEffectsComeFromTheSourceAngleAndHaveAnIndependentDefault()
+        {
+            var root = new GameObject("Transition effects", typeof(Camera), typeof(CameraAngleController)); root.SetActive(false);
+            var settings = ScriptableObject.CreateInstance<Codetective.Gameplay.PresentationSettings>();
+            var source = ScriptableObject.CreateInstance<CameraAnglePreset>(); var overview = ScriptableObject.CreateInstance<CameraAnglePreset>();
+            var entry = ScriptableObject.CreateInstance<TransitionPreset>(); var exit = ScriptableObject.CreateInstance<TransitionPreset>();
+            var fallback = ScriptableObject.CreateInstance<TransitionPreset>(); var set = ScriptableObject.CreateInstance<CameraAngleSet>();
+            try
+            {
+                Component transitions = root.AddComponent(FindType("Codetective.Gameplay.SceneTransitionController"));
+                CameraAngleController views = root.GetComponent<CameraAngleController>(); Set(set, "angles", new List<CameraAnglePreset> { overview, source }); Set(views, "angleSet", set);
+                Set(transitions, "views", views); Set(transitions, "settings", settings);
+                Set(source, "transition", entry); Set(source, "exitTransition", exit); Set(overview, "transition", entry);
+                exit.style = TransitionStyle.Cut; settings.defaultAngle = entry; settings.defaultReturn = fallback;
+                Assert.That(Call(transitions, "ReturnEffectFor", source), Is.SameAs(exit));
+                bool changed = false; Assert.That(Call(transitions, "TryReturnToOverview", source, overview, (Action)(() => changed = true)), Is.True);
+                Assert.That(changed, Is.True); Assert.That(views.ActiveAngle, Is.SameAs(overview));
+                Set(source, "exitTransition", null); Assert.That(Call(transitions, "ReturnEffectFor", source), Is.SameAs(fallback));
+                settings.defaultReturn = null; Assert.That(Call(transitions, "ReturnEffectFor", source), Is.SameAs(entry));
+            }
+            finally
+            {
+                Object.DestroyImmediate(root); Object.DestroyImmediate(settings); Object.DestroyImmediate(source); Object.DestroyImmediate(overview);
+                Object.DestroyImmediate(entry); Object.DestroyImmediate(exit); Object.DestroyImmediate(fallback); Object.DestroyImmediate(set);
+            }
         }
 
         [Test]

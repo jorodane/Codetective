@@ -19,27 +19,29 @@ namespace Codetective.Terminal
         private Image photo;
         private Text missingPhoto;
         private AspectRatioFitter photoFit;
-        public static ProfileFormView CreateHeader(Transform parent, Font font, float width, bool crt)
+        public static ProfileFormView CreateHeader(Transform parent, Font font, float width, bool crt, bool largePrint = false)
         {
-            RectTransform root = MonitorWidgets.Rect("ProfileForm", parent, Vector2.zero, new Vector2(900, 190));
+            RectTransform root = MonitorWidgets.Rect("ProfileForm", parent, Vector2.zero, new Vector2(900, largePrint ? 264 : 190));
             root.localScale = Vector3.one * (width / 900f);
             ProfileFormView view = root.gameObject.AddComponent<ProfileFormView>();
-            RectTransform frame = MonitorWidgets.Rect("Portrait35x45", root, Vector2.zero, new Vector2(140, 180));
+            Vector2 photoSize = largePrint ? new Vector2(180, 180 * 45f / 35f) : new Vector2(140, 180);
+            RectTransform frame = MonitorWidgets.Rect("Portrait35x45", root, Vector2.zero, photoSize);
             Image background = frame.gameObject.AddComponent<Image>(); background.raycastTarget = false;
             background.color = crt ? new Color(0.04f, 0.09f, 0.06f) : new Color(0.72f, 0.70f, 0.63f);
             if (crt) background.gameObject.AddComponent<CrtMeshEffect>();
             frame.gameObject.AddComponent<RectMask2D>();
-            view.photo = MonitorWidgets.Rect("PortraitPhoto", frame, Vector2.zero, new Vector2(140, 180)).gameObject.AddComponent<Image>();
+            view.photo = MonitorWidgets.Rect("PortraitPhoto", frame, Vector2.zero, photoSize).gameObject.AddComponent<Image>();
             view.photo.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             view.photo.raycastTarget = false; view.photoFit = view.photo.gameObject.AddComponent<AspectRatioFitter>();
             view.photoFit.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
             if (crt) view.photo.gameObject.AddComponent<CrtMeshEffect>();
-            view.missingPhoto = Label(frame, font, new Vector2(6, -6), new Vector2(128, 168), "사진 미등록", 20, crt);
+            view.missingPhoto = Label(frame, font, new Vector2(6, -6), photoSize - new Vector2(12, 12), "사진 미등록", largePrint ? 28 : 20, crt);
             view.missingPhoto.alignment = TextAnchor.MiddleCenter;
             for (int i = 0; i < view.fields.Length; i++)
             {
-                view.fields[i] = Label(root, font, new Vector2(180, -i * 30), new Vector2(720, 29), "", 22, crt);
-                view.fields[i].resizeTextForBestFit = true; view.fields[i].resizeTextMinSize = 12; view.fields[i].resizeTextMaxSize = 22;
+                float left = largePrint ? 216 : 180, rowHeight = largePrint ? 44 : 30;
+                view.fields[i] = Label(root, font, new Vector2(left, -i * rowHeight), new Vector2(900 - left, rowHeight - 1), "", largePrint ? 32 : 22, crt);
+                view.fields[i].resizeTextForBestFit = true; view.fields[i].resizeTextMinSize = largePrint ? 18 : 12; view.fields[i].resizeTextMaxSize = largePrint ? 32 : 22;
             }
             return view;
         }

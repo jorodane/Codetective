@@ -95,11 +95,10 @@ namespace Codetective.Gameplay
             if (dialogue == null) dialogue = gameObject.AddComponent<ConsultationOverlay>();
             dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation);
             BuildItemControls();
-            RectTransform archiveRoot = OverlayWidgets.Rect("ProfileArchive", root.transform, Vector2.zero, new Vector2(1160, 630), new Vector2(0.5f, 0.5f));
+            RectTransform archiveRoot = OverlayWidgets.Rect("ProfileArchive", root.transform, new Vector2(-18, -86), new Vector2(250, 534), new Vector2(1, 1));
             profileArchive = archiveRoot.gameObject.AddComponent<ProfileArchiveView>();
-            profileArchive.Initialize(game.Runtime, this.font, id => game.Monitor != null ? game.Monitor.PortraitFor(id) : null,
-                id => game.SelectedProfileId = id, () => Back());
-            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 · F5 빠른 저장 (입력 중 제외) · ESC 메뉴", 14);
+            profileArchive.Initialize(game.Runtime, this.font, game.SelectProfile, () => game.DisplayedProfileId, () => game.CanSelectProfile);
+            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 · F5 빠른 저장 (입력 중 제외) · ESC 전체 / 메뉴", 14);
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);
@@ -159,11 +158,12 @@ namespace Codetective.Gameplay
         {
             context = id;
             if (!IsInitialized) return;
+            if (id == "profile") profileArchive.Show(); else profileArchive.Hide();
             if (id == "monitor" || id == "counsel" || id == "drawer" || id == "profile" || id == "gramophone") { HidePanel(); return; }
             BuildContext();
         }
 
-        public void HideContext() { context = null; CloseModal(); HidePanel(); }
+        public void HideContext() { context = null; CloseModal(); if (profileArchive != null) profileArchive.Hide(); HidePanel(); }
 
         public bool Back()
         {
@@ -188,7 +188,6 @@ namespace Codetective.Gameplay
             if (newspaperReader != null) newspaperReader.gameObject.SetActive(false);
             if (profileArchive != null) profileArchive.Hide();
             ClearControls();
-            if (name == "profiles") { profileArchive.Show(); panel.gameObject.SetActive(false); return; }
             if (name == "document") { BuildDocumentReader(); panel.gameObject.SetActive(false); return; }
             panel.gameObject.SetActive(true);
             if (name == "protocol") BuildProtocolEditor();
@@ -268,7 +267,6 @@ namespace Codetective.Gameplay
             }
         }
         public void RefreshCommandLanguage() { if (languageLabel != null) RefreshLanguageLabel(); }
-        public void ShowProfileArchive() { if (game.CanOpenProfileArchive) OpenModal("profiles"); }
         private void BuildItemControls()
         {
             heldBar = Box("HeldObject", root.transform, new Vector2(0, 24), new Vector2(1040, 54), new Vector2(0.5f, 0));

@@ -11,11 +11,13 @@ namespace Codetective.CameraViews
         [Tooltip("Euler rotation in degrees, in the same space as Position.")]
         [SerializeField] private Vector3 eulerAngles;
         [SerializeField, Range(1f, 179f)] private float fieldOfView = 60f;
-        [Tooltip("Time in seconds to enter this angle. Zero changes the view immediately.")]
+        [Tooltip("Fallback movement time when no presentation transition is configured. Zero changes the view immediately.")]
         [SerializeField, Min(0f)] private float transitionDuration = 0.65f;
         [SerializeField] private AnimationCurve blendCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
-        [Tooltip("Optional entry effect. Empty keeps the existing camera interpolation.")]
+        [Tooltip("Entry effect. Empty uses Presentation Settings / Default Angle, then the angle's own interpolation.")]
         [SerializeField] private TransitionPreset transition;
+        [Tooltip("Effect used when returning from this angle to the overview. Empty uses Presentation Settings / Default Return.")]
+        [SerializeField] private TransitionPreset exitTransition;
 
         public string Id => string.IsNullOrWhiteSpace(angleId) ? name : angleId.Trim();
         public Pose Pose => new Pose(position, Quaternion.Euler(eulerAngles));
@@ -23,5 +25,6 @@ namespace Codetective.CameraViews
         public float TransitionDuration => Mathf.Max(0f, transitionDuration);
         public AnimationCurve BlendCurve => blendCurve;
         public TransitionPreset Transition => transition;
+        public TransitionPreset ExitTransition => exitTransition;
     }
 }

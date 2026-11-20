@@ -7,6 +7,8 @@ namespace Codetective.Gameplay
     public sealed class PresentationSettings : ScriptableObject
     {
         public TransitionPreset defaultAngle;
+        [Tooltip("Fallback when an angle has no Exit Transition. Empty uses Default Angle.")]
+        public TransitionPreset defaultReturn;
         [Tooltip("Menu focus always preserves the terminal; this clip supplies its fade duration.")]
         public TransitionPreset menu;
         public TransitionPreset day, visit;

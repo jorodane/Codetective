@@ -7345,6 +7345,7 @@ MonoBehaviour:
   dialoguePresentation: {fileID: 11400000, guid: 294f87ed3f348b61b63714caa50069e6, type: 2}
   newspaperAnchor: {fileID: 2000000131}
   profileArchiveStack: {fileID: 414868070}
+  profileSheet: {fileID: 794855006}
   sceneLights:
   - {fileID: 114083513}
   - {fileID: 321446934}

@@ -42,6 +42,8 @@ namespace Codetective.Interaction
         private CameraAnglePreset menuReturnAngle;
         private bool showingTitle;
         private bool started;
+        private bool returningToOverview;
+        private CameraAnglePreset inspectedAngle;
         private Pose presentationReturnPose;
         private float presentationReturnFov;
         private CameraAnglePreset presentationReturnAngle;
@@ -117,6 +119,7 @@ namespace Codetective.Interaction
             DisableTerminal();
             flow.Resume();
             flow.ReturnToOverview();
+            inspectedAngle = null; returningToOverview = false;
         }
 
         private void Update()
@@ -269,13 +272,15 @@ namespace Codetective.Interaction
                 return;
             if (flow.Mode == InspectionMode.Inspecting && views.ActiveAngle == angle)
                 return;
+            CameraAnglePreset previous = inspectedAngle; bool wasReturning = returningToOverview;
+            inspectedAngle = angle; returningToOverview = false;
             if (!ChangeAngle(angle, () =>
             {
                 DisableTerminal(); activeTerminal = targetTerminal;
                 activeTerminal?.SetInteractionEnabled(false);
                 flow.Inspect(); AngleEntered?.Invoke(angle);
             }))
-                return;
+            { inspectedAngle = previous; returningToOverview = wasReturning; return; }
             activeTerminal?.SetInteractionEnabled(false);
         }
         private bool ChangeAngle(CameraAnglePreset angle, Action changed)
@@ -306,14 +311,22 @@ namespace Codetective.Interaction
         {
             if (flow.Mode == InspectionMode.Menu || NavigationBlocked || PresentingOnTerminal || overviewAngle == null || views.AngleSet == null)
                 return;
-            if (ChangeAngle(overviewAngle, () => { DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); }))
+            CameraAnglePreset source = inspectedAngle ?? views.ActiveAngle;
+            if (Transitions != null) Transitions.CancelAngle();
+            Action changed = () => { inspectedAngle = null; DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); };
+            bool accepted = Transitions != null ? Transitions.TryReturnToOverview(source, overviewAngle, changed) : ChangeAngle(overviewAngle, changed);
+            if (accepted)
+            {
+                returningToOverview = true;
                 activeTerminal?.SetInteractionEnabled(false);
+            }
         }
         public bool SnapToOverview()
         {
             if (flow.Mode == InspectionMode.Menu || overviewAngle == null || views.AngleSet == null) return false;
             Transitions?.CancelAngle();
             if (!views.TryGoToIndex(views.AngleSet.IndexOf(overviewAngle), true)) return false;
+            inspectedAngle = null; returningToOverview = false;
             DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); return true;
         }
 
@@ -322,10 +335,19 @@ namespace Codetective.Interaction
             if (NavigationBlocked && !(PresentingOnTerminal && AllowPresentationMenu)) return;
             if (flow.Mode == InspectionMode.Menu)
             { if (!menu.HandleEscape()) Resume(); return; }
+            if (!PresentingOnTerminal)
+            {
+                if (returningToOverview) { if (!SnapToOverview()) return; }
+                else if (flow.Mode == InspectionMode.Inspecting || inspectedAngle != null || ViewBusy || views.ActiveAngle != overviewAngle)
+                {
+                    TextInputFocus.ReleaseAll(); BackHandler?.Invoke(); ReturnToOverview(); return;
+                }
+            }
             OpenSystemMenu(false);
         }
 
         public void ShowTitleMenu() => OpenSystemMenu(true);
+        public void ShowPauseMenu() => OpenSystemMenu(false);
         private void OpenSystemMenu(bool title)
         {
             if (!menu.CanShow || flow.Mode == InspectionMode.Menu) return;
@@ -338,7 +360,7 @@ namespace Codetective.Interaction
             previousTimeScale = Time.timeScale; previousBlendPause = views.PauseTransitions;
             previousAudioPause = AudioListener.pause; ownsPause = true;
             Time.timeScale = 0f; AudioListener.pause = true; views.PauseTransitions = true;
-            showingTitle = title; flow.Escape();
+            showingTitle = title; returningToOverview = false; flow.OpenMenu();
             if (views.AngleSet != null) views.TryGoToIndex(views.AngleSet.FindId("monitor"), true);
             menu.Show(title); terminal?.SetInteractionEnabled(true);
             Transitions?.SetTerminalFocus("menu", true);

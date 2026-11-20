@@ -164,7 +164,7 @@ namespace Codetective.Gameplay
             {
                 changingScene = false; nextStart = SessionStart.Title; nextSaveId = null; Transitions.CancelSceneReveal();
                 inspection.NavigationBlocked = false; StartCoroutine(Transitions.RevealScene());
-                if (IsSessionActive) inspection.HandleEscape(); else inspection.ShowTitleMenu();
+                if (IsSessionActive) inspection.ShowPauseMenu(); else inspection.ShowTitleMenu();
                 inspection.GetComponent<PauseMenuView>().ShowFeedback("화면을 열 수 없습니다: " + error.Message);
             }
         }

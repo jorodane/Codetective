@@ -19,6 +19,7 @@ namespace Codetective.Gameplay
         private Image background, full;
         private RawImage overlap;
         private Material dimMaterial;
+        private Material overlapMaterial;
         private Material clearStencilMaterial, terminalStencilMaterial;
         private Image clearStencil;
         private TerminalFocusMaskGraphic terminalMask;
@@ -50,6 +51,8 @@ namespace Codetective.Gameplay
             Canvas overlapCanvas = overlap.gameObject.AddComponent<Canvas>(); overlapCanvas.overrideSorting = true; overlapCanvas.sortingOrder = 4100;
             Shader shader = Resources.Load<Shader>("TerminalDimming");
             if (shader != null) { dimMaterial = new Material(shader); background.material = dimMaterial; }
+            Shader overlapShader = Resources.Load<Shader>("ScreenOverlap");
+            if (overlapShader != null) { overlapMaterial = new Material(overlapShader) { hideFlags = HideFlags.HideAndDontSave }; overlap.material = overlapMaterial; }
             Shader bodyShader = Resources.Load<Shader>("TerminalBodyMask");
             if (bodyShader != null)
             {
@@ -87,12 +90,19 @@ namespace Codetective.Gameplay
             focusRoutine = StartCoroutine(Tween(focusAlpha, target, settings?.menu != null ? settings.menu.duration : 0.18f, value => focusAlpha = value));
         }
         public bool TryChangeAngle(CameraAnglePreset angle, Action changed)
+            => ChangeAngle(angle, angle != null && angle.Transition != null ? angle.Transition : settings?.defaultAngle, changed);
+        public TransitionPreset ReturnEffectFor(CameraAnglePreset source) => source != null && source.ExitTransition != null ? source.ExitTransition :
+            settings != null && settings.defaultReturn != null ? settings.defaultReturn : settings?.defaultAngle;
+        public bool TryReturnToOverview(CameraAnglePreset source, CameraAnglePreset overview, Action changed)
+            => ChangeAngle(overview, ReturnEffectFor(source), changed);
+        private bool ChangeAngle(CameraAnglePreset angle, TransitionPreset effect, Action changed)
         {
             if (IsBusy || views == null || views.AngleSet == null || angle == null || views.AngleSet.IndexOf(angle) < 0) return false;
-            TransitionPreset effect = angle.Transition != null ? angle.Transition : settings?.defaultAngle;
             if (!Application.isPlaying || effect == null || effect.style == TransitionStyle.CameraMove || effect.style == TransitionStyle.Cut)
             {
-                if (!views.TryGoToIndex(views.AngleSet.IndexOf(angle), effect != null && effect.style == TransitionStyle.Cut)) return false;
+                bool move = effect != null && effect.style == TransitionStyle.CameraMove;
+                if (!views.TryGoToIndex(views.AngleSet.IndexOf(angle), effect != null && effect.style == TransitionStyle.Cut,
+                    move ? effect.duration : -1, move ? effect.cameraCurve : null)) return false;
                 changed?.Invoke(); return true;
             }
             Coroutine running = StartCoroutine(Play(effect, TransitionStyle.CameraMove, () => { views.TryGoToIndex(views.AngleSet.IndexOf(angle), true); changed?.Invoke(); }));
@@ -112,7 +122,12 @@ namespace Codetective.Gameplay
                     yield return new WaitForEndOfFrame();
                     try { capturedFrame = ScreenCapture.CaptureScreenshotAsTexture(); }
                     catch (Exception error) { Debug.LogWarning("화면 오버랩 캡처 실패: " + error.Message, this); }
-                    if (capturedFrame != null) { overlap.texture = capturedFrame; overlap.color = Color.white; } else SetAlpha(full, 1);
+                    if (capturedFrame != null)
+                    {
+                        overlap.texture = capturedFrame; overlap.color = Color.white;
+                        if (overlapMaterial != null) overlapMaterial.SetFloat("_Darkness", preset != null ? preset.overlapDarkness : 0.6f);
+                    }
+                    else SetAlpha(full, 1);
                     covered?.Invoke(); yield return Hold(hold);
                     yield return Tween(1, 0, duration, value => SetAlpha(capturedFrame != null ? (Graphic)overlap : full, value));
                 }
@@ -169,6 +184,6 @@ namespace Codetective.Gameplay
             apply(to);
         }
         private void OnDisable() { StopAllCoroutines(); focusRoutine = angleRoutine = null; ClearTransient(); focusOwners.Clear(); focusAlpha = 0; if (background != null) SetAlpha(background, 0); if (clearStencil != null) clearStencil.enabled = false; if (terminalMask != null) terminalMask.enabled = false; IsBusy = false; }
-        private void OnDestroy() { ProfileModelUtility.Dispose(root); ProfileModelUtility.Dispose(dimMaterial); ProfileModelUtility.Dispose(clearStencilMaterial); ProfileModelUtility.Dispose(terminalStencilMaterial); }
+        private void OnDestroy() { ProfileModelUtility.Dispose(root); ProfileModelUtility.Dispose(dimMaterial); ProfileModelUtility.Dispose(overlapMaterial); ProfileModelUtility.Dispose(clearStencilMaterial); ProfileModelUtility.Dispose(terminalStencilMaterial); }
     }
 }
