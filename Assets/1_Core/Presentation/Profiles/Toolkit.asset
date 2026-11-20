@@ -3,42 +3,25 @@
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject:
-    fileID: 0
-  m_PrefabInstance:
-    fileID: 0
-  m_PrefabAsset:
-    fileID: 0
-  m_GameObject:
-    fileID: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script:
-    fileID: 11500000
-    guid: 93c80d496e634a308c0b32bfadae71b8
-    type: 3
+  m_Script: {fileID: 11500000, guid: 93c80d496e634a308c0b32bfadae71b8, type: 3}
   m_Name: Toolkit
-  m_EditorClassIdentifier: ''
+  m_EditorClassIdentifier: 
   worldId: toolkit
-  entity:
-    fileID: 0
-  modelPrefab:
-    fileID: 2272440649576570105
-    guid: 79237018600179e42ba124770814a0c0
-    type: 3
-  photo:
-    fileID: 0
-  description: 지휘소에 요청해 전달받는 작업 도구입니다.
+  entity: {fileID: 0}
+  modelPrefab: {fileID: 2272440649576570105, guid: 79237018600179e42ba124770814a0c0, type: 3}
+  photo: {fileID: 21300000, guid: 9bac20f890ba1ed469d8ff6b0219d5a9, type: 3}
+  description: "\uC9C0\uD718\uC18C\uC5D0 \uC694\uCCAD\uD574 \uC804\uB2EC\uBC1B\uB294
+    \uC791\uC5C5 \uB3C4\uAD6C\uC785\uB2C8\uB2E4."
   availability:
     triggersOn: []
     triggersOff: []
     quests: []
   captureMissingPhoto: 1
-  modelScale:
-    x: 1
-    y: 1
-    z: 1
-  modelEuler:
-    x: 0
-    y: 180
-    z: 0
+  modelScale: {x: 1, y: 1, z: 1}
+  modelEuler: {x: 0, y: 180, z: 0}
