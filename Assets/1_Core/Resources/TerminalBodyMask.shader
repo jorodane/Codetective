@@ -1,9 +1,16 @@
 Shader "Hidden/Codetective/TerminalBodyMask"
 {
+    Properties
+    {
+        [PerRendererData] _MainTex("Texture", 2D) = "white" {}
+        _StencilRef("Stencil reference", Float) = 128
+    }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "Queue"="Overlay" "RenderType"="Transparent" }
+        Stencil { Ref [_StencilRef] Comp Always Pass Replace ReadMask 128 WriteMask 128 }
         Cull Off ZWrite Off ZTest Always
+        ColorMask 0
         Pass
         {
             CGPROGRAM

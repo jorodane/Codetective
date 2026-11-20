@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Codetective.CameraViews;
 using Codetective.Terminal;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 namespace Codetective.Gameplay
@@ -15,17 +14,14 @@ namespace Codetective.Gameplay
     {
         private static bool pendingSceneReveal;
         private CameraAngleController views;
-        private CrtScreen terminal;
         private PresentationSettings settings;
         private GameObject root;
         private Image background, full;
         private RawImage overlap;
         private Material dimMaterial;
-        private Material bodyMaskMaterial;
-        private Renderer[] bodyRenderers = Array.Empty<Renderer>();
-        private int[] bodySubmeshes = Array.Empty<int>();
-        private RenderTexture bodyMask;
-        private CommandBuffer bodyCommands;
+        private Material clearStencilMaterial, terminalStencilMaterial;
+        private Image clearStencil;
+        private TerminalFocusMaskGraphic terminalMask;
         private Texture2D capturedFrame;
         private Coroutine angleRoutine, focusRoutine;
         private readonly HashSet<string> focusOwners = new HashSet<string>();
@@ -40,19 +36,29 @@ namespace Codetective.Gameplay
             => Initialize(cameraViews, screen, configuration, null);
         public void Initialize(CameraAngleController cameraViews, CrtScreen screen, PresentationSettings configuration, Transform body)
         {
-            views = cameraViews; terminal = screen; settings = configuration;
-            bodyRenderers = body != null ? body.GetComponentsInChildren<Renderer>(true) : Array.Empty<Renderer>();
-            bodySubmeshes = Array.ConvertAll(bodyRenderers, renderer => renderer.sharedMaterials.Length);
+            views = cameraViews; settings = configuration;
             if (root != null) return;
             root = new GameObject("PresentationEffects", typeof(RectTransform), typeof(Canvas));
             Canvas canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 1500;
+            // Clear/write the reserved stencil bit in this same overlay, before drawing the dimmer.
+            // There is no separate camera render target or projection state to get out of sync.
+            clearStencil = Layer<Image>("ClearTerminalStencil");
+            terminalMask = Layer<TerminalFocusMaskGraphic>("TerminalStencil");
+            terminalMask.Configure(views != null ? views.ControlledCamera : null, body, screen);
             background = Layer<Image>("TerminalBackground"); full = Layer<Image>("FullScreenFade"); overlap = Layer<RawImage>("ScreenOverlap");
             Canvas fullCanvas = full.gameObject.AddComponent<Canvas>(); fullCanvas.overrideSorting = true; fullCanvas.sortingOrder = 4000;
             Canvas overlapCanvas = overlap.gameObject.AddComponent<Canvas>(); overlapCanvas.overrideSorting = true; overlapCanvas.sortingOrder = 4100;
             Shader shader = Resources.Load<Shader>("TerminalDimming");
             if (shader != null) { dimMaterial = new Material(shader); background.material = dimMaterial; }
             Shader bodyShader = Resources.Load<Shader>("TerminalBodyMask");
-            if (bodyShader != null) bodyMaskMaterial = new Material(bodyShader) { hideFlags = HideFlags.HideAndDontSave };
+            if (bodyShader != null)
+            {
+                clearStencilMaterial = new Material(bodyShader) { hideFlags = HideFlags.HideAndDontSave };
+                clearStencilMaterial.SetInt("_StencilRef", 0); clearStencil.material = clearStencilMaterial;
+                terminalStencilMaterial = new Material(bodyShader) { hideFlags = HideFlags.HideAndDontSave };
+                terminalStencilMaterial.SetInt("_StencilRef", 128); terminalMask.material = terminalStencilMaterial;
+            }
+            clearStencil.enabled = terminalMask.enabled = false;
             SetAlpha(background, 0); SetAlpha(full, pendingSceneReveal ? 1 : 0); SetAlpha(overlap, 0);
         }
         private T Layer<T>(string label) where T : Graphic
@@ -66,58 +72,9 @@ namespace Codetective.Gameplay
         {
             if (background == null) return;
             SetAlpha(background, Mathf.Max(focusAlpha, effectAlpha));
-            if (dimMaterial == null) return;
-            Camera camera = views != null ? views.ControlledCamera : null;
-            UpdateBodyMask(camera);
-            bool valid = terminal != null && terminal.isActiveAndEnabled && camera != null;
-            RectTransform panel = valid ? (RectTransform)terminal.transform : null;
-            if (!valid || panel.rect.width <= 0 || panel.rect.height <= 0) { dimMaterial.SetVector("_Panel", Vector4.zero); return; }
-            Rect rect = panel.rect;
-            dimMaterial.SetVector("_Panel", new Vector4(rect.width * 0.5f, rect.height * 0.5f, terminal.CenterBulge, 1));
-            string[] suffix = { "00", "10", "01", "11" };
-            for (int i = 0; i < 4; i++)
-            {
-                Vector3 point = new Vector3((i % 2) * Screen.width, (i / 2) * Screen.height, 0);
-                Ray ray = camera.ScreenPointToRay(point); Vector3 origin = panel.InverseTransformPoint(ray.origin);
-                origin.x -= rect.center.x; origin.y -= rect.center.y;
-                point.z = camera.farClipPlane;
-                Vector3 direction = panel.InverseTransformVector(camera.ScreenToWorldPoint(point) - ray.origin);
-                dimMaterial.SetVector("_Origin" + suffix[i], origin); dimMaterial.SetVector("_Direction" + suffix[i], direction);
-            }
-        }
-        private void UpdateBodyMask(Camera camera)
-        {
-            dimMaterial.SetFloat("_BodyMaskEnabled", 0);
-            if (!Application.isPlaying || background.color.a <= 0 || camera == null || bodyMaskMaterial == null || bodyRenderers.Length == 0 ||
-                camera.pixelWidth <= 0 || camera.pixelHeight <= 0) return;
-            if (bodyMask == null || bodyMask.width != camera.pixelWidth || bodyMask.height != camera.pixelHeight)
-            {
-                ReleaseBodyMask();
-                bodyMask = new RenderTexture(camera.pixelWidth, camera.pixelHeight, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear)
-                    { name = "Terminal body silhouette", hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
-                bodyMask.Create();
-            }
-            if (bodyCommands == null) bodyCommands = new CommandBuffer { name = "Preserve physical terminal" };
-            bodyCommands.Clear(); bodyCommands.SetRenderTarget(bodyMask); bodyCommands.ClearRenderTarget(false, true, Color.clear);
-            bodyCommands.SetViewProjectionMatrices(camera.worldToCameraMatrix, GL.GetGPUProjectionMatrix(camera.projectionMatrix, true));
-            for (int i = 0; i < bodyRenderers.Length; i++)
-            {
-                Renderer renderer = bodyRenderers[i];
-                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy || (camera.cullingMask & (1 << renderer.gameObject.layer)) == 0) continue;
-                for (int submesh = 0; submesh < bodySubmeshes[i]; submesh++) bodyCommands.DrawRenderer(renderer, bodyMaskMaterial, submesh, 0);
-            }
-            bodyCommands.SetViewProjectionMatrices(camera.worldToCameraMatrix, GL.GetGPUProjectionMatrix(camera.projectionMatrix, camera.targetTexture != null));
-            RenderTexture previous = RenderTexture.active;
-            try { Graphics.ExecuteCommandBuffer(bodyCommands); }
-            finally { RenderTexture.active = previous; }
-            dimMaterial.SetTexture("_BodyMask", bodyMask);
-            Rect viewport = camera.rect;
-            dimMaterial.SetVector("_BodyViewport", new Vector4(viewport.x, viewport.y, viewport.width, viewport.height));
-            dimMaterial.SetFloat("_BodyMaskEnabled", 1);
-        }
-        private void ReleaseBodyMask()
-        {
-            if (bodyMask != null) { bodyMask.Release(); ProfileModelUtility.Dispose(bodyMask); bodyMask = null; }
+            bool masked = background.color.a > 0 && terminalStencilMaterial != null;
+            clearStencil.enabled = terminalMask.enabled = masked;
+            if (masked) terminalMask.RefreshProjection();
         }
         public void SetTerminalFocus(string owner, bool enabled)
         {
@@ -211,7 +168,7 @@ namespace Codetective.Gameplay
             for (float time = 0; time < seconds; time += Time.unscaledDeltaTime) { apply(Mathf.Lerp(from, to, Mathf.SmoothStep(0, 1, time / seconds))); yield return null; }
             apply(to);
         }
-        private void OnDisable() { StopAllCoroutines(); focusRoutine = angleRoutine = null; ClearTransient(); focusOwners.Clear(); focusAlpha = 0; if (background != null) SetAlpha(background, 0); IsBusy = false; ReleaseBodyMask(); }
-        private void OnDestroy() { ReleaseBodyMask(); bodyCommands?.Release(); ProfileModelUtility.Dispose(root); ProfileModelUtility.Dispose(dimMaterial); ProfileModelUtility.Dispose(bodyMaskMaterial); }
+        private void OnDisable() { StopAllCoroutines(); focusRoutine = angleRoutine = null; ClearTransient(); focusOwners.Clear(); focusAlpha = 0; if (background != null) SetAlpha(background, 0); if (clearStencil != null) clearStencil.enabled = false; if (terminalMask != null) terminalMask.enabled = false; IsBusy = false; }
+        private void OnDestroy() { ProfileModelUtility.Dispose(root); ProfileModelUtility.Dispose(dimMaterial); ProfileModelUtility.Dispose(clearStencilMaterial); ProfileModelUtility.Dispose(terminalStencilMaterial); }
     }
 }
