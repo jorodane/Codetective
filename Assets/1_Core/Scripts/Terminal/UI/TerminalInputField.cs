@@ -57,7 +57,7 @@ namespace Codetective.Terminal
         public override void Rebuild(CanvasUpdate update)
         {
             base.Rebuild(update);
-            if (update != CanvasUpdate.LatePreRender || CurvedScreen == null || !CurvedScreen.IsCurved ||
+            if (update != CanvasUpdate.LatePreRender || CurvedScreen == null || (!CurvedScreen.IsCurved && !CurvedScreen.DisplayEnabled) ||
                 m_Mesh == null || m_Mesh.vertexCount == 0 || textComponent == null)
                 return;
 
@@ -78,6 +78,7 @@ namespace Codetective.Terminal
                 vertices.FillMesh(m_Mesh);
             }
             caretRenderer.SetMesh(m_Mesh);
+            caretRenderer.SetMaterial(CurvedScreen.DisplayMaterialFor(Graphic.defaultGraphicMaterial), 0);
 
             if (m_CursorVerts != null && selectionAnchorPosition == selectionFocusPosition &&
                 EventSystem.current != null && EventSystem.current.currentInputModule != null)

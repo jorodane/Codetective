@@ -7332,6 +7332,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   scenario: {fileID: 11400000, guid: a8e11aeaca22cbd5f775dd0d625ee529, type: 2}
   terminalRoot: {fileID: 942849806}
+  terminalBody: {fileID: 786780035}
   inspection: {fileID: 1503248948}
   curtainCloth: {fileID: 1089501815}
   guestCoffeeTemplate: {fileID: 385175499}

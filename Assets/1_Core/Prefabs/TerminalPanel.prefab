@@ -2603,6 +2603,11 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   centerBulge: 32
   segmentSize: 48
+  signalStrength: 0.55
+  scanlineOpacity: 0.07
+  scanlineCount: 320
+  scanSeconds: 7.5
+  syncSlip: 1.75
 --- !u!225 &112000
 CanvasGroup:
   m_ObjectHideFlags: 0

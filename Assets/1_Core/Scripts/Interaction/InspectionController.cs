@@ -111,7 +111,7 @@ namespace Codetective.Interaction
                 menu.Hide();
             }
             RestorePause();
-            Transitions?.SetTerminalFocus("menu", false); Transitions?.SetTerminalFocus("day", false);
+            if (Transitions != null) { Transitions.SetTerminalFocus("menu", false); Transitions.SetTerminalFocus("day", false); }
             PresentingOnTerminal = false; AllowPresentationMenu = false;
             Carry?.SetPresentationVisible(true);
             DisableTerminal();

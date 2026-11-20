@@ -7,7 +7,7 @@ namespace Codetective.Terminal
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(RectTransform))]
-    public sealed class CrtScreen : MonoBehaviour
+    public sealed partial class CrtScreen : MonoBehaviour
     {
         [Tooltip("Center protrusion toward the viewer in this panel's local units. 32 = 1 cm in MainScene. Zero is flat.")]
         [SerializeField, Range(0f, 96f)] private float centerBulge = 32f;
@@ -23,13 +23,16 @@ namespace Codetective.Terminal
                                 Panel.rect.width > 0f && Panel.rect.height > 0f;
         public float CenterBulge => IsCurved ? centerBulge : 0f;
 
-        private void OnEnable() => dirty = true;
-        private void OnValidate() => dirty = true;
+        private void OnEnable() { EnsureDisplayCanvas(); dirty = true; }
+        private void OnValidate() { displayDirty = true; dirty = true; }
+        private void OnTransformParentChanged() { EnsureDisplayCanvas(); dirty = true; }
         private void OnRectTransformDimensionsChange() => dirty = true;
-        private void OnDisable() => RefreshGraphics();
+        private void OnDisable() { RefreshGraphics(); ReleaseDisplayMaterials(); }
+        private void OnDestroy() => ReleaseDisplayMaterials();
 
         private void Update()
         {
+            UpdateDisplayMaterials();
             if (!dirty)
                 return;
             dirty = false;
@@ -39,7 +42,10 @@ namespace Codetective.Terminal
         private void RefreshGraphics()
         {
             foreach (var child in GetComponentsInChildren<Graphic>(true))
+            {
                 child.SetVerticesDirty();
+                child.SetMaterialDirty();
+            }
             // The InputField owns a separate mesh for its caret and text selection.
             foreach (var field in GetComponentsInChildren<TerminalInputField>(true))
                 field.ForceLabelUpdate();
@@ -58,7 +64,7 @@ namespace Codetective.Terminal
 
         public void BendMesh(VertexHelper mesh, Transform owner)
         {
-            if (!IsCurved || mesh.currentVertCount == 0)
+            if ((!IsCurved && !DisplayEnabled) || mesh.currentVertCount == 0)
                 return;
 
             sourceVertices.Clear();
@@ -110,8 +116,10 @@ namespace Codetective.Terminal
             Matrix4x4 fromPanel, Rect rect)
         {
             Vector3 p = toPanel.MultiplyPoint3x4(vertex.position);
+            // One continuous panel coordinate system, including text and photos on moving pages.
+            vertex.uv1 = new Vector4((p.x - rect.xMin) / rect.width, (p.y - rect.yMin) / rect.height, 0, 0);
             p.z += (float)CrtSurfaceMath.Height(p.x - rect.center.x, p.y - rect.center.y,
-                rect.width * 0.5f, rect.height * 0.5f, centerBulge);
+                rect.width * 0.5f, rect.height * 0.5f, CenterBulge);
             vertex.position = fromPanel.MultiplyPoint3x4(p);
             mesh.AddVert(vertex);
         }

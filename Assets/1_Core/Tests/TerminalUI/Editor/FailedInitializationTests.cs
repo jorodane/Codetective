@@ -31,6 +31,41 @@ namespace Codetective.Terminal.Tests.UI
             }
             finally { Object.DestroyImmediate(root); }
         }
+        [Test]
+        public void DestroyingTheTerminalBeforeTheGameControllerLeavesNoDestroyedMonitorReference()
+        {
+            Type type = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("Codetective.Gameplay.KernelGameController")).First(t => t != null);
+            var root = new GameObject("Stopping session"); root.SetActive(false);
+            var terminal = new GameObject("Terminal", typeof(RectTransform));
+            try
+            {
+                Component controller = root.AddComponent(type);
+                type.GetField("terminalRoot", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(controller, terminal.transform);
+                Object.DestroyImmediate(terminal);
+                Assert.That(() => type.GetProperty("Monitor").GetValue(controller), Throws.Nothing);
+                Assert.That(type.GetProperty("Monitor").GetValue(controller), Is.Null);
+                Assert.That(() => type.GetProperty("SelectedProfileId").SetValue(controller, "client"), Throws.Nothing);
+                Assert.That(() => Invoke(controller, "OnDestroy"), Throws.Nothing);
+            }
+            finally { if (terminal != null) Object.DestroyImmediate(terminal); Object.DestroyImmediate(root); }
+        }
+        [Test]
+        public void AnInactiveCameraCanReleaseTerminalFocusAndDisposeItsPresentation()
+        {
+            Type type = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("Codetective.Gameplay.SceneTransitionController")).First(t => t != null);
+            var root = new GameObject("Inactive camera"); root.SetActive(false);
+            try
+            {
+                Component transitions = root.AddComponent(type);
+                var initialize = type.GetMethods().Single(m => m.Name == "Initialize" && m.GetParameters().Length == 3);
+                initialize.Invoke(transitions, new object[] { root.GetComponent<Codetective.CameraViews.CameraAngleController>(), null, null });
+                Assert.That(() => type.GetMethod("SetTerminalFocus").Invoke(transitions, new object[] { "menu", true }), Throws.Nothing);
+                Assert.That(() => type.GetMethod("SetTerminalFocus").Invoke(transitions, new object[] { "menu", false }), Throws.Nothing);
+                Assert.That(type.GetProperty("TerminalFocused").GetValue(transitions), Is.False);
+                Assert.That(() => Invoke(transitions, "OnDisable"), Throws.Nothing);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
         private static void Invoke(Component controller, string method) => controller.GetType().GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(controller, null);
     }
 }

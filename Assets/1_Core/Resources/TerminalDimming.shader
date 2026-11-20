@@ -4,6 +4,7 @@ Shader "UI/Codetective/TerminalDimming"
     {
         [PerRendererData] _MainTex("Texture", 2D) = "white" {}
         _Color("Color", Color) = (0,0,0,1)
+        _BodyMask("Terminal body silhouette", 2D) = "black" {}
     }
     SubShader
     {
@@ -23,6 +24,9 @@ Shader "UI/Codetective/TerminalDimming"
             float4 _Origin00, _Origin10, _Origin01, _Origin11;
             float4 _Direction00, _Direction10, _Direction01, _Direction11;
             float4 _Panel; // half width, half height, bulge, enabled
+            sampler2D _BodyMask;
+            float4 _BodyViewport;
+            float _BodyMaskEnabled;
             v2f vert(appdata v)
             {
                 v2f o; o.vertex=UnityObjectToClipPos(v.vertex); o.uv=v.uv; o.color=v.color*_Color; return o;
@@ -33,11 +37,11 @@ Shader "UI/Codetective/TerminalDimming"
                 float facing=d.z-_Panel.z*dot(p*d.xy,1.0/(_Panel.xy*_Panel.xy));
                 return t>=0 && all(abs(p)<=_Panel.xy) && facing>0.000001;
             }
-            fixed4 frag(v2f i) : SV_Target
+            float panelCoverage(float2 uv)
             {
-                if (_Panel.w<0.5) return i.color;
-                float3 o=lerp(lerp(_Origin00.xyz,_Origin10.xyz,i.uv.x),lerp(_Origin01.xyz,_Origin11.xyz,i.uv.x),i.uv.y);
-                float3 d=lerp(lerp(_Direction00.xyz,_Direction10.xyz,i.uv.x),lerp(_Direction01.xyz,_Direction11.xyz,i.uv.x),i.uv.y);
+                if (_Panel.w<0.5) return 0;
+                float3 o=lerp(lerp(_Origin00.xyz,_Origin10.xyz,uv.x),lerp(_Origin01.xyz,_Origin11.xyz,uv.x),uv.y);
+                float3 d=lerp(lerp(_Direction00.xyz,_Direction10.xyz,uv.x),lerp(_Direction01.xyz,_Direction11.xyz,uv.x),uv.y);
                 d=normalize(d);
                 float2 inv=1.0/(_Panel.xy*_Panel.xy);
                 float a=0.5*_Panel.z*dot(d.xy*d.xy,inv);
@@ -58,6 +62,17 @@ Shader "UI/Codetective/TerminalDimming"
                         float t2=abs(q)>0.0000001 ? c/q : -b/(2*a);
                         inside=max(accepted(t1,o,d),accepted(t2,o,d));
                     }
+                }
+                return inside;
+            }
+            fixed4 frag(v2f i) : SV_Target
+            {
+                float inside=panelCoverage(i.uv);
+                if (_BodyMaskEnabled>0.5)
+                {
+                    float2 uv=(i.uv-_BodyViewport.xy)/_BodyViewport.zw;
+                    float valid=all(uv>=0) && all(uv<=1);
+                    inside=max(inside,tex2D(_BodyMask,uv).r*valid);
                 }
                 return fixed4(i.color.rgb,i.color.a*(1-inside));
             }

@@ -17,6 +17,8 @@ namespace Codetective.Gameplay
     {
         [SerializeField] private KernelScenarioDefinition scenario;
         [SerializeField] private Transform terminalRoot;
+        [Tooltip("Physical terminal model preserved with the screen during terminal-only fades.")]
+        [SerializeField] private Transform terminalBody;
         [SerializeField] private InspectionController inspection;
         [SerializeField] private Transform curtainCloth;
         [SerializeField] private Transform guestCoffeeTemplate;
@@ -41,14 +43,15 @@ namespace Codetective.Gameplay
         public bool IsViewTransitioning => views != null && (views.IsTransitioning || (Transitions != null && Transitions.IsBusy));
         public DialoguePresentationDefinition DialoguePresentation => dialoguePresentation;
         public ItemCarryController Carry { get; private set; }
-        public MonitorPageHost Monitor => terminalRoot?.GetComponentInChildren<MonitorPageHost>(true);
+        private MonitorPageHost monitor;
+        public MonitorPageHost Monitor => monitor != null ? monitor : terminalRoot != null ? monitor = terminalRoot.GetComponentInChildren<MonitorPageHost>(true) : null;
         public PaperDocument NewspaperDocument => newspaper?.Document;
         public bool IsDateTransitioning { get; private set; }
         public bool IsVisitPresenting { get; private set; }
         public string SelectedProfileId
         {
-            get => terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.SelectedProfileId ?? selectedProfile;
-            set { selectedProfile = value; MonitorPageHost host = terminalRoot?.GetComponentInChildren<MonitorPageHost>(true); if (host != null) host.SelectedProfileId = value; }
+            get => Monitor != null ? Monitor.SelectedProfileId : selectedProfile;
+            set { selectedProfile = value; MonitorPageHost host = Monitor; if (host != null) host.SelectedProfileId = value; }
         }
         private string selectedProfile = "client";
         private DeskNewspaper newspaper;
@@ -117,7 +120,7 @@ namespace Codetective.Gameplay
             views = inspection.GetComponent<CameraAngleController>();
             Transitions = inspection.GetComponent<SceneTransitionController>();
             if (Transitions == null) Transitions = inspection.gameObject.AddComponent<SceneTransitionController>();
-            Transitions.Initialize(views, terminalRoot != null ? terminalRoot.GetComponentInChildren<CrtScreen>(true) : null, scenario != null ? scenario.presentation : null);
+            Transitions.Initialize(views, terminalRoot != null ? terminalRoot.GetComponentInChildren<CrtScreen>(true) : null, scenario != null ? scenario.presentation : null, terminalBody);
             inspection.Transitions = Transitions;
             Monitor?.AttachProfiles(scenario != null ? scenario.profiles : null);
             inspection.AngleEntered += EnterView;
@@ -230,7 +233,7 @@ namespace Codetective.Gameplay
         public void ShowMonitorPage(string pageId)
         {
             if (inspection.Mode == InspectionMode.Menu || IsVisitPresenting || IsDateTransitioning) return;
-            terminalRoot?.GetComponentInChildren<MonitorPageHost>(true)?.ShowPage(pageId);
+            Monitor?.ShowPage(pageId);
             ShowMonitor();
         }
         private void PickedUpItem(HoldableItem item)
@@ -553,10 +556,11 @@ namespace Codetective.Gameplay
             StopAllCoroutines();
             if (sceneLights != null && initialLights != null) for (int i = 0; i < Math.Min(sceneLights.Length, initialLights.Length); i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;
-            if (Carry != null) { Carry.PutDown(); Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; }
+            if (Carry != null) { Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; Carry.PutDown(); }
             if (profileDocument != null) Destroy(profileDocument.gameObject);
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.QuickSaveRequested = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.Transitions = null; inspection.NavigationBlocked = false; }
-            if (Monitor != null) { Monitor.WaitForAppointment = null; Monitor.FinishConsultation = null; Monitor.ClinicActionsAllowed = null; }
+            MonitorPageHost host = Monitor;
+            if (host != null) { host.WaitForAppointment = null; host.FinishConsultation = null; host.ClinicActionsAllowed = null; }
             if (Runtime != null)
             {
                 Runtime.SceneActionRequested -= SceneAction;

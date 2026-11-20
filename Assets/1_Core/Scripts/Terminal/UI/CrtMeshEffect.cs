@@ -6,7 +6,7 @@ namespace Codetective.Terminal
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Graphic))]
-    public sealed class CrtMeshEffect : BaseMeshEffect
+    public sealed class CrtMeshEffect : BaseMeshEffect, IMaterialModifier
     {
         private CrtScreen screen;
         private Matrix4x4 lastMatrix;
@@ -31,7 +31,7 @@ namespace Codetective.Terminal
                 return;
             if (screen == null)
                 screen = GetComponentInParent<CrtScreen>();
-            if (screen == null || !screen.IsCurved)
+            if (screen == null || (!screen.IsCurved && !screen.DisplayEnabled))
                 return;
 
             Matrix4x4 current = screen.GraphicToPanelMatrix(transform);
@@ -42,6 +42,12 @@ namespace Codetective.Terminal
             // ScrollRect translates Text without rebuilding its mesh. The bend must
             // follow its new panel coordinates, not the coordinates before scrolling.
             graphic.SetVerticesDirty();
+        }
+        public Material GetModifiedMaterial(Material baseMaterial)
+        {
+            if (!IsActive()) return baseMaterial;
+            if (screen == null) screen = GetComponentInParent<CrtScreen>();
+            return screen != null ? screen.DisplayMaterialFor(baseMaterial) : baseMaterial;
         }
 
         public override void ModifyMesh(VertexHelper mesh)
