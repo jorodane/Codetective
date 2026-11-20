@@ -8,8 +8,9 @@ namespace Codetective.Operations
     [Serializable] public sealed class ValueNode
     {
         public DataKind kind; public string id = "", label = "", text = "", schemaId = ""; public double number;
+        public string labelKey = "", textKey = "";
         public int[] children = Array.Empty<int>();
-        public ValueNode Copy() => new ValueNode { kind = kind, id = id, label = label, text = text, schemaId = schemaId, number = number, children = children.ToArray() };
+        public ValueNode Copy() => new ValueNode { kind = kind, id = id, label = label, text = text, labelKey = labelKey, textKey = textKey, schemaId = schemaId, number = number, children = children.ToArray() };
     }
     [Serializable] public sealed class CollectionValue
     {
@@ -27,7 +28,7 @@ namespace Codetective.Operations
                     value.collection.Validate();
                     nodes.AddRange(value.collection.nodes.Select(n => { ValueNode copy = n.Copy(); copy.children = copy.children.Select(c => c + offset).ToArray(); return copy; }));
                 }
-                else nodes.Add(new ValueNode { kind = value.kind, id = value.id, label = value.label, text = value.text, schemaId = value.schemaId, number = value.number });
+                else nodes.Add(new ValueNode { kind = value.kind, id = value.id, label = value.label, text = value.text, labelKey = value.labelKey, textKey = value.textKey, schemaId = value.schemaId, number = value.number });
                 if (nodes.Count > 4096) throw new CommandException("자료 모음은 4096개 노드 이하로 작성하세요.");
             }
             nodes[0].children = children.ToArray();
@@ -71,7 +72,7 @@ namespace Codetective.Operations
             ValueNode node = nodes[index];
             if (node.kind == DataKind.Array || node.kind == DataKind.Dictionary)
                 return Create(node.kind, node.children.Select(Read));
-            return new Datum { kind = node.kind, id = node.id, label = node.label, text = node.text, schemaId = node.schemaId, number = node.number };
+            return new Datum { kind = node.kind, id = node.id, label = node.label, text = node.text, labelKey = node.labelKey, textKey = node.textKey, schemaId = node.schemaId, number = node.number };
         }
     }
     public static class DataTypes

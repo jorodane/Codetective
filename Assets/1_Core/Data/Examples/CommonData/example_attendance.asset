@@ -24,6 +24,8 @@ MonoBehaviour:
   reuseExisting: 0
   instanceId: example_attendance
   displayName: 행사 참석
+  displayNameKey: ''
+  textKeys: []
   schema:
     fileID: 0
   exposeRoot: 0

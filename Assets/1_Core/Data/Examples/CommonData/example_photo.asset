@@ -24,6 +24,8 @@ MonoBehaviour:
   reuseExisting: 0
   instanceId: example_photo
   displayName: 행사 현장 사진
+  displayNameKey: ''
+  textKeys: []
   schema:
     fileID: 0
   exposeRoot: 0

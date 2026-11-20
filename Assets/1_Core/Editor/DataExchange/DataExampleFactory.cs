@@ -19,6 +19,9 @@ namespace Codetective.DataExchange
             var hall = Make<PlaceAsset>("example_hall", "공개행사장"); var warehouse = Make<PlaceAsset>("example_warehouse", "창고");
             hall.connections = new[] { warehouse }; warehouse.connections = new[] { hall };
             var person = Make<PersonAsset>("example_victor", "Victor Hale"); person.age = 48; person.occupation = "Meridian Profile Services 대표";
+            person.displayNameKey = "sample.victor.name";
+            person.description = "실종된 기업 대표";
+            person.textKeys = new[] { new FieldTextKey { field = "description", key = "sample.victor.description" }, new FieldTextKey { field = "occupation", key = "sample.victor.occupation" } };
             var witness = Make<PersonAsset>("example_rachel", "Rachel Kim"); witness.occupation = "행사 담당 직원"; witness.topics = new[] { keyword };
             person.fields = new[] { new FieldDefinition { code = "currentPlace", label = "현재 위치", kind = DataKind.Place, typeName = "Place" } };
             person.initialValues = new[] { new InitialFieldDefinition { field = "currentPlace", reference = warehouse } };
@@ -39,6 +42,7 @@ namespace Codetective.DataExchange
             organization.places = new[] { new OrganizationPlace { place = hall, purpose = "공개행사" } };
             var viewer = ScriptableObject.CreateInstance<DataViewerAsset>(); viewer.name = "ExamplePersonViewer"; viewer.viewerId = "example_person_viewer";
             viewer.layout = DataViewerKind.Person; viewer.title = "인물 프로필"; viewer.fields = new[] { "age", "occupation", "currentPlace", "history", "relations", "topics" }; person.viewer = viewer;
+            viewer.titleKey = "sample.viewer.person";
             var knowledge = ScriptableObject.CreateInstance<CurrentInformationAsset>(); knowledge.name = "ExampleInformation"; knowledge.informationId = "example_information";
             knowledge.discoveries = new[] { new InitialDiscovery { target = person }, new InitialDiscovery { target = witness },
                 new InitialDiscovery { target = statement, observeFields = true }, new InitialDiscovery { target = time, observeFields = true },
@@ -47,15 +51,27 @@ namespace Codetective.DataExchange
                 new InformationEntry { subject = person, field = "age", readWorldField = true },
                 new InformationEntry { subject = person, field = "occupation", readWorldField = true },
                 new InformationEntry { subject = person, field = "currentPlace", referenceValue = hall, source = "Rachel 진술", sourceObject = witness,
-                    statement = "행사장에서 Victor를 보았습니다.", kind = InformationKind.Testimony, observedAt = new GameDateTime(1994, 6, 2, 14, 32) },
+                    sourceKey = "sample.source.witness", statementKey = "sample.claim.attended", statement = "행사장에서 Victor를 보았습니다.", kind = InformationKind.Testimony, observedAt = new GameDateTime(1994, 6, 2, 14, 32) },
                 new InformationEntry { subject = person, field = "currentPlace", value = Datum.Empty, source = "최종 행사 기록",
-                    statement = "Victor Hale / 개인 사정으로 불참", kind = InformationKind.Observation, observedAt = new GameDateTime(1994, 6, 2, 18, 0) } };
+                    sourceKey = "sample.source.official", statementKey = "sample.claim.absent", statement = "Victor Hale / 개인 사정으로 불참", kind = InformationKind.Observation, observedAt = new GameDateTime(1994, 6, 2, 18, 0) } };
             knowledge.inferences = new[] { new InferredInformation { id = "example_hypothesis", name = "참석 기준에 대한 가설", content = "공식 참석 기록이 실제 입장 여부와 다를 수 있다." } };
             knowledge.references = new[] { new InitialReference { name = "피해자", target = person }, new InitialReference { name = "참석여부", target = keyword },
                 new InitialReference { name = "가설", informationId = "example_hypothesis" } };
             var world = ScriptableObject.CreateInstance<WorldDefinition>(); world.name = "ExampleWorld"; world.worldId = "example_world"; world.includeClinicDefaults = false;
             world.currentTime = start; world.objects = new EntityInstanceAsset[] { person, witness, organization, tool, incident, statement };
             world.occurredEvents = new[] { incident }; world.initialInformation = knowledge;
+            var texts = ScriptableObject.CreateInstance<ContentTextTableAsset>(); texts.name = "ExampleTexts"; texts.tableId = "example_texts";
+            TextTranslation T(string key, string language, string text) => new TextTranslation { key = key, language = language, text = text };
+            texts.entries = new[] {
+                T("sample.victor.name", "ko", "빅터 헤일"), T("sample.victor.name", "en", "Victor Hale"),
+                T("sample.victor.description", "ko", "실종된 기업 대표"), T("sample.victor.description", "en", "A missing company director"),
+                T("sample.victor.occupation", "ko", "Meridian Profile Services 대표"), T("sample.victor.occupation", "en", "Director of Meridian Profile Services"),
+                T("sample.viewer.person", "ko", "인물 프로필"), T("sample.viewer.person", "en", "Person profile"),
+                T("sample.source.witness", "ko", "Rachel 진술"), T("sample.source.witness", "en", "Rachel's testimony"),
+                T("sample.source.official", "ko", "최종 행사 기록"), T("sample.source.official", "en", "Final attendance record"),
+                T("sample.claim.attended", "ko", "행사장에서 Victor를 보았습니다."), T("sample.claim.attended", "en", "I saw Victor at the event."),
+                T("sample.claim.absent", "ko", "Victor Hale / 개인 사정으로 불참"), T("sample.claim.absent", "en", "Victor Hale / Absent for personal reasons") };
+            world.textTables = new[] { texts };
             return world;
         }
     }

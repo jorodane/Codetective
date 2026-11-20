@@ -12,11 +12,11 @@ namespace Codetective.Operations
             root.Variables.Add(new VariableDefinition { Code = "id", Label = "고정 식별자", Kind = DataKind.Text,
                 Getter = e => Datum.Text(e.Id), Names = Ko("식별자") });
             root.Variables.Add(new VariableDefinition { Code = "name", Label = "이름", Kind = DataKind.Text,
-                Getter = e => Datum.Text(e.Label), Names = Ko("이름") });
+                Getter = e => Datum.Text(e.Label, e.LabelKey), Names = Ko("이름") });
             root.Variables.Add(new VariableDefinition { Code = "description", Label = "상세 정보", Kind = DataKind.Text,
                 DefaultValue = Datum.Text(""), Names = Ko("상세정보") });
             root.Operations.Add(new Operation { Code = "describe", Label = "개체 정보 확인", ReturnKind = DataKind.Text,
-                Names = Ko("설명보기"), Invoke = c => Datum.Text(c.Target.Label + " — " + c.Runtime.LastKnownValue(c.Target.Id, "description").text) });
+                Names = Ko("설명보기"), Invoke = c => Datum.Text(c.Runtime.KnownName(c.Target.Id) + " — " + c.Runtime.Format(c.Runtime.LastKnownValue(c.Target.Id, "description"))) });
             registry.Register(root);
             var concept = new EntitySchema("Concept", "추상개념", DataKind.Entity, root) { Names = Ko("추상개념") };
             concept.Variables.Add(new VariableDefinition { Code = "features", Kind = DataKind.Array, SchemaId = "Text[]", DefaultValue = Datum.List(), Names = Ko("특징") });

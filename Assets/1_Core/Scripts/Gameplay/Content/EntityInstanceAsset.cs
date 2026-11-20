@@ -17,7 +17,11 @@ namespace Codetective.Gameplay
         public bool reuseExisting;
         [Tooltip("Stable world identity. Reference aliases and save files use this ID.")]
         public string instanceId;
+        [Tooltip("Source/fallback text. Display Name Key supplies the translated display name. Neither changes the ID or command names.")]
+        [InspectorName("Display Name (Fallback)")]
         public string displayName;
+        public string displayNameKey;
+        public FieldTextKey[] textKeys = Array.Empty<FieldTextKey>();
         public EntitySchemaAsset schema;
         public bool exposeRoot = true;
         public int informationVersion = 2;

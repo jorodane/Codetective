@@ -81,6 +81,55 @@ namespace Codetective.Tests.Operations
                 }
             }
         }
+        [Test] public void AuthoredTextKeysResolveWithoutChangingIdentifiersOrFallbackText()
+        {
+            WorldDefinition w = Example(); w.displayLanguage = "en"; KernelRuntime r = w.CreateRuntime();
+            Assert.That(r.ViewData("example_victor").Name, Is.EqualTo("Victor Hale"));
+            Assert.That(r.ViewData("example_victor").Title, Is.EqualTo("Person profile"));
+            Assert.That(r.ProfileCard("example_victor").Occupation, Is.EqualTo("Director of Meridian Profile Services"));
+            Assert.That(r.ViewData("example_victor").Text(), Does.Contain("Absent for personal reasons"));
+            Assert.That(r.Data.Keys, Does.Contain("피해자")); r.DisplayLanguage = "ko";
+            Assert.That(r.ViewData("example_victor").Name, Is.EqualTo("빅터 헤일"));
+            Assert.That(r.Entity("example_victor").Label, Is.EqualTo("Victor Hale"));
+        }
+        [Test] public void TranslationSheetCanBeEditedAndImportedAsPartOfTheWorld()
+        {
+            using var resources = new Resources(); WorldDefinition w = Example(); XlsxWorkbook book = DataWorkbook.Export(w, resources);
+            string[] row = book.Require("Translations").Rows.Single(r => r.Length == 4 && r[1] == "sample.victor.name" && r[2] == "en");
+            row[3] = "New English name";
+            using (DataWorkbookPlan plan = DataWorkbook.Prepare(book, resources, New))
+            {
+                KernelRuntime r = plan.Assets.Select(a => a.Value).OfType<WorldDefinition>().Single().CreateRuntime(); r.DisplayLanguage = "en";
+                Assert.That(r.ViewData("example_victor").Name, Is.EqualTo("New English name"));
+                Assert.That(r.Entity("example_victor").Id, Is.EqualTo("example_victor"));
+                Assert.That(w.textTables.Single().entries.Single(e => e.key == "sample.victor.name" && e.language == "en").text, Is.EqualTo("Victor Hale"));
+            }
+        }
+        [Test] public void ScenarioUsesWorldDisplayLocaleUnlessExplicitlyOverridden()
+        {
+            WorldDefinition world = Example(); world.displayLanguage = "en";
+            var scenario = Make<KernelScenarioDefinition>(); scenario.worldData = world;
+            KernelRuntime runtime = scenario.CreateRuntime(); Assert.That(runtime.DisplayLanguage, Is.EqualTo("en"));
+            Assert.That(runtime.Language, Is.EqualTo(CommandLocale.Korean));
+            scenario.displayLanguage = "ko"; Assert.That(scenario.CreateRuntime().ViewData("example_victor").Name, Is.EqualTo("빅터 헤일"));
+        }
+        [Test] public void DuplicateTranslationsAndNonTextBindingsAbortImport()
+        {
+            using var resources = new Resources(); WorldDefinition w = Example(); XlsxWorkbook book = DataWorkbook.Export(w, resources);
+            book.Require("Translations").Add(book.Require("Translations").Rows[1].ToArray());
+            Assert.That(() => DataWorkbook.Prepare(book, resources, New), Throws.TypeOf<CommandException>());
+            PersonAsset p = w.AllObjects.OfType<PersonAsset>().First(); p.textKeys = new[] { new FieldTextKey { field = "age", key = "invalid" } };
+            Assert.That(() => w.CreateRuntime(), Throws.TypeOf<CommandException>());
+        }
+        [Test] public void OlderWorkbooksWithoutTranslationColumnsStillLoadTheirLiterals()
+        {
+            using var resources = new Resources(); var person = Make<PersonAsset>(); person.instanceId = "literal"; person.displayName = "기존 표시명";
+            XlsxWorkbook book = DataWorkbook.Export(person, resources); book.Sheets.Remove(book.Require("Translations"));
+            WorkbookSheet sheet = book.Require("Person"); int column = Array.IndexOf(sheet.Rows[0], "displayNameKey");
+            for (int i = 0; i < sheet.Rows.Count; i++) sheet.Rows[i] = sheet.Rows[i].Where((_, index) => index != column).ToArray();
+            using (DataWorkbookPlan plan = DataWorkbook.Prepare(book, resources, New))
+                Assert.That(plan.Assets.Select(a => a.Value).OfType<PersonAsset>().Single().displayName, Is.EqualTo("기존 표시명"));
+        }
         [Test] public void ImportEditsTypedColumnsAndNestedProtocolsWithoutMutatingOriginalAssets()
         {
             using var resources = new Resources(); WorldDefinition w = Example(); var person = w.AllObjects.OfType<PersonAsset>().First();

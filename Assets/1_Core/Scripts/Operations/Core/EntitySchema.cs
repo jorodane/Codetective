@@ -9,6 +9,7 @@ namespace Codetective.Operations
     {
         public string Code;
         public string Label;
+        public string LabelKey = "";
         public DataKind Kind = DataKind.Any;
         public string SchemaId = "";
         public Datum DefaultValue = Datum.Empty;
@@ -23,7 +24,7 @@ namespace Codetective.Operations
         public string NameFor(CommandLocale language) => CommandVocabulary.Name(Code, Names, language);
         public string LabelFor(CommandLocale language) => CommandVocabulary.Description(Label, Names, language);
         public VariableDefinition Copy() => new VariableDefinition { Code = Code, Label = Label, Kind = Kind, SchemaId = SchemaId,
-            DefaultValue = DefaultValue.Copy(), Writable = Writable, Overrides = Overrides, Getter = Getter,
+            DefaultValue = DefaultValue.Copy(), Writable = Writable, Overrides = Overrides, Getter = Getter, LabelKey = LabelKey,
             Aliases = Aliases.ToArray(), Names = Names.Select(n => new LocalizedCommandName(n.language, n.name, n.description)).ToArray(), Access = Access.Copy() };
     }
 
@@ -33,6 +34,7 @@ namespace Codetective.Operations
         public DataViewerDefinition Viewer;
         public string Id;
         public string Label;
+        public string LabelKey = "";
         public DataKind Kind;
         public EntitySchema Parent;
         public string[] Aliases = Array.Empty<string>();

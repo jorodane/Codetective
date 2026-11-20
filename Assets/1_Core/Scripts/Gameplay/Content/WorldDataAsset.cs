@@ -23,7 +23,7 @@ namespace Codetective.Gameplay
             if (asset == null) return Datum.Empty;
             References.Add(asset);
             DataKind kind = Enum.TryParse(asset.BuiltinSchemaId, out DataKind builtin) ? builtin : asset.BuiltinSchemaId == "Tool" ? DataKind.Item : DataKind.Entity;
-            return new Datum { kind = kind, id = asset.instanceId, label = string.IsNullOrWhiteSpace(asset.displayName) ? asset.name : asset.displayName, schemaId = asset.SchemaId };
+            return new Datum { kind = kind, id = asset.instanceId, label = string.IsNullOrWhiteSpace(asset.displayName) ? asset.name : asset.displayName, labelKey = asset.displayNameKey, schemaId = asset.SchemaId };
         }
         public void Reference(string name, EntityInstanceAsset asset) => Set(name, Ref(asset));
         public void List(string name, IEnumerable<EntityInstanceAsset> assets)

@@ -24,6 +24,8 @@ MonoBehaviour:
   reuseExisting: 0
   instanceId: example_badge
   displayName: 행사 명찰
+  displayNameKey: ''
+  textKeys: []
   schema:
     fileID: 0
   exposeRoot: 0

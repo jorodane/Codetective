@@ -7,6 +7,25 @@ Statement, Photo, Time, Relationship, Viewer를 생성합니다.
 
 각 자료의 Instance Id는 세계 대상의 고정 식별자입니다. Display Name은 표시명이며
 치환 참조 이름과 별개입니다. 배포한 콘텐츠의 ID는 변경하지 않는 것을 권장합니다.
+Display Name (Fallback)은 원문/미번역 시 기본값입니다. 번역된 이름을 사용하려면
+Display Name Key에 sample.victor.name 같은 키를 넣고 Text Table 에셋에 같은 key와
+언어 코드(ko, en, ja 등), 문구를 등록합니다. Text Table은 World 또는 Scenario의
+Text Tables에 연결합니다. 번역 키가 없으면 기존 문자열을 그대로 표시합니다.
+
+설명·직업·진술 내용 등은 Text Keys의 Field에 description / occupation / content 같은
+문자열 필드 코드를 지정하고 Key를 연결합니다. Viewer의 Title Key, 스키마의 Display
+Name Key, 사용자 필드의 Label Key도 번역할 수 있습니다. 초기 관측의 Source Key와
+Statement Key는 출처와 진술 문구를 번역합니다. 일반 Datum에는 textKey / labelKey가
+있어 프로토콜 결과·배열·사전에도 번역 키를 유지할 수 있습니다.
+
+Display Language는 표시할 콘텐츠의 언어 코드이며 Command Language와 독립적입니다.
+Scenario의 Display Language를 비워 두면 World의 표시 언어를 사용합니다.
+명령 식별자·별칭·플레이어의 참조 이름은 번역하지 않습니다. 기존 Names 배열은 명령
+어휘용입니다. 표시명에 공백/기호가 있더라도 명령 문법을 바꾸지 않습니다. 저장 파일은
+키와 원문을 보존하며, 불러온 뒤 현재 번역표로 표시합니다. 플레이어가 입력한 메모나
+문자열을 임의로 번역하지 않습니다. 지역 번역(en-GB)이 없으면 상위 코드(en), ko,
+원문 순으로 표시합니다. 기존 메뉴·대사 전체를 자동 번역하는 기능은 아닙니다.
+
 Schema를 비워 두면 자료형의 기본 스키마를 사용합니다. 사용자 스키마를 지정하면
 해당 기본 자료형을 상속해야 합니다. Fields / Functions는 인스턴스별 추가 멤버,
 Initial Values는 생성된 기본값을 덮어쓰는 값입니다. 함수·변수의 Access는 기존
@@ -58,6 +77,8 @@ Assets 시트: 에셋 목록. Key는 파일 내부 연결 키, Id는 런타임 I
 Guid는 기존 Unity 에셋을 갱신할 때 쓰는 GUID입니다. 새 행은 Guid를 비웁니다.
 자료형별 시트: 에셋마다 한 행. 일반 값과 단일 에셋 참조를 편집합니다.
 Details 시트: 배열·복합 데이터·함수·조건을 경로별로 편집합니다.
+Translations 시트: Text Table별로 key / language / text를 한 행씩 편집합니다.
+같은 key의 ko/en 행을 추가할 수 있으며 같은 key+언어의 중복은 거부합니다.
 예: functions[0].result.text, fields[0].access.story.triggersOn[0]
 array 행의 Value는 배열 길이입니다. 항목을 늘리거나 줄이면 길이도 함께 수정합니다.
 object/null 행은 복합 데이터의 존재 여부입니다. 연결된 에셋 내부를 경로로 수정하지

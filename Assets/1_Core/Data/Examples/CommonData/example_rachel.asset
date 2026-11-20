@@ -24,6 +24,8 @@ MonoBehaviour:
   reuseExisting: 0
   instanceId: example_rachel
   displayName: Rachel Kim
+  displayNameKey: ''
+  textKeys: []
   schema:
     fileID: 0
   exposeRoot: 0

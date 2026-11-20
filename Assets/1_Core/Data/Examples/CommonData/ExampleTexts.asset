@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: bd46540139c34d48bd88012dfc1a4510
+    type: 3
+  m_Name: ExampleTexts
+  m_EditorClassIdentifier: ''
+  tableId: example_texts
+  entries:
+  - key: sample.victor.name
+    language: ko
+    text: 빅터 헤일
+  - key: sample.victor.name
+    language: en
+    text: Victor Hale
+  - key: sample.victor.description
+    language: ko
+    text: 실종된 기업 대표
+  - key: sample.victor.description
+    language: en
+    text: A missing company director
+  - key: sample.victor.occupation
+    language: ko
+    text: Meridian Profile Services 대표
+  - key: sample.victor.occupation
+    language: en
+    text: Director of Meridian Profile Services
+  - key: sample.viewer.person
+    language: ko
+    text: 인물 프로필
+  - key: sample.viewer.person
+    language: en
+    text: Person profile
+  - key: sample.source.witness
+    language: ko
+    text: Rachel 진술
+  - key: sample.source.witness
+    language: en
+    text: Rachel's testimony
+  - key: sample.source.official
+    language: ko
+    text: 최종 행사 기록
+  - key: sample.source.official
+    language: en
+    text: Final attendance record
+  - key: sample.claim.attended
+    language: ko
+    text: 행사장에서 Victor를 보았습니다.
+  - key: sample.claim.attended
+    language: en
+    text: I saw Victor at the event.
+  - key: sample.claim.absent
+    language: ko
+    text: Victor Hale / 개인 사정으로 불참
+  - key: sample.claim.absent
+    language: en
+    text: Victor Hale / Absent for personal reasons

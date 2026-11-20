@@ -14,6 +14,7 @@ namespace Codetective.Operations
         public string id = "";
         public string label = "";
         public string text = "";
+        public string labelKey = "", textKey = "";
         public double number;
         public string schemaId = "";
         public CollectionValue collection;
@@ -33,7 +34,8 @@ namespace Codetective.Operations
         public static Datum Empty => new Datum();
         public static Datum Ref(DataKind kind, string id, string label, string text = "") =>
             new Datum { kind = kind, id = id, label = label, text = text };
-        public static Datum Text(string text) => new Datum { kind = DataKind.Text, text = text, label = text };
+        public static Datum Text(string text) => Text(text, "");
+        public static Datum Text(string text, string key) => new Datum { kind = DataKind.Text, text = text, label = text, textKey = key };
         public static Datum Number(double value) => new Datum { kind = DataKind.Number, number = value, label = value.ToString(System.Globalization.CultureInfo.InvariantCulture) };
         public static Datum Boolean(bool value) => new Datum { kind = DataKind.Boolean, number = value ? 1 : 0, label = value ? "true" : "false" };
         public Datum Copy() { var copy = (Datum)MemberwiseClone(); copy.collection = kind == DataKind.Array || kind == DataKind.Dictionary ? collection?.Copy() : null; return copy; }
@@ -124,6 +126,7 @@ namespace Codetective.Operations
     {
         public string Id;
         public string Label;
+        public string LabelKey = "";
         public DataKind Kind;
         public string[] Aliases = Array.Empty<string>();
         public LocalizedCommandName[] Names = Array.Empty<LocalizedCommandName>();
@@ -185,6 +188,7 @@ namespace Codetective.Operations
     [Serializable]
     public sealed class KernelSnapshot
     {
+        public int contentTextVersion;
         public int version = 1;
         public int day;
         public double minute;
@@ -234,6 +238,7 @@ namespace Codetective.Operations
         public bool hasViewerOverride;
         public string id;
         public string label;
+        public string labelKey;
         public string schemaId;
         public string[] rootNames;
         public string[] aliases;

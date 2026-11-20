@@ -141,7 +141,7 @@ namespace Codetective.Operations
                 Statement statement = new CommandParser(source).ReadSingle();
                 Datum value = ExecuteStatement(statement, null, null);
                 Revision++;
-                return ExecutionResult.Ok(value.kind == DataKind.Empty ? "명령을 수행했습니다." : value.ToString(), value);
+                return ExecutionResult.Ok(value.kind == DataKind.Empty ? "명령을 수행했습니다." : Format(value), value);
             }
             catch (CommandException error) { return ExecutionResult.Error(error.Message + " (" + CommandVocabulary.KeywordName("help", Language) + "로 사용법 확인)"); }
         }
@@ -380,14 +380,14 @@ namespace Codetective.Operations
                         string preferred = CommandVocabulary.Name(child.Key, child.Value.Names, Language);
                         string name = CommandVocabulary.Match(preferred, child.Value.AllNames.Concat(new[] { child.Key }), prefix, composing);
                         if (name != null && EntityDenial(child.Value, locals) == null)
-                            output.Add(new Completion(name + " · " + child.Value.LabelFor(Language), leading + objectPath + "." + name + "."));
+                            output.Add(new Completion(name + " · " + Text(child.Value.LabelKey, child.Value.LabelFor(Language)), leading + objectPath + "." + name + "."));
                     }
                     foreach (VariableDefinition field in entity.Variables)
                     {
                         string name = CommandVocabulary.Match(field.NameFor(Language), field.AllNames, prefix, composing);
                         if (name != null && VariableDenial(entity, field, locals) == null)
                             output.Add(new Completion(name + " : " + (string.IsNullOrEmpty(field.SchemaId) ? KindName(field.Kind) : DataTypes.IsArray(field.SchemaId) || DataTypes.DictionaryTypes(field.SchemaId) != null ? field.SchemaId : Schemas.Require(field.SchemaId).NameFor(Language)) +
-                                " · " + field.LabelFor(Language), leading + objectPath + "." + name));
+                                " · " + Text(field.LabelKey, field.LabelFor(Language)), leading + objectPath + "." + name));
                     }
                     foreach (Operation op in entity.EffectiveOperations)
                     {

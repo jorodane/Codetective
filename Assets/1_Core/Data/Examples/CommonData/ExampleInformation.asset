@@ -83,6 +83,8 @@ MonoBehaviour:
       fileID: 0
     field: age
     source: 초기 작전 자료
+    sourceKey: ''
+    statementKey: ''
     statement: ''
     kind: 0
     observedAt:
@@ -103,6 +105,8 @@ MonoBehaviour:
       id: ''
       label: ''
       text: ''
+      labelKey: ''
+      textKey: ''
       number: 0
       schemaId: ''
       collection:
@@ -119,6 +123,8 @@ MonoBehaviour:
       fileID: 0
     field: occupation
     source: 초기 작전 자료
+    sourceKey: ''
+    statementKey: ''
     statement: ''
     kind: 0
     observedAt:
@@ -139,6 +145,8 @@ MonoBehaviour:
       id: ''
       label: ''
       text: ''
+      labelKey: ''
+      textKey: ''
       number: 0
       schemaId: ''
       collection:
@@ -159,6 +167,8 @@ MonoBehaviour:
       fileID: 0
     field: currentPlace
     source: Rachel 진술
+    sourceKey: sample.source.witness
+    statementKey: sample.claim.attended
     statement: 행사장에서 Victor를 보았습니다.
     kind: 1
     observedAt:
@@ -179,6 +189,8 @@ MonoBehaviour:
       id: ''
       label: ''
       text: ''
+      labelKey: ''
+      textKey: ''
       number: 0
       schemaId: ''
       collection:
@@ -195,6 +207,8 @@ MonoBehaviour:
       fileID: 0
     field: currentPlace
     source: 최종 행사 기록
+    sourceKey: sample.source.official
+    statementKey: sample.claim.absent
     statement: Victor Hale / 개인 사정으로 불참
     kind: 0
     observedAt:
@@ -215,6 +229,8 @@ MonoBehaviour:
       id: ''
       label: ''
       text: ''
+      labelKey: ''
+      textKey: ''
       number: 0
       schemaId: ''
       collection:

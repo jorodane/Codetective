@@ -21,7 +21,7 @@ namespace Codetective.Operations
         {
             RequireVisibleProfile(profileId);
             Entity person = Entity(profileId);
-            string knownName = person != null ? LastKnownValue(person.Id, "name").text : "";
+            string knownName = person != null ? KnownName(person.Id) : "";
             string displayName = !string.IsNullOrWhiteSpace(knownName) ? knownName : Consultation.FirstOrDefault(l => ProfileOf(l) == profileId)?.speaker ?? profileId;
             return new PersonProfile { Id = profileId, DisplayName = displayName,
                 Name = ProfileField(person, profileFields[0], displayName), Gender = ProfileField(person, profileFields[1]),
@@ -38,7 +38,7 @@ namespace Codetective.Operations
                 if (!person.Variables.Any(v => v.Code == field.Code) || VariableDenial(person, field, null) != null) return "[접근 제한]";
                 Datum value = LastKnownValue(person.Id, field.Code);
                 if (!IsPlayerVisible(value)) return "[접근 제한]";
-                return value.kind == DataKind.Empty || value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text) ? person.Id == "kernel" ? "[데이터 말소됨]" : fallback : value.ToString();
+                return value.kind == DataKind.Empty || value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text) && string.IsNullOrEmpty(value.textKey) ? person.Id == "kernel" ? "[데이터 말소됨]" : fallback : Format(value);
             }
             return fallback;
         }
@@ -55,11 +55,10 @@ namespace Codetective.Operations
                     Datum value = LastKnownValue(person.Id, field.Code);
                     if (value.kind != DataKind.Empty && !(value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text)) &&
                         !((value.kind == DataKind.Array || value.kind == DataKind.Dictionary) && value.Elements.Length == 0) && IsPlayerVisible(value))
-                        text.Append(string.IsNullOrWhiteSpace(field.Label) ? field.NameFor(Language) : field.Label).Append(": ").Append(value).Append('\n');
+                        text.Append(Text(field.LabelKey, string.IsNullOrWhiteSpace(field.Label) ? field.NameFor(Language) : field.Label)).Append(": ").Append(Format(value)).Append('\n');
                 }
-            foreach (ObservationRecord report in Observations.Where(o => o.subjectId == profileId && !string.IsNullOrWhiteSpace(o.statement)))
-                text.Append("[관측 · ").Append(report.source).Append(" / ").Append(report.observedAt?.ToString() ?? "DAY " + report.observedDay + " " + TimeOfDay(report.observedMinute))
-                    .Append(" → 수신 ").Append(report.receivedAt?.ToString() ?? "DAY " + report.receivedDay + " " + TimeOfDay(report.receivedMinute)).Append("]\n").Append(report.statement).Append("\n\n");
+            foreach (ObservationRecord report in Observations.Where(o => o.subjectId == profileId && (!string.IsNullOrWhiteSpace(o.statement) || !string.IsNullOrEmpty(o.statementKey))))
+                text.Append(ObservationText(report)).Append("\n\n");
             foreach (ConsultationLine line in Consultation.Where(l => ProfileOf(l) == profileId && RecordedClues.Contains(l.fact)).GroupBy(l => l.fact).Select(g => g.First()))
                 if (!observations.Any(o => o.subjectId == profileId && o.statement == line.sentence))
                     text.Append("● ").Append(line.keyword).Append('\n').Append(line.sentence).Append("\n\n");

@@ -44,6 +44,7 @@ namespace Codetective.Gameplay
                 else if (!asset.reuseExisting || !entity.Schema.IsA(runtime.Schemas.Require(asset.SchemaId))) throw new CommandException("인스턴스 ID가 중복되거나 재사용 자료형이 다릅니다: " + asset.instanceId);
                 if (!string.IsNullOrEmpty(asset.BuiltinSchemaId) && !entity.Schema.IsA(runtime.Schemas.Require(asset.BuiltinSchemaId))) throw new CommandException("에셋의 기본 자료형과 스키마가 다릅니다: " + asset.instanceId);
                 entity.Label = string.IsNullOrWhiteSpace(asset.displayName) ? asset.name : asset.displayName;
+                entity.LabelKey = asset.displayNameKey;
                 entity.Aliases = asset.aliases; entity.Names = asset.names; entity.Access = asset.access.Compile();
                 entity.Viewer = asset.viewer != null ? asset.viewer.Compile() : null;
             }
@@ -57,6 +58,16 @@ namespace Codetective.Gameplay
                 Entity entity = runtime.Entity(asset.instanceId);
                 foreach (ActionDefinition action in asset.functions) entity.AddFunction(compiler.Function(action, entity.GetVariableDefinition));
                 foreach (InitialFieldDefinition initial in asset.Values) entity.SetValue(initial.field, compiler.Value(initial.value, initial.reference));
+                var localizedFields = new HashSet<string>(StringComparer.Ordinal);
+                foreach (FieldTextKey binding in asset.textKeys ?? Array.Empty<FieldTextKey>())
+                {
+                    VariableDefinition field = binding == null ? null : entity.GetVariableDefinition(binding.field);
+                    if (field == null || field.Kind != DataKind.Text || field.Getter != null || string.IsNullOrWhiteSpace(binding.key) || !localizedFields.Add(field.Code))
+                        throw new CommandException("번역할 텍스트 필드 또는 키가 유효하지 않습니다: " + asset.instanceId);
+                    Datum value = entity.GetValue(field.Code);
+                    value = value.kind == DataKind.Empty ? Datum.Text("") : value.Copy(); value.textKey = binding.key;
+                    entity.SetValue(field.Code, value);
+                }
                 foreach (ChildInstanceDefinition child in asset.children)
                 {
                     if (child.instance == null || !CommandParser.IsIdentifier(child.name)) throw new CommandException("하위 개체 연결이 유효하지 않습니다: " + asset.instanceId);
@@ -96,7 +107,7 @@ namespace Codetective.Gameplay
             if (!visiting.Add(asset) || visiting.Count > 64) throw new CommandException("스키마 부모에 순환이 있거나 깊이(64)를 초과했습니다: " + asset.name);
             EntitySchema parent = asset.parent != null ? Declare(asset.parent) : runtime.Schemas.Require(asset.builtinParent);
             var schema = new EntitySchema(asset.schemaId, asset.displayName, asset.inheritKind ? parent.Kind : asset.kind, parent)
-            { Aliases = asset.aliases, Names = asset.names, Access = asset.access.Compile(), Viewer = asset.viewer != null ? asset.viewer.Compile() : null };
+            { Aliases = asset.aliases, Names = asset.names, LabelKey = asset.displayNameKey, Access = asset.access.Compile(), Viewer = asset.viewer != null ? asset.viewer.Compile() : null };
             runtime.Schemas.Register(schema);
             compiled.Add(asset, schema); visiting.Remove(asset);
             return schema;
@@ -106,7 +117,7 @@ namespace Codetective.Gameplay
             foreach (FieldDefinition field in asset.fields)
                 compiled[asset].Variables.Add(Field(field));
         }
-        private VariableDefinition Field(FieldDefinition field) => new VariableDefinition { Code = field.code, Label = field.label,
+        private VariableDefinition Field(FieldDefinition field) => new VariableDefinition { Code = field.code, Label = field.label, LabelKey = field.labelKey,
                     Kind = string.IsNullOrEmpty(field.typeName) ? field.kind : DataTypes.Parameter(field.code, field.typeName).Kind,
                     SchemaId = !string.IsNullOrEmpty(field.typeName) ? DataTypes.Parameter(field.code, field.typeName).SchemaId : field.referenceType != null ? field.referenceType.schemaId : "", DefaultValue = field.defaultValue.Copy(),
                     Writable = field.writable, Overrides = field.overrides, Aliases = field.aliases, Names = field.names, Access = field.access.Compile() };
@@ -140,7 +151,7 @@ namespace Codetective.Gameplay
                 Incidents = (action.incidents ?? Array.Empty<string>()).ToArray(), Responses = (action.responses ?? Array.Empty<ActionResponseDefinition>()).Select(r => r.Copy()).ToArray(),
                 FieldWrites = action.fieldWrites.Select(w => new OperationFieldWrite { Field = w.field, ArgumentIndex = w.argumentIndex,
                     TargetArgumentIndex = w.useArgumentTarget ? w.targetArgumentIndex : -1,
-                    Value = w.reference != null ? new Datum { kind = DataKind.Entity, id = w.reference.instanceId, label = w.reference.displayName,
+                    Value = w.reference != null ? new Datum { kind = DataKind.Entity, id = w.reference.instanceId, label = w.reference.displayName, labelKey = w.reference.displayNameKey,
                         schemaId = w.reference.SchemaId } : w.value.Copy() }).ToArray() };
             foreach (FieldWriteDefinition write in action.fieldWrites)
             {

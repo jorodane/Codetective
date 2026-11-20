@@ -9,6 +9,7 @@ namespace Codetective.Gameplay
     {
         public string schemaId;
         public string displayName;
+        public string displayNameKey;
         public DataViewerAsset viewer;
         [Tooltip("Inherited fields, functions and access requirements remain available on this type.")]
         public EntitySchemaAsset parent;
@@ -40,6 +41,7 @@ namespace Codetective.Gameplay
     {
         public string code;
         public string label;
+        public string labelKey;
         public DataKind kind = DataKind.Text;
         [Tooltip("Optional collection/custom type, e.g. Person[], Dict<Physical,Relationship[]>.")]
         public string typeName = "";

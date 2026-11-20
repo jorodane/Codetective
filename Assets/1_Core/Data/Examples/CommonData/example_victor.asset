@@ -26,6 +26,12 @@ MonoBehaviour:
   reuseExisting: 0
   instanceId: example_victor
   displayName: Victor Hale
+  displayNameKey: sample.victor.name
+  textKeys:
+  - field: description
+    key: sample.victor.description
+  - field: occupation
+    key: sample.victor.occupation
   schema:
     fileID: 0
   exposeRoot: 0
@@ -45,6 +51,7 @@ MonoBehaviour:
   fields:
   - code: currentPlace
     label: 현재 위치
+    labelKey: ''
     kind: 10
     typeName: Place
     referenceType:
@@ -54,6 +61,8 @@ MonoBehaviour:
       id: ''
       label: ''
       text: ''
+      labelKey: ''
+      textKey: ''
       number: 0
       schemaId: ''
       collection:
@@ -81,6 +90,8 @@ MonoBehaviour:
       id: ''
       label: ''
       text: ''
+      labelKey: ''
+      textKey: ''
       number: 0
       schemaId: ''
       collection:
@@ -90,7 +101,7 @@ MonoBehaviour:
       guid: 667acd2a741f36a676a7d0f08bcf20a4
       type: 2
   children: []
-  description: ''
+  description: 실종된 기업 대표
   features: []
   portrait:
     fileID: 11400000

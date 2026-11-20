@@ -74,9 +74,11 @@ namespace Codetective.Operations
                 VariableDefinition field = target.FindVariable("description");
                 bool allowed = field != null && VariableDenial(target, field, null) == null;
                 Datum visible = allowed ? LastKnownValue(target.Id, field.Code) : Datum.Empty;
-                description = !allowed || !IsPlayerVisible(visible) ? "" : visible.kind == DataKind.Empty || visible.kind == DataKind.Text && string.IsNullOrWhiteSpace(visible.text) ? record.value.text : visible.ToString();
+                description = !allowed || !IsPlayerVisible(visible) ? "" : visible.kind == DataKind.Empty || visible.kind == DataKind.Text && string.IsNullOrWhiteSpace(visible.text) && string.IsNullOrEmpty(visible.textKey) ? Text(record.value.textKey, record.value.text) : Format(visible);
             }
-            string name = target?.Label ?? record.value.label;
+            string name = target != null ? KnownName(target.Id, Text(record.value.labelKey, record.value.label)) : Text(record.value.labelKey, record.value.label);
+            ObservationRecord origin = ObservationEvidence(record.value.id);
+            if (origin != null) { name = ObservationEvidenceName(origin); description = ObservationText(origin); }
             return new EvidenceEntry { Id = record.value.id, Number = record.number, Name = string.IsNullOrWhiteSpace(name) ? record.value.id : name,
                 Description = string.IsNullOrWhiteSpace(description) ? "현재 열람 가능한 상세 설명이 없습니다." : description,
                 Source = record.source, Day = record.day, Minute = record.minute, HasAcquiredTime = record.hasAcquiredTime,

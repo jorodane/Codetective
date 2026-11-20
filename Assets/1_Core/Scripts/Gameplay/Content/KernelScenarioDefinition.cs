@@ -10,6 +10,9 @@ namespace Codetective.Gameplay
     {
         [Min(0.1f)] public float secondsPerGameMinute = 2f;
         public CommandLocale commandLanguage = CommandLocale.Korean;
+        [Tooltip("Empty uses the World's Display Language (or ko without a World). Independent of Command Language.")]
+        public string displayLanguage = "";
+        public ContentTextTableAsset[] textTables = Array.Empty<ContentTextTableAsset>();
         public ConsultationLine[] consultation = Array.Empty<ConsultationLine>();
         public EntitySchemaAsset[] schemas = Array.Empty<EntitySchemaAsset>();
         public EntityInstanceAsset[] instances = Array.Empty<EntityInstanceAsset>();
@@ -31,6 +34,8 @@ namespace Codetective.Gameplay
             KernelRuntime runtime = ClinicScenario.Create();
             worldData?.ConfigureClock(runtime);
             runtime.Language = commandLanguage;
+            runtime.DisplayLanguage = string.IsNullOrWhiteSpace(displayLanguage) ? worldData != null ? worldData.displayLanguage : "ko" : displayLanguage;
+            ContentTextTableAsset.Install(runtime, textTables.Concat(worldData != null ? worldData.textTables : Array.Empty<ContentTextTableAsset>()).Distinct().ToArray());
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
             profiles?.Validate();
             EntityInstanceAsset[] profileInstances = profiles != null ? profiles.All.Select(p => p.entity).Where(p => p != null).ToArray() : Array.Empty<EntityInstanceAsset>();

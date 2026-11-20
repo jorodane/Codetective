@@ -22,6 +22,7 @@ MonoBehaviour:
   viewerId: example_person_viewer
   layout: 2
   title: 인물 프로필
+  titleKey: sample.viewer.person
   fields:
   - age
   - occupation

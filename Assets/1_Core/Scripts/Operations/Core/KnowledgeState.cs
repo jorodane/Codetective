@@ -13,6 +13,7 @@ namespace Codetective.Operations
     {
         public int number;
         public string subjectId = "", keywordId = "", field = "", sourceId = "", source = "", statement = "";
+        public string sourceKey = "", statementKey = "";
         public int observedDay, receivedDay;
         public double observedMinute, receivedMinute;
         public GameDateTime observedAt, receivedAt, aboutTime;
@@ -21,7 +22,7 @@ namespace Codetective.Operations
         public ObservationRecord Copy() => new ObservationRecord { number = number, subjectId = subjectId, keywordId = keywordId,
             field = field, sourceId = sourceId, source = source, statement = statement, observedDay = observedDay,
             receivedDay = receivedDay, observedMinute = observedMinute, receivedMinute = receivedMinute, value = value.Copy(),
-            observedAt = observedAt?.Copy(), receivedAt = receivedAt?.Copy(), aboutTime = aboutTime?.Copy(), kind = kind };
+            observedAt = observedAt?.Copy(), receivedAt = receivedAt?.Copy(), aboutTime = aboutTime?.Copy(), kind = kind, sourceKey = sourceKey, statementKey = statementKey };
     }
     [Serializable] public sealed class WorldEventRecord
     {
@@ -37,6 +38,7 @@ namespace Codetective.Operations
     [Serializable] public sealed class ObservationDefinition
     {
         public string subjectId = "", keywordId = "", field = "", sourceId = "", source = "", statement = "";
+        public string sourceKey = "", statementKey = "";
         public Datum value = Datum.Empty;
         public bool useCurrentField;
         public GameDateTime observedAt, aboutTime;
@@ -44,7 +46,7 @@ namespace Codetective.Operations
         public InformationRole role;
         public ObservationDefinition Copy() => new ObservationDefinition { subjectId = subjectId, keywordId = keywordId, field = field,
             sourceId = sourceId, source = source, statement = statement, value = value.Copy(), useCurrentField = useCurrentField, role = role,
-            observedAt = observedAt?.Copy(), aboutTime = aboutTime?.Copy(), kind = kind };
+            observedAt = observedAt?.Copy(), aboutTime = aboutTime?.Copy(), kind = kind, sourceKey = sourceKey, statementKey = statementKey };
     }
 
     public sealed partial class KernelRuntime
@@ -90,7 +92,7 @@ namespace Codetective.Operations
             if (fresh)
             {
                 Observe(new ObservationDefinition { subjectId = id, field = "id", value = Datum.Text(id), source = source });
-                Observe(new ObservationDefinition { subjectId = id, field = "name", value = Datum.Text(entity.Label), source = source });
+                Observe(new ObservationDefinition { subjectId = id, field = "name", value = Datum.Text(entity.Label, entity.LabelKey), source = source });
             }
             if (observeFields)
             {
@@ -122,7 +124,8 @@ namespace Codetective.Operations
                 field = definition.field ?? "", sourceId = definition.sourceId ?? "", source = definition.source ?? "", statement = definition.statement ?? "",
                 value = definition.useCurrentField ? target.GetValue(definition.field) : definition.value.Copy(),
                 observedDay = day, observedMinute = minute, receivedDay = Day, receivedMinute = Minute,
-                observedAt = definition.observedAt?.Copy() ?? DateAt(day, minute), receivedAt = CurrentTime, aboutTime = definition.aboutTime?.Copy(), kind = definition.kind };
+                observedAt = definition.observedAt?.Copy() ?? DateAt(day, minute), receivedAt = CurrentTime, aboutTime = definition.aboutTime?.Copy(), kind = definition.kind,
+                sourceKey = definition.sourceKey, statementKey = definition.statementKey };
             ThreadAgent agent = string.IsNullOrEmpty(executingAgent) ? null : Agent(executingAgent);
             if (agent != null) agent.Observations.Add(record);
             else PublishObservation(record);
@@ -134,7 +137,7 @@ namespace Codetective.Operations
             if (!string.IsNullOrEmpty(record.subjectId) && !IsDiscovered(record.subjectId)) Discover(record.subjectId, record.source);
             DiscoverReferences(record.value, record.source);
             observations.Add(record); Revision++; NarrativeUpdated();
-            if (!string.IsNullOrWhiteSpace(record.statement))
+            if (!string.IsNullOrWhiteSpace(record.statement) || !string.IsNullOrEmpty(record.statementKey))
                 CollectEvidence(Datum.Ref(DataKind.Statement, "observation_" + record.number, record.source + " / 관측 " + record.number,
                     record.statement + "\n관측 " + (record.observedAt?.ToString() ?? "DAY " + record.observedDay + " " + TimeOfDay(record.observedMinute)) +
                     " / 수신 " + (record.receivedAt?.ToString() ?? "DAY " + record.receivedDay + " " + TimeOfDay(record.receivedMinute))), record.source);
@@ -233,6 +236,11 @@ namespace Codetective.Operations
                 if (item.observedAt != null && item.observedAt.Value > (item.receivedAt ?? DateAt(item.receivedDay, item.receivedMinute)).Value)
                     throw new CommandException("관측 시각이 수신 시각보다 늦습니다.");
                 ObservationRecord record = item.Copy();
+                if (snapshot.contentTextVersion < 1 && record.value.kind == DataKind.Text && string.IsNullOrEmpty(record.value.textKey) && Entity(record.subjectId) is Entity owner && owner.GetVariableDefinition(record.field) != null)
+                {
+                    Datum template = owner.GetValue(record.field);
+                    if (template.kind == DataKind.Text && template.text == record.value.text) record.value.textKey = template.textKey;
+                }
                 if (record.field == "connection" && Entity(record.subjectId)?.GetVariableDefinition("connection")?.SchemaId == "Place[]" && record.value.kind == DataKind.Place)
                     record.value = Datum.List(record.value);
                 observations.Add(record); nextObservation = Math.Max(nextObservation, item.number + 1);

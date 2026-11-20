@@ -36,8 +36,10 @@ namespace Codetective.DataExchange
             { world.CreateRuntime(); covered.UnionWith(DataWorkbook.CollectAssets(world)); }
             ScriptableObject[] remaining = Assets.Select(a => a.Value).Where(a => !covered.Contains(a)).ToArray();
             var runtime = ClinicScenario.Create();
+            ContentTextTableAsset.Install(runtime, remaining.OfType<ContentTextTableAsset>().ToArray());
             EntityAssetCompiler.Install(runtime, remaining.OfType<EntitySchemaAsset>().ToArray(), remaining.OfType<EntityInstanceAsset>().ToArray());
             foreach (CurrentInformationAsset information in remaining.OfType<CurrentInformationAsset>()) information.Apply(runtime);
+            foreach (ContentTextTableAsset table in Assets.Select(a => a.Value).OfType<ContentTextTableAsset>()) new ContentTextCatalog().Install(table.entries);
             foreach (DataViewerAsset viewer in Assets.Select(a => a.Value).OfType<DataViewerAsset>())
                 if (!Enum.IsDefined(typeof(DataViewerKind), viewer.layout) || viewer.fields == null || viewer.fields.Any(string.IsNullOrWhiteSpace) || viewer.fields.Distinct().Count() != viewer.fields.Length)
                     throw new InvalidDataException("Viewer 레이아웃 또는 필드 목록이 유효하지 않습니다: " + viewer.name);
@@ -48,6 +50,7 @@ namespace Codetective.DataExchange
     {
         public static readonly IReadOnlyDictionary<string, Type> Types = new Dictionary<string, Type>(StringComparer.Ordinal) {
             { "World", typeof(WorldDefinition) }, { "CurrentInformation", typeof(CurrentInformationAsset) }, { "Viewer", typeof(DataViewerAsset) },
+            { "TextTable", typeof(ContentTextTableAsset) },
             { "Schema", typeof(EntitySchemaAsset) }, { "Instance", typeof(EntityInstanceAsset) }, { "Concept", typeof(ConceptAsset) },
             { "Physical", typeof(PhysicalAsset) }, { "Keyword", typeof(KeywordAsset) }, { "Time", typeof(TimeAsset) }, { "Photo", typeof(PhotoAsset) },
             { "Relationship", typeof(RelationshipAsset) }, { "Statement", typeof(StatementAsset) }, { "Place", typeof(PlaceAsset) },
@@ -56,7 +59,7 @@ namespace Codetective.DataExchange
         public static bool Supported(Object asset) => asset != null && Types.Values.Contains(asset.GetType());
         public static string TypeName(Type type) => Types.FirstOrDefault(p => p.Value == type).Key ?? throw new InvalidDataException("지원하지 않는 자료 에셋입니다: " + type.Name);
         private static string Identity(Type type) => typeof(EntityInstanceAsset).IsAssignableFrom(type) ? "instanceId" : type == typeof(EntitySchemaAsset) ? "schemaId" :
-            type == typeof(WorldDefinition) ? "worldId" : type == typeof(CurrentInformationAsset) ? "informationId" : "viewerId";
+            type == typeof(WorldDefinition) ? "worldId" : type == typeof(CurrentInformationAsset) ? "informationId" : type == typeof(ContentTextTableAsset) ? "tableId" : "viewerId";
         public static IEnumerable<FieldInfo> Fields(Type type)
         {
             var chain = new Stack<Type>();
@@ -108,10 +111,12 @@ namespace Codetective.DataExchange
             readme.Add("루트", Key(root));
             readme.Add("편집", "자료형별 시트에서 이름·성별·나이·설명 등을 수정합니다. ~null은 비어 있는 값이며, 문자 그대로 ~로 시작하는 내용은 ~를 하나 더 붙입니다.");
             readme.Add("연결", "@대상ID는 이 파일의 에셋 참조입니다. asset:GUID:FileID는 이 Unity 프로젝트의 사진·프리팹 등 외부 에셋입니다.");
+            readme.Add("번역", "displayNameKey와 Text Keys는 Translations 시트의 key를 참조합니다. Display Name은 원문/미번역 시 기본값입니다. 명령 식별자·치환 이름은 번역하지 않습니다.");
             readme.Add("배열 / 함수", "Details의 Path를 사용합니다. array 행의 Value는 배열 길이이며, 항목은 [0], [1] 순서입니다. 추가·삭제 시 길이도 수정하세요.");
             readme.Add("가져오기", "전체를 검증한 뒤 기존 GUID를 유지해 갱신합니다. 원본 에셋 파일은 삭제하지 않습니다. ID는 저장·명령 참조에 사용하므로 배포한 콘텐츠의 ID는 유지하세요.");
             WorkbookSheet manifest = book.Add("Assets"); manifest.Add("Key", "Type", "Id", "Guid", "Path", "Name");
             WorkbookSheet details = book.Add("Details"); details.Add("Asset", "Path", "Kind", "Value");
+            WorkbookSheet translations = book.Add("Translations"); translations.Add("Asset", "key", "language", "text");
             foreach (var group in assets.OrderBy(p => p.Key, StringComparer.Ordinal).GroupBy(p => TypeName(p.Value.GetType())))
             {
                 Type type = Types[group.Key]; FieldInfo[] fields = Fields(type).Where(f => f.Name != Identity(type)).ToArray();
@@ -123,7 +128,10 @@ namespace Codetective.DataExchange
                     ScriptableObject asset = pair.Value; WorkbookLocation where = resources.Locate(asset) ?? new WorkbookLocation();
                     manifest.Add(pair.Key, group.Key, (string)type.GetField(Identity(type)).GetValue(asset), where.Guid, where.Path, asset.name);
                     sheet.Add(new[] { pair.Key }.Concat(columns.Select(f => Encode(f.GetValue(asset), resources))).ToArray());
-                    foreach (FieldInfo field in fields.Where(f => !Simple(f.FieldType))) Flatten(details, pair.Key, field.Name, field.GetValue(asset), resources, 0);
+                    foreach (FieldInfo field in fields.Where(f => !Simple(f.FieldType) && !(asset is ContentTextTableAsset && f.Name == "entries"))) Flatten(details, pair.Key, field.Name, field.GetValue(asset), resources, 0);
+                    if (asset is ContentTextTableAsset table)
+                        foreach (TextTranslation row in table.entries)
+                            translations.Add(pair.Key, Encode(row.key, resources), Encode(row.language, resources), Encode(row.text, resources));
                 }
             }
             return book;
@@ -203,9 +211,23 @@ namespace Codetective.DataExchange
                     string owner = Get(row, "Asset"), path = Get(row, "Path");
                     if (!map.TryGetValue(owner, out ScriptableObject asset)) throw new InvalidDataException("Details의 에셋이 없습니다: " + owner);
                     string top = path.Split('.', '[')[0];
+                    if (asset is ContentTextTableAsset && top == "entries") throw new InvalidDataException("번역 문구는 Translations 시트에서 수정하세요.");
                     if (Simple(Field(asset.GetType(), top).FieldType)) throw new InvalidDataException("일반 필드는 자료형별 시트에서 수정하세요: " + path);
                     if (!seen.Add(owner + "\n" + path)) throw new InvalidDataException("자료 경로가 중복됩니다: " + owner + "." + path);
                     SetPath(asset, path, Get(row, "Kind"), Get(row, "Value"), map, resources);
+                }
+                var textTables = plan.Assets.Where(a => a.Value is ContentTextTableAsset).ToDictionary(a => a.Key, a => (ContentTextTableAsset)a.Value, StringComparer.Ordinal);
+                if (textTables.Count > 0)
+                {
+                    var translated = textTables.Keys.ToDictionary(k => k, k => new List<TextTranslation>(), StringComparer.Ordinal);
+                    foreach (var row in Table(book.Require("Translations")))
+                    {
+                        string owner = Get(row, "Asset");
+                        if (!translated.TryGetValue(owner, out var entries)) throw new InvalidDataException("번역 시트의 Text Table 에셋이 없습니다: " + owner);
+                        string String(string column) => (string)Decode(Get(row, column), typeof(string), map, resources);
+                        entries.Add(new TextTranslation { key = String("key"), language = String("language"), text = String("text") });
+                    }
+                    foreach (var table in textTables) table.Value.entries = translated[table.Key].ToArray();
                 }
                 var byGuid = plan.Assets.Where(a => !string.IsNullOrEmpty(a.Guid)).ToDictionary(a => a.Guid, a => a.Value, StringComparer.Ordinal);
                 foreach (WorkbookAsset item in plan.Assets) RewriteReferences(item.Value, obj =>

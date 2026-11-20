@@ -24,6 +24,8 @@ MonoBehaviour:
   reuseExisting: 0
   instanceId: example_time
   displayName: 1994-06-02 14:32
+  displayNameKey: ''
+  textKeys: []
   schema:
     fileID: 0
   exposeRoot: 0

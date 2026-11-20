@@ -12,6 +12,9 @@ namespace Codetective.Gameplay
         public string worldId = "world_" + Guid.NewGuid().ToString("N");
         public TimeAsset currentTime;
         public bool includeClinicDefaults = true;
+        [Tooltip("Content display locale, independent of the command language. e.g. ko, en, ja, zh-Hans.")]
+        public string displayLanguage = "ko";
+        public ContentTextTableAsset[] textTables = Array.Empty<ContentTextTableAsset>();
         public EntitySchemaAsset[] schemas = Array.Empty<EntitySchemaAsset>();
         public EntityInstanceAsset[] objects = Array.Empty<EntityInstanceAsset>();
         public EventAsset[] occurredEvents = Array.Empty<EventAsset>();
@@ -28,6 +31,7 @@ namespace Codetective.Gameplay
         public KernelRuntime CreateRuntime()
         {
             KernelRuntime runtime = includeClinicDefaults ? ClinicScenario.Create() : new KernelRuntime();
+            runtime.DisplayLanguage = displayLanguage; ContentTextTableAsset.Install(runtime, textTables);
             ConfigureClock(runtime); EntityAssetCompiler.Install(runtime, schemas, Roots);
             ApplyInformation(runtime); runtime.CaptureScenarioEntityDefaults(); return runtime;
         }

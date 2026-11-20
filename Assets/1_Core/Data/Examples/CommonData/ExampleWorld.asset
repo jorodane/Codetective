@@ -25,6 +25,11 @@ MonoBehaviour:
     guid: a4e4fe4ed9414cc17097112c04c06449
     type: 2
   includeClinicDefaults: 0
+  displayLanguage: ko
+  textTables:
+  - fileID: 11400000
+    guid: aec7c778b47e231c8fc549e6f68bfe8a
+    type: 2
   schemas: []
   objects:
   - fileID: 11400000

@@ -116,6 +116,7 @@ namespace Codetective.Operations
         {
             return new KernelSnapshot
             {
+                contentTextVersion = 1,
                 day = Day, minute = Minute, calendarStart = GameDateTime.From(calendarStart), knowledgeOnlyIds = knowledgeOnly.ToArray(), occurredEventIds = occurredEvents.ToArray(), suspicion = Suspicion, exposure = Exposure,
                 responseMinutes = ResponseMinutes, consultationIndex = ConsultationIndex,
                 dayEnded = IsDayEnded, coffeeReceived = CoffeeReceived,
@@ -139,7 +140,7 @@ namespace Codetective.Operations
                 completedWorldEvents = completedWorldEvents.ToArray(),
                 entities = entities.Values.Select(e => new EntitySnapshot
                 {
-                    id = e.Id, label = e.Label, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
+                    id = e.Id, label = e.Label, labelKey = e.LabelKey, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
                     rootNames = roots.Where(r => r.Value == e).Select(r => r.Key).ToArray(), values = e.CaptureValues(),
                     children = e.Children.Select(c => new EntityChildSnapshot { name = c.Key, id = c.Value.Id }).ToArray(),
                     localVariables = e.CaptureLocalVariables(), localFunctions = e.CaptureLocalFunctions(), viewer = e.Viewer?.Copy(), hasViewerOverride = e.Viewer != null,
@@ -190,7 +191,7 @@ namespace Codetective.Operations
             if (snapshot.calendarStart?.IsSpecified == true) calendarStart = snapshot.calendarStart.Value.Date;
             Day = snapshot.day; Minute = snapshot.minute; IsDayEnded = snapshot.dayEnded;
             RestoreStoryState(snapshot);
-            RestoreEntities(snapshot.entities, snapshot.discoveries == null);
+            RestoreEntities(snapshot.entities, snapshot.discoveries == null, snapshot.contentTextVersion < 1);
             Suspicion = snapshot.suspicion; Exposure = snapshot.exposure; ResponseMinutes = snapshot.responseMinutes;
             ConsultationIndex = Math.Max(0, Math.Min(snapshot.consultationIndex, Consultation.Count));
             CoffeeReceived = snapshot.coffeeReceived;

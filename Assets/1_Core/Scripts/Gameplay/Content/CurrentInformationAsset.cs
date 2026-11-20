@@ -27,8 +27,8 @@ namespace Codetective.Gameplay
                 runtime.CreateInformation(inference.id, inference.name, inference.content, inference.kind, inference.type, inference.source);
             foreach (InformationEntry entry in entries)
                 runtime.Observe(new ObservationDefinition { subjectId = entry.subject != null ? entry.subject.instanceId : "", field = entry.field,
-                    sourceId = entry.sourceObject != null ? entry.sourceObject.instanceId : "", source = entry.source,
-                    keywordId = entry.keyword != null ? entry.keyword.instanceId : "", statement = entry.statement, kind = entry.kind,
+                    sourceId = entry.sourceObject != null ? entry.sourceObject.instanceId : "", source = entry.source, sourceKey = entry.sourceKey,
+                    keywordId = entry.keyword != null ? entry.keyword.instanceId : "", statement = entry.statement, statementKey = entry.statementKey, kind = entry.kind,
                     observedAt = entry.observedAt, aboutTime = entry.aboutTime, useCurrentField = entry.readWorldField,
                     value = entry.referenceValue != null ? runtime.Reference(runtime.Entity(entry.referenceValue.instanceId)) : entry.value.Copy() });
             foreach (InitialReference reference in references)
@@ -50,6 +50,7 @@ namespace Codetective.Gameplay
         public EntityInstanceAsset subject, sourceObject, referenceValue;
         public KeywordAsset keyword;
         public string field = "", source = "초기 작전 자료";
+        public string sourceKey, statementKey;
         [TextArea] public string statement;
         public InformationKind kind;
         public GameDateTime observedAt, aboutTime;

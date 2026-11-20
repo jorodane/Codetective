@@ -33,6 +33,7 @@ namespace Codetective.Operations
         {
             if (entity == null) throw new CommandException("개체 참조가 비어 있습니다.");
             Datum value = Datum.Ref(entity.Kind, entity.Id, entity.Label);
+            value.labelKey = entity.LabelKey;
             value.schemaId = entity.Schema?.Id ?? "";
             return value;
         }
@@ -101,8 +102,14 @@ namespace Codetective.Operations
         public bool IsPlayerVisible(Entity entity) => entity != null && EntityDenial(entity) == null;
         private Datum TagReference(Datum value)
         {
+            if (value.kind == DataKind.Array || value.kind == DataKind.Dictionary)
+            { Datum result = CollectionValue.Create(value.kind, value.Elements.Select(TagReference)); result.schemaId = value.schemaId; return result; }
             Entity target = ReferenceTarget(value);
-            if (target != null) { value.kind = target.Kind; value.schemaId = target.Schema.Id; }
+            if (target != null)
+            {
+                value.kind = target.Kind; value.schemaId = target.Schema.Id;
+                if (string.IsNullOrEmpty(value.labelKey) && value.label == target.Label) value.labelKey = target.LabelKey;
+            }
             return value;
         }
         private Datum Invoke(Entity target, Operation operation, Datum[] arguments, string agent)
@@ -182,13 +189,14 @@ namespace Codetective.Operations
             var registry = new SchemaRegistry();
             foreach (EntitySchema schema in Schemas.All) registry.Register(schema);
             var copy = new KernelRuntime(registry) { DryRun = true, Language = Language, StoryStartFact = StoryStartFact };
+            Texts.CopyTo(copy.Texts); copy.DisplayLanguage = DisplayLanguage;
             foreach (StoryMail message in mail.Values) copy.mail.Add(message.id, message.Copy());
             foreach (var entry in worldSchedule) copy.worldSchedule.Add(entry.Key, entry.Value.Copy());
             foreach (NewsArticle article in news.Values) copy.RegisterNews(article);
             foreach (Entity original in entities.Values)
             {
                 var clone = new Entity(original.Id, original.Label, original.Schema)
-                { Aliases = original.Aliases.ToArray(), Names = original.Names.ToArray(), Access = original.Access };
+                { Aliases = original.Aliases.ToArray(), Names = original.Names.ToArray(), Access = original.Access, LabelKey = original.LabelKey };
                 clone.Operations.AddRange(original.Operations);
                 copy.entities.Add(clone.Id, clone);
             }
@@ -213,7 +221,7 @@ namespace Codetective.Operations
         private EntitySchema SchemaOf(Datum value) => value.CanReferenceEntity ? ReferenceTarget(value)?.Schema ?? Schemas.Find(value.schemaId) ??
             Schemas.Find(value.kind.ToString()) : null;
 
-        private void RestoreEntities(EntitySnapshot[] savedEntities, bool legacyKnowledge = false)
+        private void RestoreEntities(EntitySnapshot[] savedEntities, bool legacyKnowledge = false, bool legacyText = false)
         {
             if (savedEntities == null) return; // Version 1 saves made before schemas retain the scenario defaults.
             var savedIds = new HashSet<string>(savedEntities.Select(e => e.id), StringComparer.Ordinal);
@@ -223,10 +231,11 @@ namespace Codetective.Operations
             {
                 EntitySchema schema = Schemas.Require(saved.schemaId);
                 var entity = new Entity(saved.id, saved.label, schema)
-                { Aliases = saved.aliases ?? Array.Empty<string>(), Names = saved.names ?? Array.Empty<LocalizedCommandName>() };
+                { Aliases = saved.aliases ?? Array.Empty<string>(), Names = saved.names ?? Array.Empty<LocalizedCommandName>(), LabelKey = saved.labelKey ?? "" };
                 if (entities.TryGetValue(saved.id, out Entity original))
                 {
                     entity.Access = original.Access;
+                    if (legacyText && string.IsNullOrEmpty(entity.LabelKey) && entity.Label == original.Label) entity.LabelKey = original.LabelKey;
                     entity.Viewer = original.Viewer?.Copy();
                     entity.Operations.AddRange(original.Operations);
                 }
@@ -265,6 +274,11 @@ namespace Codetective.Operations
                 {
                     VariableDefinition field = entity.GetVariableDefinition(value.name) ?? throw new CommandException("저장된 변수의 스키마가 없습니다: " + value.name);
                     Datum datum = value.value;
+                    if (legacyText && datum.kind == DataKind.Text && string.IsNullOrEmpty(datum.textKey) && Entity(saved.id) is Entity authored && authored.GetVariableDefinition(field.Code) != null)
+                    {
+                        Datum template = authored.GetValue(field.Code);
+                        if (template.kind == DataKind.Text && template.text == datum.text) { datum = datum.Copy(); datum.textKey = template.textKey; }
+                    }
                     if (legacyKnowledge && field.Code == "age" && field.Kind == DataKind.Number && datum.kind == DataKind.Text)
                         datum = double.TryParse(datum.text, out double age) ? Datum.Number(age) : Datum.Empty;
                     if (field.Code == "connection" && field.SchemaId == "Place[]" && datum.kind == DataKind.Place) datum = Datum.List(datum);
