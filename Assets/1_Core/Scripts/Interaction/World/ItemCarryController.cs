@@ -57,7 +57,7 @@ namespace Codetective.Interaction
         {
             if (!CanManipulate || HeldItem == null || IsPlacing) return false;
             IsPlacing = true; destination = null; PlacementValid = false;
-            PlacementHint = "놓을 곳을 클릭하세요 · 4 서랍 앵글 · 우클릭 확인으로 돌아가기";
+            PlacementHint = "놓을 곳을 클릭하세요 · 서랍 클릭 / 4 서랍 앵글 · 우클릭 확인으로 돌아가기";
             SetPresentationVisible(false);
             preview = new GameObject("ItemPlacementPreview");
             Shader shader = Resources.Load<Shader>("PlacementPreview");

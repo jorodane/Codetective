@@ -122,6 +122,7 @@ namespace Codetective.Gameplay
             Transitions = inspection.GetComponent<SceneTransitionController>();
             if (Transitions == null) Transitions = inspection.gameObject.AddComponent<SceneTransitionController>();
             Transitions.Initialize(views, terminalRoot != null ? terminalRoot.GetComponentInChildren<CrtScreen>(true) : null, scenario != null ? scenario.presentation : null, terminalBody);
+            if (start != SessionStart.Title) Transitions.BeginLoadedSceneCovered();
             inspection.Transitions = Transitions;
             Monitor?.AttachProfiles(scenario != null ? scenario.profiles : null);
             inspection.AngleEntered += EnterView;
@@ -174,10 +175,15 @@ namespace Codetective.Gameplay
                 NewGame = () => RestartScene(SessionStart.NewGame), Load = LoadGame, Save = SaveNow,
                 Title = ReturnToTitle, Quit = QuitGame, ReadSaves = ReadSaveInfos,
                 GetLanguage = () => Runtime.Language, SetLanguage = SetCommandLanguage });
-            if (!IsSessionActive) { inspection.ShowTitleMenu(); Transitions.RevealLoadedScene(); return; }
-            Transitions.RevealLoadedScene();
+            if (!IsSessionActive) inspection.ShowTitleMenu();
+            StartCoroutine(StartReadySession());
+        }
+        private IEnumerator StartReadySession()
+        {
+            yield return Transitions.RevealLoadedSceneRoutine();
+            if (!IsSessionActive) yield break;
             Runtime.RetrySceneActions();
-            if (!Runtime.IsDayEnded && !Runtime.DayIntroSeen) StartCoroutine(IntroduceDay());
+            if (!Runtime.IsDayEnded && !Runtime.DayIntroSeen) yield return IntroduceDay();
         }
 
         private void Update()

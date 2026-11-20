@@ -16,7 +16,7 @@ namespace Codetective.Gameplay
         private CameraAngleController views;
         private PresentationSettings settings;
         private GameObject root;
-        private Image background, full;
+        private Image background, full, sceneFade;
         private RawImage overlap;
         private Material dimMaterial;
         private Material overlapMaterial;
@@ -27,7 +27,8 @@ namespace Codetective.Gameplay
         private Coroutine angleRoutine, focusRoutine;
         private readonly HashSet<string> focusOwners = new HashSet<string>();
         private float focusAlpha, effectAlpha;
-        public bool IsBusy { get; private set; }
+        private bool angleBusy, sceneBusy;
+        public bool IsBusy => angleBusy || sceneBusy;
         public bool TerminalFocused => focusOwners.Count > 0;
         public PresentationSettings Settings => settings;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -47,8 +48,10 @@ namespace Codetective.Gameplay
             terminalMask = Layer<TerminalFocusMaskGraphic>("TerminalStencil");
             terminalMask.Configure(views != null ? views.ControlledCamera : null, body, screen);
             background = Layer<Image>("TerminalBackground"); full = Layer<Image>("FullScreenFade"); overlap = Layer<RawImage>("ScreenOverlap");
+            sceneFade = Layer<Image>("LoadedSceneFade");
             Canvas fullCanvas = full.gameObject.AddComponent<Canvas>(); fullCanvas.overrideSorting = true; fullCanvas.sortingOrder = 4000;
             Canvas overlapCanvas = overlap.gameObject.AddComponent<Canvas>(); overlapCanvas.overrideSorting = true; overlapCanvas.sortingOrder = 4100;
+            Canvas sceneCanvas = sceneFade.gameObject.AddComponent<Canvas>(); sceneCanvas.overrideSorting = true; sceneCanvas.sortingOrder = 5000;
             Shader shader = Resources.Load<Shader>("TerminalDimming");
             if (shader != null) { dimMaterial = new Material(shader); background.material = dimMaterial; }
             Shader overlapShader = Resources.Load<Shader>("ScreenOverlap");
@@ -62,7 +65,8 @@ namespace Codetective.Gameplay
                 terminalStencilMaterial.SetInt("_StencilRef", 128); terminalMask.material = terminalStencilMaterial;
             }
             clearStencil.enabled = terminalMask.enabled = false;
-            SetAlpha(background, 0); SetAlpha(full, pendingSceneReveal ? 1 : 0); SetAlpha(overlap, 0);
+            SetAlpha(background, 0); SetAlpha(full, 0); SetAlpha(overlap, 0); SetAlpha(sceneFade, 0);
+            if (pendingSceneReveal) BeginLoadedSceneCovered();
         }
         private T Layer<T>(string label) where T : Graphic
         {
@@ -114,7 +118,7 @@ namespace Codetective.Gameplay
         public IEnumerator Play(TransitionPreset preset, TransitionStyle fallback, Action covered = null)
         {
             while (IsBusy) yield return null;
-            IsBusy = true;
+            angleBusy = true;
             TransitionStyle style = preset != null ? preset.style : fallback;
             float duration = preset != null ? Mathf.Max(0, preset.duration) : 0.25f, hold = preset != null ? Mathf.Max(0, preset.hold) : 0.05f;
             try
@@ -137,6 +141,9 @@ namespace Codetective.Gameplay
                     if (capturedFrame != null)
                     {
                         overlap.texture = capturedFrame; overlap.color = Color.white;
+                        // Screen captures retain the graphics API's framebuffer origin. Normalize
+                        // it once here; the UI shader must not perform a second, texel-size flip.
+                        overlap.uvRect = CaptureUvRect(SystemInfo.graphicsUVStartsAtTop);
                         if (overlapMaterial != null) overlapMaterial.SetFloat("_Darkness", preset != null ? preset.overlapDarkness : 0.6f);
                     }
                     else SetAlpha(full, 1);
@@ -153,12 +160,12 @@ namespace Codetective.Gameplay
                 }
                 else { covered?.Invoke(); yield return Hold(hold); }
             }
-            finally { ClearTransient(); IsBusy = false; angleRoutine = null; }
+            finally { ClearTransient(); angleBusy = false; angleRoutine = null; }
         }
         public void CancelAngle()
         {
             if (angleRoutine == null) return;
-            StopCoroutine(angleRoutine); angleRoutine = null; ClearTransient(); IsBusy = false;
+            StopCoroutine(angleRoutine); angleRoutine = null; ClearTransient(); angleBusy = false;
         }
         private void ClearTransient()
         {
@@ -170,22 +177,36 @@ namespace Codetective.Gameplay
         public IEnumerator CoverScene()
         {
             CancelAngle(); while (IsBusy) yield return null;
-            IsBusy = true; float from = full.color.a; Color tint = settings?.scene != null ? settings.scene.color : Color.black;
-            tint.a = from; full.color = tint;
-            yield return Tween(from, 1, settings?.scene != null ? settings.scene.duration : 0.3f, value => SetAlpha(full, value));
+            sceneBusy = true; float from = sceneFade.color.a; Color tint = settings?.scene != null ? settings.scene.color : Color.black;
+            tint.a = from; sceneFade.color = tint;
+            yield return Tween(from, 1, settings?.scene != null ? settings.scene.duration : 0.3f, value => SetAlpha(sceneFade, value));
+        }
+        public static Rect CaptureUvRect(bool topOrigin) => topOrigin ? new Rect(0, 1, 1, -1) : new Rect(0, 0, 1, 1);
+        public void BeginLoadedSceneCovered()
+        {
+            sceneBusy = true;
+            Color tint = settings?.scene != null ? settings.scene.color : Color.black; tint.a = 1; sceneFade.color = tint;
         }
         public void PrepareSceneReveal() => pendingSceneReveal = true;
         public void CancelSceneReveal() => pendingSceneReveal = false;
         public void RevealLoadedScene()
         {
-            if (!pendingSceneReveal) return;
-            pendingSceneReveal = false; StartCoroutine(RevealScene());
+            if ((!pendingSceneReveal && !sceneBusy) || !isActiveAndEnabled) return;
+            StartCoroutine(RevealLoadedSceneRoutine());
+        }
+        public IEnumerator RevealLoadedSceneRoutine()
+        {
+            if (!pendingSceneReveal && !sceneBusy) yield break;
+            pendingSceneReveal = false;
+            BeginLoadedSceneCovered();
+            yield return null; // Keep the initialization frame covered before starting the reveal.
+            yield return RevealScene();
         }
         public IEnumerator RevealScene()
         {
-            IsBusy = true;
-            yield return Tween(1, 0, settings?.scene != null ? settings.scene.duration : 0.3f, value => SetAlpha(full, value));
-            IsBusy = false;
+            sceneBusy = true;
+            try { yield return Tween(1, 0, settings?.scene != null ? settings.scene.duration : 0.3f, value => SetAlpha(sceneFade, value)); }
+            finally { if (sceneFade != null) SetAlpha(sceneFade, 0); sceneBusy = false; }
         }
         public static IEnumerator Hold(float seconds)
         { for (float time = 0; time < seconds; time += Time.unscaledDeltaTime) yield return null; }
@@ -195,7 +216,7 @@ namespace Codetective.Gameplay
             for (float time = 0; time < seconds; time += Time.unscaledDeltaTime) { apply(Mathf.Lerp(from, to, Mathf.SmoothStep(0, 1, time / seconds))); yield return null; }
             apply(to);
         }
-        private void OnDisable() { StopAllCoroutines(); focusRoutine = angleRoutine = null; ClearTransient(); focusOwners.Clear(); focusAlpha = 0; if (background != null) SetAlpha(background, 0); if (clearStencil != null) clearStencil.enabled = false; if (terminalMask != null) terminalMask.enabled = false; IsBusy = false; }
+        private void OnDisable() { StopAllCoroutines(); focusRoutine = angleRoutine = null; ClearTransient(); focusOwners.Clear(); focusAlpha = 0; if (background != null) SetAlpha(background, 0); if (sceneFade != null) SetAlpha(sceneFade, 0); if (clearStencil != null) clearStencil.enabled = false; if (terminalMask != null) terminalMask.enabled = false; angleBusy = sceneBusy = false; }
         private void OnDestroy() { ProfileModelUtility.Dispose(root); ProfileModelUtility.Dispose(dimMaterial); ProfileModelUtility.Dispose(overlapMaterial); ProfileModelUtility.Dispose(clearStencilMaterial); ProfileModelUtility.Dispose(terminalStencilMaterial); }
     }
 }

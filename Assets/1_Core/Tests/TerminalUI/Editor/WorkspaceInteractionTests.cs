@@ -56,6 +56,64 @@ namespace Codetective.Terminal.Tests.UI
             .Single(m => m.Name == name && m.GetParameters().Length == args.Length).Invoke(target, args);
 
         [Test]
+        public void LoadedScenesStayCoveredThroughAngleCleanupAndRevealAfterTheirFirstReadyFrame()
+        {
+            var system = new GameObject("Loaded scene", typeof(Camera), typeof(CameraAngleController)); system.SetActive(false);
+            var settings = ScriptableObject.CreateInstance<Codetective.Gameplay.PresentationSettings>();
+            var effect = ScriptableObject.CreateInstance<TransitionPreset>(); effect.duration = 0; settings.scene = effect;
+            Component transitions = null;
+            try
+            {
+                transitions = system.AddComponent(FindType("Codetective.Gameplay.SceneTransitionController"));
+                Call(transitions, "Initialize", system.GetComponent<CameraAngleController>(), null, settings);
+                Call(transitions, "BeginLoadedSceneCovered");
+                Image cover = (Image)transitions.GetType().GetField("sceneFade", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(transitions);
+                Call(transitions, "ClearTransient");
+                Assert.That(cover.color.a, Is.EqualTo(1)); Assert.That(transitions.GetType().GetProperty("IsBusy").GetValue(transitions), Is.True);
+                IEnumerator reveal = (IEnumerator)Call(transitions, "RevealLoadedSceneRoutine");
+                Assert.That(reveal.MoveNext(), Is.True); Assert.That(cover.color.a, Is.EqualTo(1));
+                Drain(reveal); Assert.That(cover.color.a, Is.Zero); Assert.That(transitions.GetType().GetProperty("IsBusy").GetValue(transitions), Is.False);
+            }
+            finally
+            {
+                if (transitions != null) { Call(transitions, "CancelSceneReveal"); Call(transitions, "OnDestroy"); }
+                Object.DestroyImmediate(system); Object.DestroyImmediate(settings); Object.DestroyImmediate(effect);
+            }
+        }
+
+        [Test]
+        public void EscapePutsTheHeldItemDownBeforeReturningToOverviewAndThenOpeningTheMenu()
+        {
+            var navigation = new GameObject("Escape sequence", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); navigation.SetActive(false);
+            var canvas = new GameObject("Monitor", typeof(RectTransform), typeof(Canvas)); var carryRoot = new GameObject("Carry"); var itemRoot = new GameObject("Evidence");
+            var set = ScriptableObject.CreateInstance<CameraAngleSet>(); var presets = new List<CameraAnglePreset>();
+            float oldTime = Time.timeScale; bool oldAudio = AudioListener.pause;
+            try
+            {
+                foreach (string id in new[] { "overview", "monitor" })
+                { var angle = ScriptableObject.CreateInstance<CameraAnglePreset>(); Set(angle, "angleId", id); presets.Add(angle); }
+                Set(set, "angles", presets); CameraAngleController views = navigation.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
+                GameObject monitor = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/1_Core/Prefabs/TerminalPanel.prefab"), canvas.transform);
+                MonitorPageHost host = monitor.GetComponent<MonitorPageHost>(); host.Initialize();
+                Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                Set(inspection, "overviewAngle", presets[0]); Set(inspection, "terminalRoot", monitor.transform); Call(inspection, "Awake");
+                ItemCarryController carry = carryRoot.AddComponent<ItemCarryController>(); carry.Initialize(navigation.transform);
+                inspection.GetType().GetProperty("Carry").SetValue(inspection, carry); Call(inspection, "InspectAngle", presets[1]);
+                Assert.That(carry.TryPickup(itemRoot.AddComponent<HoldableItem>()), Is.True);
+                Call(inspection, "HandleEscape"); Assert.That(carry.HeldItem, Is.Null); Assert.That(itemRoot.transform.parent, Is.Null);
+                Assert.That(views.ActiveAngle, Is.SameAs(presets[1])); Assert.That(host.SystemMenuVisible, Is.False);
+                Call(inspection, "HandleEscape"); Assert.That(views.ActiveAngle, Is.SameAs(presets[0])); Assert.That(host.SystemMenuVisible, Is.False);
+                Call(inspection, "HandleEscape"); Assert.That(host.SystemMenuVisible, Is.True);
+                Call(inspection, "PrepareForSceneChange");
+            }
+            finally
+            {
+                Object.DestroyImmediate(carryRoot); Object.DestroyImmediate(itemRoot); Object.DestroyImmediate(navigation); Object.DestroyImmediate(canvas); Object.DestroyImmediate(set);
+                foreach (var preset in presets) Object.DestroyImmediate(preset); Time.timeScale = oldTime; AudioListener.pause = oldAudio;
+            }
+        }
+
+        [Test]
         public void TitleBrandingUsesTheSpaceBesideTheTerminalAndShowsTheBuildVersionAtBottomLeft()
         {
             var system = new GameObject("Title presentation"); system.SetActive(false);
@@ -341,7 +399,7 @@ namespace Codetective.Terminal.Tests.UI
         public void PlacementSurvivesAngleChangesAndFrontClicksStillToggleTheDrawer()
         {
             var navigation = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); navigation.SetActive(false);
-            var system = new GameObject("Carry"); var itemRoot = new GameObject("Item"); var drawerRoot = new GameObject("Drawer");
+            var system = new GameObject("Carry"); var itemRoot = new GameObject("Item"); var drawerRoot = new GameObject("Drawer"); var hotspot = new GameObject("Drawer angle");
             var set = ScriptableObject.CreateInstance<CameraAngleSet>(); var presets = new List<CameraAnglePreset>();
             try
             {
@@ -355,20 +413,24 @@ namespace Codetective.Terminal.Tests.UI
                 carry.TryPickup(itemRoot.AddComponent<HoldableItem>()); Assert.That(carry.BeginPlacement(), Is.True);
                 Assert.That(Call(inspection, "TryInspectNumber", 4), Is.True); Assert.That(carry.IsPlacing, Is.True);
                 Assert.That(Call(inspection, "TryInspectNumber", 1), Is.True); Assert.That(carry.IsPlacing, Is.True);
-                Call(inspection, "TryInspectNumber", 4);
+                Call(inspection, "TryInspectNumber", 1);
                 var runtime = new KernelRuntime(); drawerRoot.transform.position = new Vector3(0, 0, 2);
                 SlidingDrawer drawer = drawerRoot.AddComponent<SlidingDrawer>(); drawer.Initialize(runtime, "drawer"); drawer.SetInteractionEnabled(true);
+                hotspot.transform.position = new Vector3(0, 0, 1.5f); hotspot.AddComponent<BoxCollider>().isTrigger = true;
+                Component target = hotspot.AddComponent(FindType("Codetective.Interaction.InspectionTarget")); Set(target, "closeUpAngle", presets[2]); Call(inspection, "RegisterTarget", target);
                 var face = new GameObject("Front"); face.transform.SetParent(drawerRoot.transform, false);
                 face.AddComponent<DrawerFrontTarget>().Initialize(drawer, new Bounds(Vector3.zero, new Vector3(0.6f, 0.3f, 0.025f)));
                 Physics.SyncTransforms();
                 Vector2 point = navigation.GetComponent<Camera>().WorldToScreenPoint(face.transform.position);
+                Assert.That(Call(inspection, "InteractAtScreenPoint", point), Is.True);
+                Assert.That(navigation.GetComponent<CameraAngleController>().ActiveAngle.Id, Is.EqualTo("drawer")); Assert.That(carry.IsPlacing, Is.True); Assert.That(drawer.IsOpen, Is.False);
                 Assert.That(Call(inspection, "InteractAtScreenPoint", point), Is.True); Assert.That(drawer.IsOpen, Is.True);
                 Assert.That(Call(inspection, "InteractAtScreenPoint", point), Is.True); Assert.That(drawer.IsOpen, Is.False);
                 Assert.That(carry.IsPlacing, Is.True); Assert.That(carry.HeldItem, Is.Not.Null);
             }
             finally
             {
-                Object.DestroyImmediate(system); Object.DestroyImmediate(itemRoot); Object.DestroyImmediate(drawerRoot); Object.DestroyImmediate(navigation);
+                Object.DestroyImmediate(system); Object.DestroyImmediate(itemRoot); Object.DestroyImmediate(drawerRoot); Object.DestroyImmediate(hotspot); Object.DestroyImmediate(navigation);
                 Object.DestroyImmediate(set); foreach (var angle in presets) Object.DestroyImmediate(angle);
             }
         }

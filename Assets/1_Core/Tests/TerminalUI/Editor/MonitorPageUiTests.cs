@@ -143,6 +143,50 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(loaded, Is.EqualTo("save8")); Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.IsTitle, Is.True);
         }
         [Test]
+        public void QuitRequiresConfirmationAndEscapeOrNoReturnsToTheTitle()
+        {
+            int quits = 0; var menu = SystemMenu(new SystemMenuActions { Quit = () => quits++ }); menu.Show(true);
+            MenuButton(menu, "끝내기").onClick.Invoke(); Assert.That(quits, Is.Zero);
+            Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text == "정말 끝내시겠습니까?"), Is.True);
+            MenuButton(menu, "아니요").onClick.Invoke(); Assert.That(quits, Is.Zero);
+            MenuButton(menu, "끝내기").onClick.Invoke(); Assert.That(menu.HandleEscape(), Is.True); Assert.That(quits, Is.Zero);
+            MenuButton(menu, "끝내기").onClick.Invoke(); MenuButton(menu, "예, 끝내기").onClick.Invoke(); Assert.That(quits, Is.EqualTo(1));
+        }
+        [Test]
+        public void SettingsUseFourTabsAndVolumeIsOneHorizontalSettingWithAVisibleGauge()
+        {
+            const string volumeKey = "Codetective.MasterVolume";
+            bool hadPreference = PlayerPrefs.HasKey(volumeKey); float oldPreference = PlayerPrefs.GetFloat(volumeKey), oldVolume = AudioListener.volume;
+            EventSystem previous = EventSystem.current; var events = new GameObject("Settings navigation", typeof(EventSystem));
+            try
+            {
+                EventSystem.current = events.GetComponent<EventSystem>(); AudioListener.volume = 0.5f;
+                CommandLocale language = CommandLocale.Korean;
+                var menu = SystemMenu(new SystemMenuActions { GetLanguage = () => language, SetLanguage = value => language = value }); menu.Show(true);
+                MenuButton(menu, "설정").onClick.Invoke();
+                foreach (string tab in new[] { "게임플레이", "비디오", "오디오", "입력" }) Assert.That(MenuButton(menu, tab), Is.Not.Null);
+                SystemSettingChoice choice = menu.GetComponentsInChildren<SystemSettingChoice>().Single(c => c.name == "명령 언어");
+                choice.OnMove(new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Right }); Assert.That(language, Is.EqualTo(CommandLocale.English));
+                MenuButton(menu, "오디오").onClick.Invoke(); CrtSlider slider = menu.GetComponentInChildren<CrtSlider>();
+                Assert.That(slider, Is.Not.Null); Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(slider.gameObject));
+                Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text == "−" || t.text == "+"), Is.False);
+                slider.OnMove(new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Left });
+                Assert.That(AudioListener.volume, Is.EqualTo(0.4f).Within(0.001f)); Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(slider.gameObject));
+                Assert.That(slider.fillRect.anchorMax.x, Is.EqualTo(0.4f).Within(0.001f));
+                slider.OnMove(new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Right });
+                Assert.That(AudioListener.volume, Is.EqualTo(0.5f).Within(0.001f)); Assert.That(PlayerPrefs.GetFloat(volumeKey), Is.EqualTo(0.5f).Within(0.001f));
+                Assert.That(slider.Track, Is.Not.Null); Assert.That(slider.navigation.selectOnUp, Is.SameAs(MenuButton(menu, "오디오")));
+                MenuButton(menu, "오디오").Select(); MenuButton(menu, "오디오").OnMove(new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Right });
+                Assert.That(menu.GetComponentInChildren<CrtSlider>(), Is.Null); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text == "배치 취소"), Is.True);
+            }
+            finally
+            {
+                AudioListener.volume = oldVolume;
+                if (hadPreference) PlayerPrefs.SetFloat(volumeKey, oldPreference); else PlayerPrefs.DeleteKey(volumeKey);
+                PlayerPrefs.Save(); Object.DestroyImmediate(events); EventSystem.current = previous;
+            }
+        }
+        [Test]
         public void BrowsingContinueAndReturningToTitleDoesNotReadSavesAgain()
         {
             int reads = 0;

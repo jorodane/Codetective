@@ -98,7 +98,7 @@ namespace Codetective.Gameplay
             RectTransform archiveRoot = OverlayWidgets.Rect("ProfileArchive", root.transform, new Vector2(-18, -86), new Vector2(250, 534), new Vector2(1, 1));
             profileArchive = archiveRoot.gameObject.AddComponent<ProfileArchiveView>();
             profileArchive.Initialize(game.Runtime, this.font, game.SelectProfile, () => game.DisplayedProfileId, () => game.CanSelectProfile);
-            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 · F5 빠른 저장 (입력 중 제외) · ESC 전체 / 메뉴", 14);
+            Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 · F5 빠른 저장 (입력 중 제외) · ESC 내려놓기→전체→메뉴", 14);
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
             nextDayButton.SetActive(false);

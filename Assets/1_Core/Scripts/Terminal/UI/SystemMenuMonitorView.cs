@@ -37,7 +37,9 @@ namespace Codetective.Terminal
         private string selectedSaveId;
         private IReadOnlyList<SystemSaveInfo> saveSlots = Array.Empty<SystemSaveInfo>();
         private readonly Dictionary<string, Button> saveButtons = new Dictionary<string, Button>(StringComparer.Ordinal);
-        private readonly List<Button> menuButtons = new List<Button>();
+        private readonly List<Selectable> menuControls = new List<Selectable>();
+        private readonly List<Button> settingsTabs = new List<Button>();
+        private int settingsCategory;
         private bool savesRead;
         private Button loadButton;
         public bool IsTitle { get; private set; }
@@ -76,14 +78,14 @@ namespace Codetective.Terminal
             return IsTitle;
         }
         public void ShowFeedback(string value) { if (message != null) message.text = value; }
-        public void RefreshSaveList() { savesRead = false; if (IsVisible && section == "load") Render(); }
+        public void RefreshSaveList() { savesRead = false; if (isActiveAndEnabled && section == "load") Render(); }
         private void Open(string value) { section = value; Render(); }
         private bool CanUse => isActiveAndEnabled && host.SystemMenuVisible && host.GetComponent<TerminalController>().InteractionEnabled;
         private void Run(Action action) { if (CanUse) action?.Invoke(); }
         private Button Option(int row, string label, Action action, bool enabled = true)
         {
             Button button = MonitorWidgets.Button(content, font, new Vector2(268, -row * 76), new Vector2(464, 58), label, () => { if (enabled) Run(action); });
-            button.interactable = enabled; menuButtons.Add(button); return button;
+            button.interactable = enabled; menuControls.Add(button); return button;
         }
         private void Render()
         {
@@ -92,9 +94,9 @@ namespace Codetective.Terminal
                 GameObject child = content.GetChild(i).gameObject; child.SetActive(false);
                 if (Application.isPlaying) Destroy(child); else DestroyImmediate(child);
             }
-            heading.text = section == "main" ? IsTitle ? "메인 메뉴" : "일시정지됨" : section == "load" ? "불러오기" : section == "guide" ? "가이드" : "설정";
+            heading.text = section == "main" ? IsTitle ? "메인 메뉴" : "일시정지됨" : section == "load" ? "불러오기" : section == "guide" ? "가이드" : section == "quit" ? "정말 끝내시겠습니까?" : "설정";
             message.text = "";
-            saveButtons.Clear(); menuButtons.Clear(); loadButton = null;
+            saveButtons.Clear(); menuControls.Clear(); settingsTabs.Clear(); loadButton = null;
             footer.text = section != "main" ? "ESC 돌아가기" : IsTitle ? "CODETECTIVE / KERNEL TERMINAL" : "ESC 계속하기";
             switch (section)
             {
@@ -105,7 +107,7 @@ namespace Codetective.Terminal
                         Option(0, "이어하기", () => Open("load"), saves.Any(s => s.Available));
                         Option(1, "처음부터", actions.NewGame);
                         Option(2, "설정", () => Open("settings"));
-                        Option(3, "끝내기", actions.Quit);
+                        Option(3, "끝내기", () => Open("quit"));
                         message.text = saves.Count == 0 ? "저장된 기록이 없습니다." : !saves.Any(s => s.Available) ? saves[0].Situation :
                             "저장 기록 " + saves.Count + " / " + SaveHistory.Capacity + " · 이어하기에서 기록을 선택하세요.";
                     }
@@ -123,13 +125,18 @@ namespace Codetective.Terminal
                     BuildSaveList(); break;
                 case "guide":
                     MonitorWidgets.ScrollText(content, font, Vector2.zero, new Vector2(1000, 344)).text =
-                        "화면 이동\n1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기\nESC 전체 보기 → 다시 ESC 메뉴 · Q 전체 보기 · F5 빠른 저장\n입력 중에는 화면 이동과 빠른 저장 단축키가 작동하지 않습니다.\n\n" +
+                        "화면 이동\n1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기\nESC 물건 내려놓기 → 전체 보기 → 메뉴 · Q 전체 보기 · F5 빠른 저장\n입력 중에는 화면 이동과 빠른 저장 단축키가 작동하지 않습니다.\n\n" +
                         "터미널\n입력창을 클릭해서 명령을 작성하세요.\n대상 뒤에 '.'을 입력하면 권한 목록을 볼 수 있습니다.\nTab / Enter / Space 자동완성 확정 · 다음 Enter 명령 실행\n입력하지 않을 때 Tab / Shift+Tab 메뉴 이동\nhelp / 도움말: 사용 가능한 명령 확인\n\n" +
                         "확보 자료와 상담\n커널 → 확보 자료에서 도구와 단서를 보고 명령용 참조를 연결하세요.\n상담소에서 프로필과 상담 일지를 기록할 수 있습니다.\n스케쥴에서 다음 예약까지 기다리거나 상담을 마칠 수 있습니다.\n\n" +
-                        "물건 확인\n물건을 클릭해서 확인하고 '내려놓기'로 배치하세요.\n4 서랍 앵글 · 서랍 앞면 클릭: 열기 / 닫기\n우클릭: 배치 취소 · 종이의 인쇄 영역 클릭: 내용 읽기";
+                        "물건 확인\n물건을 클릭해서 확인하고 '내려놓기'로 배치하세요.\n배치 중 서랍 클릭 / 4 서랍 앵글 · 서랍 앞면 클릭: 열기 / 닫기\n우클릭: 배치 취소 · 종이의 인쇄 영역 클릭: 내용 읽기";
                     Option(5, "돌아가기", () => Open("main"));
                     break;
                 case "settings": BuildSettings(); break;
+                case "quit":
+                    Option(1, "아니요", () => Open("main"));
+                    Option(2, "예, 끝내기", actions.Quit);
+                    footer.text = "ESC 취소";
+                    break;
             }
             ConfigureNavigation();
         }
@@ -158,19 +165,19 @@ namespace Codetective.Terminal
                 button.onClick.AddListener(() => { if (CanUse) SelectSave(slot.Id); });
                 button.Activated = () => { if (CanUse) { SelectSave(slot.Id); LoadSelectedSave(); } };
                 button.Focused = () => { if (CanUse) SelectSave(slot.Id); ScrollToRow(scroll, row); };
-                SaveCell(row, "GameTime", Vector2.zero, new Vector2(236, 112), slot.Day > 0 ? "DAY " + slot.Day + "\n" + slot.GameTime : "기록 없음", 28, TextAnchor.MiddleCenter);
-                SaveCell(row, "Situation", new Vector2(244, 0), new Vector2(756, 64), slot.Situation, 22, TextAnchor.MiddleLeft, 126);
-                SaveCell(row, "SavedAt", new Vector2(244, -68), new Vector2(756, 44), slot.SavedAt, 20, TextAnchor.MiddleLeft);
+                SaveCell(row, "GameTime", Vector2.zero, new Vector2(177, 112), slot.Day > 0 ? "DAY " + slot.Day + "\n" + slot.GameTime : "기록 없음", 28, TextAnchor.MiddleCenter);
+                SaveCell(row, "Situation", new Vector2(185, 0), new Vector2(815, 64), slot.Situation, 22, TextAnchor.MiddleLeft, 126);
+                SaveCell(row, "SavedAt", new Vector2(185, -68), new Vector2(815, 44), slot.SavedAt, 20, TextAnchor.MiddleLeft);
                 Text kind = MonitorWidgets.Label(row, font, new Vector2(872, -10), new Vector2(116, 44), slot.Kind, 19); kind.alignment = TextAnchor.MiddleRight;
                 button.interactable = slot.Available;
-                menuButtons.Add(button);
+                menuControls.Add(button);
                 if (slot.Id != null) saveButtons[slot.Id] = button;
             }
             if (saveSlots.Count == 0) MonitorWidgets.Label(rows, font, new Vector2(20, -20), new Vector2(960, 160), "저장된 기록이 없습니다.", 26);
             loadButton = MonitorWidgets.Button(content, font, new Vector2(0, -398), new Vector2(650, 52), "이 기록 불러오기", () =>
             { if (CanUse) LoadSelectedSave(); });
-            menuButtons.Add(loadButton);
-            menuButtons.Add(MonitorWidgets.Button(content, font, new Vector2(674, -398), new Vector2(326, 52), "돌아가기", () => Run(() => Open("main"))));
+            menuControls.Add(loadButton);
+            menuControls.Add(MonitorWidgets.Button(content, font, new Vector2(674, -398), new Vector2(326, 52), "돌아가기", () => Run(() => Open("main"))));
             SelectSave(selectedSaveId);
             message.text = "새 저장은 맨 위에 추가됩니다. 10개를 넘으면 가장 오래된 기록부터 삭제됩니다.";
         }
@@ -192,22 +199,29 @@ namespace Codetective.Terminal
         }
         private void ConfigureNavigation()
         {
-            Button[] enabled = menuButtons.Where(b => b != null && b.isActiveAndEnabled && b.interactable).ToArray();
+            Selectable[] enabled = menuControls.Where(b => b != null && b.isActiveAndEnabled && b.interactable).ToArray();
             for (int i = 0; i < enabled.Length; i++)
             {
-                Button previous = enabled[(i + enabled.Length - 1) % enabled.Length], next = enabled[(i + 1) % enabled.Length];
+                Selectable previous = enabled[(i + enabled.Length - 1) % enabled.Length], next = enabled[(i + 1) % enabled.Length];
                 enabled[i].navigation = new Navigation { mode = Navigation.Mode.Explicit, selectOnUp = previous, selectOnDown = next,
                     selectOnLeft = previous, selectOnRight = next };
             }
+            if (section == "settings") ConfigureSettingsNavigation(enabled);
             if (EventSystem.current != null && enabled.Length > 0)
-                (section == "load" && selectedSaveId != null && saveButtons.TryGetValue(selectedSaveId, out Button selected) ? selected : enabled[0]).Select();
+                DefaultFocus()?.Select();
+        }
+        private Selectable DefaultFocus()
+        {
+            if (section == "settings" && settingsTabs.Count > settingsCategory) return settingsTabs[settingsCategory];
+            if (section == "load" && selectedSaveId != null && saveButtons.TryGetValue(selectedSaveId, out Button selected) && selected.interactable) return selected;
+            return menuControls.FirstOrDefault(control => control != null && control.isActiveAndEnabled && control.interactable);
         }
         private void LateUpdate()
         {
             if (!CanUse || EventSystem.current == null) return;
             GameObject selected = EventSystem.current.currentSelectedGameObject;
             if (selected == null || !selected.activeInHierarchy || !selected.transform.IsChildOf(transform))
-                menuButtons.FirstOrDefault(b => b != null && b.isActiveAndEnabled && b.interactable)?.Select();
+                DefaultFocus()?.Select();
         }
         public void SelectSave(string id)
         {
@@ -218,32 +232,96 @@ namespace Codetective.Terminal
         }
         private void BuildSettings()
         {
-            Text volume = MonitorWidgets.Label(content, font, new Vector2(268, -8), new Vector2(464, 48), "", 28);
-            void RefreshVolume() => volume.text = "전체 음량  " + Mathf.RoundToInt(AudioListener.volume * 100) + "%";
-            void ChangeVolume(float delta)
+            string[] categories = { "게임플레이", "비디오", "오디오", "입력" };
+            for (int i = 0; i < categories.Length; i++)
             {
-                AudioListener.volume = Mathf.Clamp01(AudioListener.volume + delta);
-                PlayerPrefs.SetFloat(VolumeKey, AudioListener.volume); PlayerPrefs.Save(); RefreshVolume();
+                int index = i;
+                RectTransform rect = MonitorWidgets.Rect(categories[i], content, new Vector2(i * 254, 0), new Vector2(238, 48));
+                Image image = rect.gameObject.AddComponent<Image>(); image.color = i == settingsCategory ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor;
+                rect.gameObject.AddComponent<CrtMeshEffect>();
+                SystemSettingChoice tab = rect.gameObject.AddComponent<SystemSettingChoice>(); tab.targetGraphic = image;
+                Text text = MonitorWidgets.Label(rect, font, new Vector2(6, -4), new Vector2(226, 40), categories[i], 22); text.alignment = TextAnchor.MiddleCenter;
+                tab.Adjust = direction => Run(() => ShowSettingsCategory(index + direction, false));
+                tab.onClick.AddListener(() => Run(() => ShowSettingsCategory(index, true)));
+                settingsTabs.Add(tab); menuControls.Add(tab);
             }
-            menuButtons.Add(MonitorWidgets.Button(content, font, new Vector2(160, 0), new Vector2(76, 58), "−", () => Run(() => ChangeVolume(-0.1f))));
-            menuButtons.Add(MonitorWidgets.Button(content, font, new Vector2(764, 0), new Vector2(76, 58), "+", () => Run(() => ChangeVolume(0.1f))));
-            RefreshVolume();
-            Button fullscreen = null;
-            fullscreen = Option(1, "화면: " + (Screen.fullScreen ? "전체 화면" : "창 모드"), () =>
+            RectTransform page = MonitorWidgets.Rect("SettingsPage", content, new Vector2(0, -78), new Vector2(1000, 296));
+            switch (settingsCategory)
             {
-                bool next = !Screen.fullScreen;
-                Screen.fullScreen = next; PlayerPrefs.SetInt(FullscreenKey, next ? 1 : 0); PlayerPrefs.Save();
-                fullscreen.GetComponentInChildren<Text>().text = "화면: " + (next ? "전체 화면" : "창 모드");
+                case 0:
+                    AddSettingChoice(page, "명령 언어", () => (actions.GetLanguage?.Invoke() ?? CommandLocale.Korean) == CommandLocale.Korean ? "한국어" : "English",
+                        () => actions.SetLanguage?.Invoke((actions.GetLanguage?.Invoke() ?? CommandLocale.Korean) == CommandLocale.Korean ? CommandLocale.English : CommandLocale.Korean), actions.SetLanguage != null);
+                    break;
+                case 1:
+                    bool fullscreen = Screen.fullScreen;
+                    AddSettingChoice(page, "화면", () => fullscreen ? "전체 화면" : "창 모드", () =>
+                    { fullscreen = !fullscreen; Screen.fullScreen = fullscreen; PlayerPrefs.SetInt(FullscreenKey, fullscreen ? 1 : 0); PlayerPrefs.Save(); });
+                    break;
+                case 2: BuildVolume(page); break;
+                case 3:
+                    string[,] bindings = { { "뒤로 / 메뉴", "ESC" }, { "전체 보기", "Q" }, { "화면 이동", "1 / 2 / 3 / 4 / 5" },
+                        { "권한 확정", "Tab / Enter / Space" }, { "페이지 이동", "Tab / Shift+Tab (입력 중 제외)" }, { "빠른 저장", "F5" },
+                        { "물건 확인 / 배치", "마우스 왼쪽 버튼 / 내려놓기" }, { "배치 취소", "마우스 오른쪽 버튼" } };
+                    for (int i = 0; i < bindings.GetLength(0); i++)
+                    {
+                        MonitorWidgets.Label(page, font, new Vector2(20, -i * 34), new Vector2(330, 32), bindings[i, 0], 22);
+                        MonitorWidgets.Label(page, font, new Vector2(370, -i * 34), new Vector2(610, 32), bindings[i, 1], 22);
+                    }
+                    break;
+            }
+            menuControls.Add(MonitorWidgets.Button(content, font, new Vector2(674, -398), new Vector2(326, 52), "돌아가기", () => Run(() => Open("main"))));
+            footer.text = "↑↓ 항목 · ←→ 값 조절 · Enter 선택 · ESC 돌아가기";
+            message.text = settingsCategory == 3 ? "ESC: 물건 내려놓기 → 전체 보기 → 메뉴" : "설정은 변경 즉시 적용되고 저장됩니다.";
+        }
+        private void ShowSettingsCategory(int index, bool focusBody)
+        {
+            settingsCategory = (index + 4) % 4; Render();
+            if (focusBody) menuControls.FirstOrDefault(control => !settingsTabs.Contains(control as Button) && control.interactable)?.Select();
+        }
+        private void AddSettingChoice(Transform parent, string label, Func<string> value, Action change, bool enabled = true)
+        {
+            RectTransform row = MonitorWidgets.Rect(label, parent, Vector2.zero, new Vector2(1000, 76));
+            Image background = row.gameObject.AddComponent<Image>(); background.color = MonitorWidgets.ButtonColor; row.gameObject.AddComponent<CrtMeshEffect>();
+            var choice = row.gameObject.AddComponent<SystemSettingChoice>(); choice.targetGraphic = background; choice.interactable = enabled;
+            MonitorWidgets.Label(row, font, new Vector2(18, -12), new Vector2(390, 48), label, 26);
+            Text current = MonitorWidgets.Label(row, font, new Vector2(430, -12), new Vector2(550, 48), value(), 26); current.alignment = TextAnchor.MiddleRight;
+            choice.Adjust = _ => Run(() => { change(); current.text = value(); });
+            choice.onClick.AddListener(() => choice.Adjust?.Invoke(1)); menuControls.Add(choice);
+        }
+        private void BuildVolume(Transform parent)
+        {
+            RectTransform row = MonitorWidgets.Rect("MasterVolume", parent, Vector2.zero, new Vector2(1000, 76));
+            Image background = row.gameObject.AddComponent<Image>(); background.color = MonitorWidgets.ButtonColor; row.gameObject.AddComponent<CrtMeshEffect>();
+            var slider = row.gameObject.AddComponent<CrtSlider>(); slider.targetGraphic = background; slider.minValue = 0; slider.maxValue = 1;
+            MonitorWidgets.Label(row, font, new Vector2(18, -12), new Vector2(300, 48), "음량", 26);
+            RectTransform track = MonitorWidgets.Rect("VolumeTrack", row, new Vector2(350, -26), new Vector2(480, 24));
+            Image trackImage = track.gameObject.AddComponent<Image>(); trackImage.color = new Color(0.02f, 0.04f, 0.03f); track.gameObject.AddComponent<CrtMeshEffect>();
+            RectTransform fill = MonitorWidgets.Rect("VolumeFill", track, Vector2.zero, new Vector2(480, 24));
+            fill.anchorMin = Vector2.zero; fill.anchorMax = Vector2.one; fill.offsetMin = fill.offsetMax = Vector2.zero;
+            Image gauge = fill.gameObject.AddComponent<Image>(); gauge.color = MonitorWidgets.Foreground;
+            gauge.raycastTarget = false; fill.gameObject.AddComponent<CrtMeshEffect>();
+            slider.fillRect = fill; slider.Track = track;
+            Text percentage = MonitorWidgets.Label(row, font, new Vector2(860, -12), new Vector2(120, 48), "", 26); percentage.alignment = TextAnchor.MiddleRight;
+            void RefreshVolume() => percentage.text = Mathf.RoundToInt(AudioListener.volume * 100) + "%";
+            slider.SetValueWithoutNotify(AudioListener.volume); RefreshVolume();
+            slider.onValueChanged.AddListener(value =>
+            {
+                if (!CanUse) return;
+                AudioListener.volume = Mathf.Clamp01(value); PlayerPrefs.SetFloat(VolumeKey, AudioListener.volume); PlayerPrefs.Save(); RefreshVolume();
             });
-            string LanguageLabel() => "명령 언어: " + ((actions.GetLanguage?.Invoke() ?? CommandLocale.Korean) == CommandLocale.Korean ? "한국어" : "English");
-            Button language = null;
-            language = Option(2, LanguageLabel(), () =>
-            {
-                actions.SetLanguage?.Invoke((actions.GetLanguage?.Invoke() ?? CommandLocale.Korean) == CommandLocale.Korean ? CommandLocale.English : CommandLocale.Korean);
-                language.GetComponentInChildren<Text>().text = LanguageLabel();
-            }, actions.SetLanguage != null);
-            Option(4, "돌아가기", () => Open("main"));
-            message.text = "설정은 변경 즉시 적용되고 저장됩니다.";
+            menuControls.Add(slider);
+        }
+        private void ConfigureSettingsNavigation(Selectable[] enabled)
+        {
+            Selectable[] rows = enabled.Where(control => !settingsTabs.Contains(control as Button)).ToArray();
+            Button active = settingsTabs[settingsCategory];
+            for (int i = 0; i < settingsTabs.Count; i++)
+                settingsTabs[i].navigation = new Navigation { mode = Navigation.Mode.Explicit,
+                    selectOnLeft = settingsTabs[(i + settingsTabs.Count - 1) % settingsTabs.Count], selectOnRight = settingsTabs[(i + 1) % settingsTabs.Count],
+                    selectOnUp = rows.LastOrDefault(), selectOnDown = rows.FirstOrDefault() };
+            for (int i = 0; i < rows.Length; i++)
+                rows[i].navigation = new Navigation { mode = Navigation.Mode.Explicit,
+                    selectOnUp = i == 0 ? (Selectable)active : rows[i - 1], selectOnDown = i + 1 == rows.Length ? (Selectable)active : rows[i + 1] };
         }
     }
 }

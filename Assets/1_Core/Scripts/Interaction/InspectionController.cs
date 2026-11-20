@@ -232,6 +232,7 @@ namespace Codetective.Interaction
             if (TextInputFocused) TextInputFocus.ReleaseAll();
             RaycastHit[] hits = Physics.RaycastAll(views.ControlledCamera.ScreenPointToRay(point), clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            if (TryInspectPlacementTarget(hits)) return true;
             foreach (RaycastHit hit in hits)
             {
                 if (hit.collider.GetComponent<ItemPlacementSurface>() != null)
@@ -243,12 +244,35 @@ namespace Codetective.Interaction
                 if (action is DrawerFrontTarget front && front.CanInteract(views.ActiveAngle?.Id)) { front.Interact(); return true; }
                 // Prefab body colliders must not turn the entire open tray into a close button.
                 if (action is SlidingDrawer) continue;
+                if (hit.collider.isTrigger && hit.collider.GetComponentInParent<InspectionTarget>() != null) continue;
                 if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
                 if (action != null && action.CanInteract(views.ActiveAngle?.Id)) { action.Interact(); return true; }
                 // Coarse inspection volumes select an angle; they must not obstruct its detailed controls.
                 if (hit.collider.GetComponentInParent<InspectionTarget>() == null && !hit.collider.isTrigger) return false;
             }
             if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
+            return false;
+        }
+        private bool TryInspectPlacementTarget(RaycastHit[] hits)
+        {
+            if (Carry == null || !Carry.IsPlacing) return false;
+            foreach (RaycastHit hit in hits)
+            {
+                InspectionTarget target = hit.collider.GetComponentInParent<InspectionTarget>();
+                if (target != null && target.isActiveAndEnabled && target.Angle != null && target.Angle != views.ActiveAngle &&
+                    (CanInspectByPointer || target.Angle.Id == "drawer"))
+                { InspectAngle(target.Angle); return true; }
+                bool drawer = hit.collider.GetComponentInParent<SlidingDrawer>() != null || hit.collider.GetComponent<DrawerFrontTarget>() != null;
+                if (drawer && views.ActiveAngle?.Id != "drawer")
+                {
+                    CameraAnglePreset angle = target != null && target.Angle != null && target.Angle.Id == "drawer" ? target.Angle : GetTarget("drawer")?.Angle;
+                    if (angle == null && views.AngleSet != null) angle = views.AngleSet.Get(views.AngleSet.FindId("drawer"));
+                    if (angle == null) return false;
+                    InspectAngle(angle); return true;
+                }
+                // A desk placement surface or solid foreground object still occludes drawers behind it.
+                if (!hit.collider.isTrigger) return false;
+            }
             return false;
         }
 
@@ -367,6 +391,8 @@ namespace Codetective.Interaction
             if (NavigationBlocked && !(PresentingOnTerminal && AllowPresentationMenu)) return;
             if (flow.Mode == InspectionMode.Menu)
             { if (!menu.HandleEscape()) Resume(); return; }
+            if (!PresentingOnTerminal && Carry != null && Carry.HeldItem != null)
+            { TextInputFocus.ReleaseAll(); BackHandler?.Invoke(); Carry.PutDown(); return; }
             if (!PresentingOnTerminal)
             {
                 if (returningToOverview) { if (!SnapToOverview()) return; }
