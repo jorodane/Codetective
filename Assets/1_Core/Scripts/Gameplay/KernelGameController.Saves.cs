@@ -54,6 +54,7 @@ namespace Codetective.Gameplay
             {
                 EnsureSaveHistory();
                 History.Save(JsonUtility.ToJson(Runtime.Capture()), kind, Runtime.Day, Runtime.Minute, SaveSituation(Runtime));
+                if (inspection != null) inspection.GetComponent<PauseMenuView>().RefreshSaveList();
                 narrativeDirty = false; Feedback = "저장되었습니다."; return true;
             }
             catch (Exception error)
@@ -90,7 +91,6 @@ namespace Codetective.Gameplay
             bool saved = TrySave(GameSaveKind.Quick);
             while (Time.unscaledTime < started + 0.35f) yield return null;
             quickSaving = false;
-            if (saved) inspection.GetComponent<PauseMenuView>().RefreshSaveList();
             ui.ShowSaveStatus(saved ? "저장되었습니다." : "빠른 저장 실패", 2f);
         }
         private bool TryReadSave(string id, out KernelRuntime restored, out string error)
@@ -114,27 +114,22 @@ namespace Codetective.Gameplay
                 foreach (GameSaveSlot slot in History.Slots)
                 {
                     GameSaveRecord record = slot.Record;
-                    if (!slot.Available) { result.Add(new SystemSaveInfo { Id = slot.Id, Label = "열람할 수 없는 저장 기록", Description = slot.Error }); continue; }
-                    bool available = true; string error = null;
-                    try { RestoreSavedRecord(record); }
-                    catch (Exception failure) { available = false; error = failure.Message; }
+                    if (!slot.Available) { result.Add(new SystemSaveInfo { Id = slot.Id, Situation = slot.Error }); continue; }
                     string kind = record.kind == GameSaveKind.Auto ? "Auto" : record.kind == GameSaveKind.Quick ? "빠른 저장" : "수동 저장";
                     string situation = (record.situation ?? "").Replace('\n', ' ').Replace('\r', ' ');
                     if (situation.Length > 40) situation = situation.Substring(0, 40) + "…";
                     string stamp = DateTimeOffset.ParseExact(record.savedAtUtc, "O", CultureInfo.InvariantCulture).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-                    result.Add(new SystemSaveInfo { Id = slot.Id, Available = available,
-                        Label = kind + " · DAY " + record.day + " / " + KernelRuntime.TimeOfDay(record.minute),
-                        Description = available ? situation + "\n저장: " + stamp : "기록을 불러올 수 없습니다: " + error });
+                    result.Add(new SystemSaveInfo { Id = slot.Id, Available = true, Day = record.day,
+                        GameTime = KernelRuntime.TimeOfDay(record.minute), Kind = kind, Situation = situation, SavedAt = stamp });
                 }
-                if (result.Count == 0 && legacyError != null) result.Add(new SystemSaveInfo { Label = "이전 저장 기록", Description = legacyError });
+                if (result.Count == 0 && legacyError != null) result.Add(new SystemSaveInfo { Situation = legacyError });
             }
-            catch (Exception error) { result.Add(new SystemSaveInfo { Label = "저장 목록을 읽을 수 없습니다.", Description = error.Message }); }
+            catch (Exception error) { result.Add(new SystemSaveInfo { Situation = "저장 목록을 읽을 수 없습니다: " + error.Message }); }
             return result;
         }
         public void LoadGame(string id)
         {
             if (changingScene || quickSaving) return;
-            if (!TryReadSave(id, out _, out string error)) { inspection.GetComponent<PauseMenuView>().ShowFeedback(error); return; }
             RestartScene(SessionStart.Continue, id);
         }
         public void ReturnToTitle()
@@ -142,7 +137,15 @@ namespace Codetective.Gameplay
             if (changingScene) return;
             if (quickSaving) { inspection.GetComponent<PauseMenuView>().ShowFeedback("빠른 저장 중입니다."); return; }
             if (IsSessionActive && !TrySave(GameSaveKind.Auto)) { inspection.GetComponent<PauseMenuView>().ShowFeedback(Feedback); return; }
-            RestartScene(SessionStart.Title);
+            changingScene = true; inspection.NavigationBlocked = true;
+            StartCoroutine(ShowTitleCovered());
+        }
+        private IEnumerator ShowTitleCovered()
+        {
+            yield return Transitions.CoverScene();
+            IsSessionActive = false; ui.HideContext(); inspection.ShowTitleMenu();
+            yield return Transitions.RevealScene();
+            changingScene = false;
         }
         private void RestartScene(SessionStart start, string saveId = null)
         {
@@ -153,6 +156,11 @@ namespace Codetective.Gameplay
         private IEnumerator RestartCovered(SessionStart start, string saveId)
         {
             yield return Transitions.CoverScene();
+            if (start == SessionStart.Continue && !TryReadSave(saveId, out nextRuntime, out string loadError))
+            {
+                yield return Transitions.RevealScene(); changingScene = false; inspection.NavigationBlocked = inspection.PresentingOnTerminal;
+                inspection.GetComponent<PauseMenuView>().ShowFeedback(loadError); yield break;
+            }
             nextStart = start; nextSaveId = saveId; Transitions.PrepareSceneReveal();
             inspection.PrepareForSceneChange();
             try
@@ -162,7 +170,7 @@ namespace Codetective.Gameplay
             }
             catch (Exception error)
             {
-                changingScene = false; nextStart = SessionStart.Title; nextSaveId = null; Transitions.CancelSceneReveal();
+                changingScene = false; nextStart = SessionStart.Title; nextSaveId = null; nextRuntime = null; Transitions.CancelSceneReveal();
                 inspection.NavigationBlocked = false; StartCoroutine(Transitions.RevealScene());
                 if (IsSessionActive) inspection.ShowPauseMenu(); else inspection.ShowTitleMenu();
                 inspection.GetComponent<PauseMenuView>().ShowFeedback("화면을 열 수 없습니다: " + error.Message);

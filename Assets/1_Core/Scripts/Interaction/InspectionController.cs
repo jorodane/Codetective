@@ -44,6 +44,9 @@ namespace Codetective.Interaction
         private bool started;
         private bool returningToOverview;
         private CameraAnglePreset inspectedAngle;
+        private CameraAnglePreset informationReturnAngle;
+        private InspectionMode informationReturnMode;
+        private bool hasInformationReturn;
         private Pose presentationReturnPose;
         private float presentationReturnFov;
         private CameraAnglePreset presentationReturnAngle;
@@ -119,7 +122,7 @@ namespace Codetective.Interaction
             DisableTerminal();
             flow.Resume();
             flow.ReturnToOverview();
-            inspectedAngle = null; returningToOverview = false;
+            inspectedAngle = null; returningToOverview = false; hasInformationReturn = false;
         }
 
         private void Update()
@@ -273,6 +276,14 @@ namespace Codetective.Interaction
             if (flow.Mode == InspectionMode.Inspecting && views.ActiveAngle == angle)
                 return;
             CameraAnglePreset previous = inspectedAngle; bool wasReturning = returningToOverview;
+            CameraAnglePreset previousInformationReturn = informationReturnAngle;
+            InspectionMode previousInformationMode = informationReturnMode; bool hadInformationReturn = hasInformationReturn;
+            if (IsInformationAngle(angle))
+            {
+                if (!hasInformationReturn)
+                { informationReturnAngle = views.ActiveAngle ?? overviewAngle; informationReturnMode = flow.Mode; hasInformationReturn = true; }
+            }
+            else hasInformationReturn = false;
             inspectedAngle = angle; returningToOverview = false;
             if (!ChangeAngle(angle, () =>
             {
@@ -280,7 +291,10 @@ namespace Codetective.Interaction
                 activeTerminal?.SetInteractionEnabled(false);
                 flow.Inspect(); AngleEntered?.Invoke(angle);
             }))
-            { inspectedAngle = previous; returningToOverview = wasReturning; return; }
+            {
+                inspectedAngle = previous; returningToOverview = wasReturning; informationReturnAngle = previousInformationReturn;
+                informationReturnMode = previousInformationMode; hasInformationReturn = hadInformationReturn; return;
+            }
             activeTerminal?.SetInteractionEnabled(false);
         }
         private bool ChangeAngle(CameraAnglePreset angle, Action changed)
@@ -288,6 +302,24 @@ namespace Codetective.Interaction
             if (Transitions != null) return Transitions.TryChangeAngle(angle, changed);
             if (!views.TryGoToIndex(views.AngleSet.IndexOf(angle))) return false;
             changed?.Invoke(); return true;
+        }
+        private static bool IsInformationAngle(CameraAnglePreset angle) => angle != null && (angle.Id == "clock" || angle.Id == "portrait");
+        public bool CloseInformationView()
+        {
+            if (!hasInformationReturn || !IsInformationAngle(inspectedAngle ?? views.ActiveAngle) || flow.Mode == InspectionMode.Menu || NavigationBlocked || ViewBusy) return false;
+            CameraAnglePreset source = inspectedAngle ?? views.ActiveAngle, destination = informationReturnAngle ?? overviewAngle;
+            InspectionMode mode = informationReturnMode;
+            Action changed = () =>
+            {
+                hasInformationReturn = false; DisableTerminal();
+                if (mode == InspectionMode.Overview || destination == overviewAngle)
+                { inspectedAngle = null; flow.ReturnToOverview(); OverviewEntered?.Invoke(); }
+                else
+                { inspectedAngle = destination; activeTerminal = FindTerminalFor(destination); flow.Inspect(); AngleEntered?.Invoke(destination); }
+            };
+            bool accepted = Transitions != null ? Transitions.TryReturnToView(source, destination, changed) : ChangeAngle(destination, changed);
+            if (accepted) returningToOverview = mode == InspectionMode.Overview || destination == overviewAngle;
+            return accepted;
         }
 
         private TerminalController FindTerminalFor(CameraAnglePreset angle)
@@ -313,7 +345,7 @@ namespace Codetective.Interaction
                 return;
             CameraAnglePreset source = inspectedAngle ?? views.ActiveAngle;
             if (Transitions != null) Transitions.CancelAngle();
-            Action changed = () => { inspectedAngle = null; DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); };
+            Action changed = () => { inspectedAngle = null; hasInformationReturn = false; DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); };
             bool accepted = Transitions != null ? Transitions.TryReturnToOverview(source, overviewAngle, changed) : ChangeAngle(overviewAngle, changed);
             if (accepted)
             {
@@ -326,7 +358,7 @@ namespace Codetective.Interaction
             if (flow.Mode == InspectionMode.Menu || overviewAngle == null || views.AngleSet == null) return false;
             Transitions?.CancelAngle();
             if (!views.TryGoToIndex(views.AngleSet.IndexOf(overviewAngle), true)) return false;
-            inspectedAngle = null; returningToOverview = false;
+            inspectedAngle = null; returningToOverview = false; hasInformationReturn = false;
             DisableTerminal(); flow.ReturnToOverview(); OverviewEntered?.Invoke(); return true;
         }
 
@@ -346,7 +378,13 @@ namespace Codetective.Interaction
             OpenSystemMenu(false);
         }
 
-        public void ShowTitleMenu() => OpenSystemMenu(true);
+        public void ShowTitleMenu()
+        {
+            PresentingOnTerminal = false; AllowPresentationMenu = false; NavigationBlocked = false;
+            Transitions?.SetTerminalFocus("day", false);
+            if (flow.Mode != InspectionMode.Menu) { OpenSystemMenu(true); return; }
+            showingTitle = true; menu.Show(true);
+        }
         public void ShowPauseMenu() => OpenSystemMenu(false);
         private void OpenSystemMenu(bool title)
         {

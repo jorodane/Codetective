@@ -113,13 +113,13 @@ namespace Codetective.Terminal.Tests.UI
         {
             string loaded = null; int saves = 0, resumes = 0, titles = 0;
             var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, Save = () => saves++, Resume = () => resumes++, Title = () => titles++,
-                ReadSaves = () => new[] { new SystemSaveInfo { Id = "latest", Available = true, Label = "Auto · DAY 3 / 10:00", Description = "상담 중\n저장: 2026-11-18 10:00:00" },
-                    new SystemSaveInfo { Id = "earlier", Available = true, Label = "수동 저장 · DAY 2 / 09:00", Description = "상담 대기\n저장: 2026-11-17 09:00:00" } } });
+                ReadSaves = () => new[] { new SystemSaveInfo { Id = "latest", Available = true, Day = 3, GameTime = "10:00", Kind = "Auto", Situation = "상담 중", SavedAt = "2026-11-18 10:00:00" },
+                    new SystemSaveInfo { Id = "earlier", Available = true, Day = 2, GameTime = "09:00", Kind = "수동 저장", Situation = "상담 대기", SavedAt = "2026-11-17 09:00:00" } } });
             menu.Show(false);
             Assert.That(menu.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text),
                 Is.EqualTo(new[] { "계속하기", "저장하기", "불러오기", "가이드", "설정", "타이틀 화면" }));
             MenuButton(menu, "저장하기").onClick.Invoke(); Assert.That(saves, Is.EqualTo(1));
-            MenuButton(menu, "불러오기").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("DAY 3 / 10:00")), Is.True);
+            MenuButton(menu, "불러오기").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text == "DAY 3\n10:00"), Is.True);
             menu.SelectSave("earlier"); MenuButton(menu, "이 기록 불러오기").onClick.Invoke(); Assert.That(loaded, Is.EqualTo("earlier")); Assert.That(menu.HandleEscape(), Is.True);
             MenuButton(menu, "가이드").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("Q 전체 보기")), Is.True);
             Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.HandleEscape(), Is.False);
@@ -131,16 +131,67 @@ namespace Codetective.Terminal.Tests.UI
         {
             string loaded = null;
             var slots = Enumerable.Range(0, 10).Select(i => new SystemSaveInfo { Id = "save" + i, Available = i != 2,
-                Label = (i % 2 == 0 ? "Auto" : "수동 저장") + " · DAY " + (10 - i), Description = "상담 중\n저장: 실제 시각 " + i }).ToArray();
+                Day = 10 - i, GameTime = "09:00", Kind = i % 2 == 0 ? "Auto" : "수동 저장", Situation = "상담 중", SavedAt = "실제 시각 " + i }).ToArray();
             var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, ReadSaves = () => slots }); menu.Show(true);
             MenuButton(menu, "이어하기").onClick.Invoke(); Assert.That(loaded, Is.Null);
             ScrollRect scroll = menu.GetComponentInChildren<CrtScrollRect>();
             Assert.That(scroll.vertical, Is.True); Assert.That(scroll.content.rect.height, Is.GreaterThan(scroll.viewport.rect.height));
             Assert.That(scroll.content.GetComponentsInChildren<Button>().Length, Is.EqualTo(10));
-            slots = new[] { new SystemSaveInfo { Id = "quick", Available = true, Label = "빠른 저장", Description = "새 기록\n저장: 방금" } }.Concat(slots.Take(9)).ToArray();
+            slots = new[] { new SystemSaveInfo { Id = "quick", Available = true, Day = 11, GameTime = "09:00", Kind = "빠른 저장", Situation = "새 기록", SavedAt = "방금" } }.Concat(slots.Take(9)).ToArray();
             menu.RefreshSaveList(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("빠른 저장")), Is.True);
             menu.SelectSave("save8"); menu.SelectSave("save2"); MenuButton(menu, "이 기록 불러오기").onClick.Invoke();
             Assert.That(loaded, Is.EqualTo("save8")); Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.IsTitle, Is.True);
+        }
+        [Test]
+        public void BrowsingContinueAndReturningToTitleDoesNotReadSavesAgain()
+        {
+            int reads = 0;
+            var menu = SystemMenu(new SystemMenuActions { ReadSaves = () =>
+            { reads++; return new[] { new SystemSaveInfo { Id = "latest", Available = true, Day = 1, GameTime = "09:00", Situation = "상담 중", SavedAt = "2026-11-20 10:00:00", Kind = "Auto" } }; } });
+            menu.Show(true); Assert.That(reads, Is.EqualTo(1));
+            for (int i = 0; i < 3; i++)
+            { MenuButton(menu, "이어하기").onClick.Invoke(); MenuButton(menu, "돌아가기").onClick.Invoke(); }
+            Assert.That(reads, Is.EqualTo(1));
+            MenuButton(menu, "이어하기").onClick.Invoke(); menu.RefreshSaveList(); Assert.That(reads, Is.EqualTo(2));
+        }
+        [Test]
+        public void SaveRowsHaveSeparateDateSituationAndTimestampCellsAndSupportDoubleClickAndSubmit()
+        {
+            string loaded = null;
+            var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, ReadSaves = () => new[] {
+                new SystemSaveInfo { Id = "latest", Available = true, Day = 1, GameTime = "09:00", Kind = "Auto", Situation = "상담 대기", SavedAt = "2026-11-20 10:00:00" },
+                new SystemSaveInfo { Id = "older", Available = true, Day = 1, GameTime = "08:00", Kind = "수동 저장", Situation = "이전 상황", SavedAt = "2026-11-19 10:00:00" } } });
+            menu.Show(true); MenuButton(menu, "이어하기").onClick.Invoke();
+            SystemSaveRow[] rows = menu.GetComponentsInChildren<SystemSaveRow>(); SystemSaveRow row = rows[0];
+            Assert.That(row.transform.Find("GameTime").GetComponentInChildren<Text>().text, Is.EqualTo("DAY 1\n09:00"));
+            Assert.That(row.transform.Find("Situation").GetComponentInChildren<Text>().text, Is.EqualTo("상담 대기"));
+            Assert.That(row.transform.Find("SavedAt").GetComponentInChildren<Text>().text, Is.EqualTo("2026-11-20 10:00:00"));
+            Assert.That(row.transform.Find("SavedAt").GetComponent<RectTransform>().rect.height, Is.LessThan(row.transform.Find("Situation").GetComponent<RectTransform>().rect.height));
+            row.OnPointerClick(new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left, clickCount = 1 }); Assert.That(loaded, Is.Null);
+            row.OnPointerClick(new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left, clickCount = 2 }); Assert.That(loaded, Is.EqualTo("latest"));
+            rows[1].OnSubmit(new BaseEventData(EventSystem.current)); Assert.That(loaded, Is.EqualTo("older"));
+        }
+        [Test]
+        public void MenuArrowNavigationIsScopedSkipsDisabledOptionsAndKeepsSaveRowsVisible()
+        {
+            EventSystem previous = EventSystem.current; var events = new GameObject("Menu navigation", typeof(EventSystem));
+            try
+            {
+                EventSystem.current = events.GetComponent<EventSystem>();
+                var slots = Enumerable.Range(0, 10).Select(i => new SystemSaveInfo { Id = "save" + i, Available = i != 1, Day = 10 - i, GameTime = "09:00" }).ToArray();
+                var menu = SystemMenu(new SystemMenuActions { ReadSaves = () => slots }); menu.Show(true);
+                Button start = MenuButton(menu, "이어하기"); Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(start.gameObject));
+                start.OnMove(new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Down });
+                Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(MenuButton(menu, "처음부터").gameObject));
+                MenuButton(menu, "이어하기").onClick.Invoke(); SystemSaveRow[] rows = menu.GetComponentsInChildren<SystemSaveRow>();
+                Assert.That(rows[0].navigation.selectOnDown, Is.SameAs(rows[2]));
+                rows[9].Select(); Assert.That(menu.GetComponentInChildren<ScrollRect>().content.anchoredPosition.y, Is.GreaterThan(0));
+                Assert.That(rows[9].navigation.mode, Is.EqualTo(Navigation.Mode.Explicit));
+                EventSystem.current.SetSelectedGameObject(null);
+                typeof(SystemMenuMonitorView).GetMethod("LateUpdate", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(menu, null);
+                Assert.That(EventSystem.current.currentSelectedGameObject, Is.Not.Null);
+            }
+            finally { Object.DestroyImmediate(events); EventSystem.current = previous; }
         }
         [Test]
         public void HistoryEnvelopesPreservePlayableSnapshotsThroughUnityJsonSerialization()

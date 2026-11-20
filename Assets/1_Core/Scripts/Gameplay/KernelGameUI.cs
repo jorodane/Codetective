@@ -86,7 +86,7 @@ namespace Codetective.Gameplay
             suspicionImage = suspicionFill.GetComponent<Image>(); suspicionImage.raycastTarget = false;
             panel = Box("Context", root.transform, new Vector2(-18, -74), new Vector2(570, 620), new Vector2(1, 1));
             heading = Label(panel, new Vector2(20, -16), new Vector2(460, 42), "", 26);
-            Button(panel, new Vector2(492, -14), new Vector2(58, 40), "닫기", () => { if (!Back()) HidePanel(); });
+            Button(panel, new Vector2(492, -14), new Vector2(58, 40), "닫기", CloseContext);
             body = ScrollText(panel, new Vector2(20, -72), new Vector2(530, 330));
             feedback = Label(panel, new Vector2(20, -552), new Vector2(530, 54), "", 17);
             panel.gameObject.SetActive(false);
@@ -164,6 +164,12 @@ namespace Codetective.Gameplay
         }
 
         public void HideContext() { context = null; CloseModal(); if (profileArchive != null) profileArchive.Hide(); HidePanel(); }
+        private void CloseContext()
+        {
+            if (Back()) return;
+            if ((context == "clock" || context == "portrait") && inspection.CloseInformationView()) HideContext();
+            else HidePanel();
+        }
 
         public bool Back()
         {

@@ -56,6 +56,32 @@ namespace Codetective.Terminal.Tests.UI
             .Single(m => m.Name == name && m.GetParameters().Length == args.Length).Invoke(target, args);
 
         [Test]
+        public void TitleBrandingUsesTheSpaceBesideTheTerminalAndShowsTheBuildVersionAtBottomLeft()
+        {
+            var system = new GameObject("Title presentation"); system.SetActive(false);
+            var camera = new GameObject("Title camera", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); camera.SetActive(false);
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube); body.transform.position = new Vector3(1, 0, 3);
+            try
+            {
+                Component inspection = camera.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                var flow = (InspectionFlow)inspection.GetType().GetField("flow", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(inspection);
+                flow.OpenMenu(); Set(inspection, "showingTitle", true);
+                Component branding = system.AddComponent(FindType("Codetective.Gameplay.TitleBrandingView"));
+                Call(branding, "Initialize", inspection, camera.GetComponent<Camera>(), body.transform, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+                Call(branding, "LateUpdate");
+                GameObject overlay = (GameObject)branding.GetType().GetField("root", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(branding);
+                Text logo = overlay.GetComponentsInChildren<Text>().Single(t => t.name == "TitleLogo");
+                Text version = overlay.GetComponentsInChildren<Text>().Single(t => t.name == "BuildVersion");
+                Assert.That(overlay.activeSelf, Is.True); Assert.That(overlay.GetComponent<Canvas>().renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
+                Assert.That(logo.rectTransform.anchorMax.x, Is.LessThan(0.5f)); Assert.That(logo.transform.IsChildOf(body.transform), Is.False);
+                Assert.That(version.rectTransform.anchorMin, Is.EqualTo(Vector2.zero)); Assert.That(version.text, Is.EqualTo("v" + Application.version));
+                Assert.That(overlay.GetComponent<GraphicRaycaster>(), Is.Null);
+                Set(inspection, "showingTitle", false); Call(branding, "LateUpdate"); Assert.That(overlay.activeSelf, Is.False);
+            }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(camera); Object.DestroyImmediate(body); }
+        }
+
+        [Test]
         public void SelectingAProfilePrintsOnTheAuthoredSheetWithoutAHoldableCopy()
         {
             var system = new GameObject("Profile archive system"); system.SetActive(false);
@@ -186,6 +212,26 @@ namespace Codetective.Terminal.Tests.UI
             }
         }
 
+        [Test]
+        public void ClosingTheCalendarOrPhotoReturnsToTheViewThatOpenedIt()
+        {
+            var root = new GameObject("Information views", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); root.SetActive(false);
+            var set = ScriptableObject.CreateInstance<CameraAngleSet>(); var presets = new List<CameraAnglePreset>();
+            try
+            {
+                foreach (string id in new[] { "overview", "drawer", "clock", "portrait" })
+                { var preset = ScriptableObject.CreateInstance<CameraAnglePreset>(); Set(preset, "angleId", id); presets.Add(preset); }
+                Set(set, "angles", presets); CameraAngleController views = root.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
+                Component inspection = root.AddComponent(FindType("Codetective.Interaction.InspectionController")); Set(inspection, "overviewAngle", presets[0]); Call(inspection, "Awake");
+                foreach (int source in new[] { 0, 1 }) foreach (int info in new[] { 2, 3 })
+                {
+                    Call(inspection, "InspectAngle", presets[source]); Call(inspection, "InspectAngle", presets[info]);
+                    Assert.That(Call(inspection, "CloseInformationView"), Is.True); Assert.That(views.ActiveAngle, Is.SameAs(presets[source]));
+                    Assert.That(Call(inspection, "CloseInformationView"), Is.False);
+                }
+            }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(set); foreach (var preset in presets) Object.DestroyImmediate(preset); }
+        }
         [Test]
         public void ViewEventsBeforeOverlayInitializationDoNotAccessUnboundReferences()
         {

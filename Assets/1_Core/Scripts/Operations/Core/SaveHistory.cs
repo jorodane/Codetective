@@ -59,7 +59,48 @@ namespace Codetective.Operations
             }
             return files.OrderByDescending(f => f.Order).ThenByDescending(f => f.Id, StringComparer.Ordinal).ToArray();
         }
-        public IReadOnlyList<GameSaveSlot> Slots => Files().Take(Capacity).Select(ReadFile).ToArray();
+        /// <summary>Listing never restores a world or retains its snapshot. Old saves acquire a small index once.</summary>
+        public IReadOnlyList<GameSaveSlot> Slots => Files().Take(Capacity).Select(ReadMetadata).ToArray();
+        private static GameSaveRecord Metadata(GameSaveRecord record) => new GameSaveRecord {
+            version = record.version, id = record.id, order = record.order, kind = record.kind,
+            day = record.day, minute = record.minute, savedAtUtc = record.savedAtUtc, situation = record.situation
+        };
+        private GameSaveSlot ReadMetadata(SaveFile file)
+        {
+            var source = new FileInfo(file.Path);
+            try
+            {
+                using (var reader = new StreamReader(file.Path + ".info"))
+                {
+                    if (reader.ReadLine() != "Codetective Save Info 1" || reader.ReadLine() != source.Length.ToString(CultureInfo.InvariantCulture) ||
+                        reader.ReadLine() != source.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture)) throw new IOException("Stale save index.");
+                    GameSaveRecord info = decode(reader.ReadToEnd()); Validate(info, file.Id, file.Order, false);
+                    info.snapshot = null; return new GameSaveSlot { Id = file.Id, Record = info };
+                }
+            }
+            catch (Exception)
+            {
+                GameSaveSlot slot = ReadFile(file);
+                if (!slot.Available) return slot;
+                WriteMetadata(file.Path, slot.Record);
+                slot.Record = Metadata(slot.Record); return slot;
+            }
+        }
+        private void WriteMetadata(string path, GameSaveRecord record)
+        {
+            // An index is disposable. A failed index write must not invalidate the published save.
+            string temporary = path + ".info.tmp";
+            try
+            {
+                var source = new FileInfo(path);
+                string info = "Codetective Save Info 1\n" + source.Length.ToString(CultureInfo.InvariantCulture) + "\n" +
+                    source.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture) + "\n" + encode(Metadata(record));
+                File.WriteAllText(temporary, info);
+                if (File.Exists(path + ".info")) File.Delete(path + ".info");
+                File.Move(temporary, path + ".info");
+            }
+            catch (Exception) { if (File.Exists(temporary)) try { File.Delete(temporary); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
+        }
         private GameSaveSlot ReadFile(SaveFile file)
         {
             try
@@ -97,14 +138,20 @@ namespace Codetective.Operations
             Directory.CreateDirectory(directory);
             try { File.WriteAllText(temporary, serialized); File.Move(temporary, path); }
             catch { if (File.Exists(temporary)) File.Delete(temporary); throw; }
-            foreach (SaveFile oldest in Files().Skip(Capacity)) File.Delete(oldest.Path);
+            WriteMetadata(path, record);
+            foreach (SaveFile oldest in Files().Skip(Capacity))
+            {
+                File.Delete(oldest.Path);
+                if (File.Exists(oldest.Path + ".info"))
+                    try { File.Delete(oldest.Path + ".info"); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
             return new GameSaveSlot { Id = id, Record = record };
         }
-        private static void Validate(GameSaveRecord record, string id, long order)
+        private static void Validate(GameSaveRecord record, string id, long order, bool requireSnapshot = true)
         {
             if (record == null || record.version != 1 || record.id != id || record.order != order || order < 1 ||
                 !Enum.IsDefined(typeof(GameSaveKind), record.kind) || record.day < 1 || double.IsNaN(record.minute) || double.IsInfinity(record.minute) || record.minute < 0 || record.minute > 1440 ||
-                string.IsNullOrWhiteSpace(record.snapshot) || !DateTimeOffset.TryParseExact(record.savedAtUtc, "O", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                (requireSnapshot && string.IsNullOrWhiteSpace(record.snapshot)) || !DateTimeOffset.TryParseExact(record.savedAtUtc, "O", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
                 throw new CommandException("저장 파일의 정보가 유효하지 않습니다.");
         }
         public bool ImportLegacy(string path, Func<string, LegacySaveDescription> describe)

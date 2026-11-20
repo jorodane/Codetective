@@ -44,6 +44,7 @@ namespace Codetective.Tests.Operations
             }
             Assert.That(history.Slots.Select(s => s.Record.day), Is.EqualTo(Enumerable.Range(8, 10).Reverse()));
             Assert.That(Directory.GetFiles(directory, "*.json").Length, Is.EqualTo(10));
+            Assert.That(Directory.GetFiles(directory, "*.info").Length, Is.EqualTo(10));
             Assert.That(() => history.Read(oldest), Throws.TypeOf<CommandException>());
         }
         [Test]
@@ -52,9 +53,9 @@ namespace Codetective.Tests.Operations
             GameSaveSlot older = Save(1); Save(2); Save(3);
             var reopened = new SaveHistory(directory, Encode, Decode);
             Assert.That(reopened.Read(older.Id).snapshot, Is.EqualTo("snapshot-1"));
-            Assert.That(reopened.Slots.First().Record.snapshot, Is.EqualTo("snapshot-3"));
-            reopened.Slots.First().Record.snapshot = "changed";
-            Assert.That(history.Slots.First().Record.snapshot, Is.EqualTo("snapshot-3"));
+            Assert.That(reopened.Slots.First().Record.snapshot, Is.Null);
+            reopened.Slots.First().Record.situation = "changed";
+            Assert.That(history.Slots.First().Record.situation, Is.EqualTo("상담 3"));
         }
         [Test]
         public void SaveTypesGameSituationAndRealUtcTimeRoundTrip()
@@ -87,10 +88,43 @@ namespace Codetective.Tests.Operations
         public void CorruptNewestFileDoesNotPreventSelectingAnEarlierSaveOrCreatingAnother()
         {
             GameSaveSlot earlier = Save(1), corrupt = Save(2);
-            File.WriteAllText(Directory.GetFiles(directory).Single(p => p.Contains(corrupt.Id)), "broken JSON");
+            File.WriteAllText(Directory.GetFiles(directory, "save-*.json").Single(p => p.Contains(corrupt.Id)), "broken JSON");
             Assert.That(history.Slots[0].Available, Is.False); Assert.That(history.Read(earlier.Id).day, Is.EqualTo(1));
             Assert.That(() => history.Read(corrupt.Id), Throws.TypeOf<CommandException>());
             Save(3); Assert.That(history.Slots[0].Record.day, Is.EqualTo(3));
+        }
+        [Test]
+        public void ListingTenLargeSavesReadsOnlySmallMetadataAndLoadingReadsOnlyTheSelectedPayload()
+        {
+            for (int n = 1; n <= 10; n++) history.Save(new string('x', 256 * 1024) + n, GameSaveKind.Manual, n, 540, "상담 중");
+            int payloads = 0, characters = 0;
+            var reopened = new SaveHistory(directory, Encode, json =>
+            { characters += json.Length; GameSaveRecord record = Decode(json); if (record.snapshot != null) payloads++; return record; });
+            var slots = reopened.Slots;
+            Assert.That(slots.Count, Is.EqualTo(10)); Assert.That(slots.All(s => s.Record.snapshot == null), Is.True);
+            Assert.That(payloads, Is.Zero); Assert.That(characters, Is.LessThan(10000));
+            Assert.That(reopened.Read(slots[7].Id).day, Is.EqualTo(3)); Assert.That(payloads, Is.EqualTo(1));
+        }
+        [Test]
+        public void OldSaveFilesWithoutIndexesAreIndexedOnceWithoutRewritingTheirPayloads()
+        {
+            Save(1); Save(2);
+            string[] payloads = Directory.GetFiles(directory, "save-*.json").OrderBy(p => p).Select(File.ReadAllText).ToArray();
+            foreach (string info in Directory.GetFiles(directory, "*.info")) File.Delete(info);
+            int reads = 0;
+            var reopened = new SaveHistory(directory, Encode, json => { var record = Decode(json); if (record.snapshot != null) reads++; return record; });
+            Assert.That(reopened.Slots.Count, Is.EqualTo(2)); Assert.That(reads, Is.EqualTo(2));
+            Assert.That(reopened.Slots.Count, Is.EqualTo(2)); Assert.That(reads, Is.EqualTo(2));
+            Assert.That(Directory.GetFiles(directory, "save-*.json").OrderBy(p => p).Select(File.ReadAllText), Is.EqualTo(payloads));
+        }
+        [Test]
+        public void ACorruptIndexFallsBackToTheIntactSaveAndRepairsIt()
+        {
+            GameSaveSlot saved = Save(4);
+            File.WriteAllText(Directory.GetFiles(directory, "*.info").Single(), "broken index");
+            Assert.That(history.Slots.Single().Record.day, Is.EqualTo(4));
+            Assert.That(File.ReadAllText(Directory.GetFiles(directory, "*.info").Single()), Does.StartWith("Codetective Save Info 1"));
+            Assert.That(history.Read(saved.Id).snapshot, Is.EqualTo("snapshot-4"));
         }
         [Test]
         public void SerializationFailureCannotPruneExistingSavesOrLeaveATemporaryFile()

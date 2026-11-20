@@ -89,8 +89,9 @@ namespace Codetective.Gameplay
         private enum SessionStart { Title, NewGame, Continue }
         private static SessionStart nextStart = SessionStart.Title;
         private static string nextSaveId;
+        private static KernelRuntime nextRuntime;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetSessionStart() { nextStart = SessionStart.Title; nextSaveId = null; }
+        private static void ResetSessionStart() { nextStart = SessionStart.Title; nextSaveId = null; nextRuntime = null; }
         private KernelRuntime CreateRuntime() => scenario != null ? scenario.CreateRuntime() : ClinicScenario.Create();
 
         private void Awake()
@@ -100,9 +101,10 @@ namespace Codetective.Gameplay
             minuteBasis = ClockBasis(clockMinute);
             sceneBasisCaptured = true;
             SystemMenuMonitorView.ApplySavedSettings();
-            SessionStart start = nextStart; string saveId = nextSaveId; nextStart = SessionStart.Title; nextSaveId = null;
-            Runtime = CreateRuntime(); IsSessionActive = start != SessionStart.Title;
-            if (start == SessionStart.Continue)
+            SessionStart start = nextStart; string saveId = nextSaveId; KernelRuntime prepared = nextRuntime;
+            nextStart = SessionStart.Title; nextSaveId = null; nextRuntime = null;
+            Runtime = start == SessionStart.Continue && prepared != null ? prepared : CreateRuntime(); IsSessionActive = start != SessionStart.Title;
+            if (start == SessionStart.Continue && prepared == null)
             {
                 if (TryReadSave(saveId, out KernelRuntime restored, out string error)) { Runtime = restored; Feedback = "날짜 기록을 불러왔습니다."; }
                 else { IsSessionActive = false; Feedback = error; }
@@ -145,6 +147,7 @@ namespace Codetective.Gameplay
             }
             // Bind and build the overlay before optional desk/paper presentation can fail or emit view events.
             ui.Initialize(this, inspection, font);
+            gameObject.AddComponent<TitleBrandingView>().Initialize(inspection, views.ControlledCamera, terminalBody, font);
             if (Monitor != null) gameObject.AddComponent<MailNotificationPresenter>().Initialize(this, inspection, Monitor, Transitions.Settings);
             inspection.BackHandler = ui.Back;
             inspection.QuickSaveRequested = QuickSave;

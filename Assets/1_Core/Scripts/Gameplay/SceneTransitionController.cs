@@ -23,7 +23,7 @@ namespace Codetective.Gameplay
         private Material clearStencilMaterial, terminalStencilMaterial;
         private Image clearStencil;
         private TerminalFocusMaskGraphic terminalMask;
-        private Texture2D capturedFrame;
+        private RenderTexture capturedFrame;
         private Coroutine angleRoutine, focusRoutine;
         private readonly HashSet<string> focusOwners = new HashSet<string>();
         private float focusAlpha, effectAlpha;
@@ -84,7 +84,7 @@ namespace Codetective.Gameplay
             if (enabled) focusOwners.Add(owner); else focusOwners.Remove(owner);
             if (root == null) return;
             if (focusRoutine != null) { StopCoroutine(focusRoutine); focusRoutine = null; }
-            float target = TerminalFocused ? settings != null ? settings.terminalFocusOpacity : 0.995f : 0;
+            float target = TerminalFocused ? settings != null ? settings.terminalFocusOpacity : 0.94f : 0;
             // Sibling OnDisable callbacks may arrive while the whole camera hierarchy is shutting down.
             if (!Application.isPlaying || !gameObject.activeInHierarchy || !this.enabled || !isActiveAndEnabled) { focusAlpha = target; return; }
             focusRoutine = StartCoroutine(Tween(focusAlpha, target, settings?.menu != null ? settings.menu.duration : 0.18f, value => focusAlpha = value));
@@ -94,7 +94,9 @@ namespace Codetective.Gameplay
         public TransitionPreset ReturnEffectFor(CameraAnglePreset source) => source != null && source.ExitTransition != null ? source.ExitTransition :
             settings != null && settings.defaultReturn != null ? settings.defaultReturn : settings?.defaultAngle;
         public bool TryReturnToOverview(CameraAnglePreset source, CameraAnglePreset overview, Action changed)
-            => ChangeAngle(overview, ReturnEffectFor(source), changed);
+            => TryReturnToView(source, overview, changed);
+        public bool TryReturnToView(CameraAnglePreset source, CameraAnglePreset destination, Action changed)
+            => ChangeAngle(destination, ReturnEffectFor(source), changed);
         private bool ChangeAngle(CameraAnglePreset angle, TransitionPreset effect, Action changed)
         {
             if (IsBusy || views == null || views.AngleSet == null || angle == null || views.AngleSet.IndexOf(angle) < 0) return false;
@@ -120,8 +122,18 @@ namespace Codetective.Gameplay
                 if (style == TransitionStyle.ScreenOverlap && Application.isPlaying)
                 {
                     yield return new WaitForEndOfFrame();
-                    try { capturedFrame = ScreenCapture.CaptureScreenshotAsTexture(); }
-                    catch (Exception error) { Debug.LogWarning("화면 오버랩 캡처 실패: " + error.Message, this); }
+                    try
+                    {
+                        // The finished framebuffer is sRGB. A screenshot Texture2D can be marked linear,
+                        // which encodes its pixels a second time in a Linear project and causes an initial flash.
+                        capturedFrame = RenderTexture.GetTemporary(Screen.width, Screen.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                        ScreenCapture.CaptureScreenshotIntoRenderTexture(capturedFrame);
+                    }
+                    catch (Exception error)
+                    {
+                        if (capturedFrame != null) { RenderTexture.ReleaseTemporary(capturedFrame); capturedFrame = null; }
+                        Debug.LogWarning("화면 오버랩 캡처 실패: " + error.Message, this);
+                    }
                     if (capturedFrame != null)
                     {
                         overlap.texture = capturedFrame; overlap.color = Color.white;
@@ -153,7 +165,7 @@ namespace Codetective.Gameplay
             effectAlpha = 0;
             if (full != null) SetAlpha(full, 0);
             if (overlap != null) { SetAlpha(overlap, 0); overlap.texture = null; }
-            if (capturedFrame != null) { Destroy(capturedFrame); capturedFrame = null; }
+            if (capturedFrame != null) { RenderTexture.ReleaseTemporary(capturedFrame); capturedFrame = null; }
         }
         public IEnumerator CoverScene()
         {

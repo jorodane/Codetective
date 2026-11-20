@@ -43,7 +43,7 @@ MonoBehaviour:
     fileID: 11400000
     guid: b785c871a3f64f628bf90a579c7f1b31
     type: 2
-  terminalFocusOpacity: 0.995
+  terminalFocusOpacity: 0.94
   dayCardSeconds: 1.3
   dayTitleWidth: 0.52
   dayTitleFadeSeconds: 0.4
