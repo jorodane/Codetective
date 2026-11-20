@@ -56,6 +56,31 @@ namespace Codetective.Terminal.Tests.UI
             .Single(m => m.Name == name && m.GetParameters().Length == args.Length).Invoke(target, args);
 
         [Test]
+        public void TheProfileStackOpensAnArchiveWithoutSpawningAHoldableProfileSheet()
+        {
+            var system = new GameObject("Profile archive system"); system.SetActive(false);
+            var stack = GameObject.CreatePrimitive(PrimitiveType.Cube); stack.name = "Upper-left paper stack";
+            var camera = new GameObject("Reference camera", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); camera.SetActive(false);
+            var carryRoot = new GameObject("Carry");
+            try
+            {
+                Component game = system.AddComponent(FindType("Codetective.Gameplay.KernelGameController"));
+                Component inspection = camera.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                ItemCarryController carry = carryRoot.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                Set(game, "profileArchiveStack", stack.transform); Set(game, "inspection", inspection); Set(game, "<Carry>k__BackingField", carry);
+                Call(game, "InitializeProfileArchive");
+                Component target = stack.GetComponent(FindType("Codetective.Gameplay.ProfileArchiveTarget")); Assert.That(target, Is.Not.Null);
+                Assert.That(system.GetComponentsInChildren<HoldableItem>(true), Is.Empty);
+                Assert.That(Call(target, "CanInteract", "profile"), Is.False);
+                Set(game, "presentationInitialized", true); Set(game, "<IsSessionActive>k__BackingField", true); Set(game, "<CurrentView>k__BackingField", "profile");
+                Assert.That(Call(target, "CanInteract", "profile"), Is.True); Assert.That(Call(target, "CanInteract", "overview"), Is.False);
+                inspection.GetType().GetProperty("ModalInputBlocked").SetValue(inspection, true);
+                Assert.That(Call(target, "CanInteract", "profile"), Is.False);
+            }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(stack); Object.DestroyImmediate(camera); Object.DestroyImmediate(carryRoot); }
+        }
+
+        [Test]
         public void EscapeSnapsToTheTerminalAndResumeRestoresTheExactWorkingView()
         {
             var root = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); root.SetActive(false);

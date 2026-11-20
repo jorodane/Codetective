@@ -84,9 +84,33 @@ namespace Codetective.Tests.Interaction
                 Assert.That(carry.TryUse(true), Is.False); Assert.That(uses, Is.Zero);
                 Assert.That(carry.TryUse(false), Is.True); Assert.That(uses, Is.EqualTo(1));
                 carry.PutDown(); Assert.That(carry.TryUse(false), Is.False); Assert.That(carry.TryPickup(two), Is.True);
-                system.SetActive(false); Assert.That(carry.HeldItem, Is.Null); Assert.That(b.transform.parent, Is.Null);
+                system.SetActive(false); Assert.That(carry.HeldItem, Is.SameAs(two)); Assert.That(carry.IsExamining, Is.False);
+                Assert.That(carry.TryUse(false), Is.False);
+                system.SetActive(true); Assert.That(carry.IsExamining, Is.True);
+                carry.PutDown(); Assert.That(b.transform.parent, Is.Null);
             }
             finally { Object.DestroyImmediate(system); Object.DestroyImmediate(camera); Object.DestroyImmediate(a); Object.DestroyImmediate(b); }
+        }
+        [Test]
+        public void DisablingTheCameraWhileHoldingAnItemNeverReparentsDuringActivationCallbacks()
+        {
+            var camera = new GameObject("Main Camera", typeof(Camera)); var desk = new GameObject("Desk");
+            GameObject paper = GameObject.CreatePrimitive(PrimitiveType.Cube); paper.transform.SetParent(desk.transform, false);
+            try
+            {
+                ItemCarryController carry = camera.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
+                HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("newspaper", "신문", HeldItemUse.Newspaper);
+                Assert.That(carry.TryPickup(item), Is.True); Assert.That(paper.transform.parent, Is.SameAs(camera.transform));
+                camera.SetActive(false);
+                Assert.That(paper.transform.parent, Is.SameAs(camera.transform));
+                Assert.That(paper.GetComponent<Renderer>().enabled, Is.False);
+                carry.SetPresentationVisible(true); Assert.That(paper.GetComponent<Renderer>().enabled, Is.False);
+                camera.SetActive(true); Assert.That(paper.GetComponent<Renderer>().enabled, Is.True);
+                carry.PutDown(); Assert.That(paper.transform.parent, Is.SameAs(desk.transform));
+                carry.TryPickup(item); camera.SetActive(false); carry.EndSession();
+                Assert.That(carry.HeldItem, Is.Null); Assert.That(paper.transform.parent, Is.SameAs(camera.transform));
+            }
+            finally { Object.DestroyImmediate(paper); Object.DestroyImmediate(camera); Object.DestroyImmediate(desk); }
         }
     }
 }

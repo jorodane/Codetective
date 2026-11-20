@@ -74,7 +74,7 @@ namespace Codetective.Interaction
                 }
             if (found) { measuredSize = bounds.size; placementOffset = bounds.center - transform.position; }
         }
-        public override bool CanInteract(string angleId) => isActiveAndEnabled && owner != null && !IsHeld && owner.HeldItem == null && (Storage == null || Storage.CanRetrieve);
+        public override bool CanInteract(string angleId) => isActiveAndEnabled && owner != null && owner.CanManipulate && !IsHeld && owner.HeldItem == null && (Storage == null || Storage.CanRetrieve);
         public override void Interact() { if (CanInteract(null)) owner.TryPickup(this); }
         internal void PickUp(Transform hand)
         {

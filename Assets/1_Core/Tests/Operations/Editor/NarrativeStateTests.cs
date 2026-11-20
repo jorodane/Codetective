@@ -129,6 +129,20 @@ namespace Codetective.Tests.Operations
             Assert.That(() => runtime.ProfileCard("thread01"), Throws.TypeOf<CommandException>());
         }
         [Test]
+        public void ProfileNamesAndFindingsWaitForAcquiredInformation()
+        {
+            KernelRuntime runtime = ClinicScenario.Create(); Entity person = runtime.Entity("client");
+            string knownName = runtime.ProfileCard(person.Id).DisplayName;
+            person.Label = "아직 보고되지 않은 이름";
+            person.AddVariable(new VariableDefinition { Code = "discoveredNote", Kind = DataKind.Text, DefaultValue = Datum.Text("아직 모르는 정보") });
+            Assert.That(runtime.ProfileCard(person.Id).DisplayName, Is.EqualTo(knownName));
+            Assert.That(runtime.ProfileFindings(person.Id), Does.Not.Contain("아직 모르는 정보").And.Not.Contain("[]").And.Not.Contain("{}"));
+            runtime.Observe(new ObservationDefinition { subjectId = person.Id, field = "name", value = Datum.Text("새로 확인한 이름"), source = "신원 기록" });
+            runtime.Observe(new ObservationDefinition { subjectId = person.Id, field = "discoveredNote", useCurrentField = true, source = "현장 보고" });
+            Assert.That(runtime.ProfileCard(person.Id).DisplayName, Is.EqualTo("새로 확인한 이름"));
+            Assert.That(runtime.ProfileFindings(person.Id), Does.Contain("아직 모르는 정보"));
+        }
+        [Test]
         public void KernelUsesTheSameFormWithoutReplacingRecoveredIdentityInformation()
         {
             KernelRuntime runtime = ClinicScenario.Create(); PersonProfile kernel = runtime.ProfileCard("kernel");

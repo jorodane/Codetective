@@ -21,7 +21,8 @@ namespace Codetective.Operations
         {
             RequireVisibleProfile(profileId);
             Entity person = Entity(profileId);
-            string displayName = person?.Label ?? Consultation.FirstOrDefault(l => ProfileOf(l) == profileId)?.speaker ?? profileId;
+            string knownName = person != null ? LastKnownValue(person.Id, "name").text : "";
+            string displayName = !string.IsNullOrWhiteSpace(knownName) ? knownName : Consultation.FirstOrDefault(l => ProfileOf(l) == profileId)?.speaker ?? profileId;
             return new PersonProfile { Id = profileId, DisplayName = displayName,
                 Name = ProfileField(person, profileFields[0], displayName), Gender = ProfileField(person, profileFields[1]),
                 Age = ProfileField(person, profileFields[2]), Birthday = ProfileField(person, profileFields[3]),
@@ -52,8 +53,9 @@ namespace Codetective.Operations
                 foreach (VariableDefinition field in person.Variables.Where(f => !basic.Contains(f.Code) && VariableDenial(person, f, null) == null))
                 {
                     Datum value = LastKnownValue(person.Id, field.Code);
-                    if (value.kind != DataKind.Empty && !(value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text)) && IsPlayerVisible(value))
-                        text.Append(field.Label ?? field.Code).Append(": ").Append(value).Append('\n');
+                    if (value.kind != DataKind.Empty && !(value.kind == DataKind.Text && string.IsNullOrWhiteSpace(value.text)) &&
+                        !((value.kind == DataKind.Array || value.kind == DataKind.Dictionary) && value.Elements.Length == 0) && IsPlayerVisible(value))
+                        text.Append(string.IsNullOrWhiteSpace(field.Label) ? field.NameFor(Language) : field.Label).Append(": ").Append(value).Append('\n');
                 }
             foreach (ObservationRecord report in Observations.Where(o => o.subjectId == profileId && !string.IsNullOrWhiteSpace(o.statement)))
                 text.Append("[관측 · ").Append(report.source).Append(" / DAY ").Append(report.observedDay).Append(" ").Append(TimeOfDay(report.observedMinute))

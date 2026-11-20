@@ -15,24 +15,25 @@ namespace Codetective.Interaction
         public event Action<HoldableItem> PickedUp;
         public event Action<HoldableItem> Placed;
         public bool IsPlacing { get; private set; }
-        public bool IsExamining => HeldItem != null && !IsPlacing;
+        public bool IsExamining => isActiveAndEnabled && !sessionEnded && HeldItem != null && !IsPlacing;
         public Camera ViewCamera => hand != null ? hand.GetComponent<Camera>() : null;
         public bool PlacementValid { get; private set; }
         public Func<bool> ManipulationAllowed { get; set; }
-        public bool CanManipulate => ManipulationAllowed == null || ManipulationAllowed();
+        public bool CanManipulate => isActiveAndEnabled && !sessionEnded && (ManipulationAllowed == null || ManipulationAllowed());
         public string PlacementHint { get; private set; }
         private GameObject preview;
         private Material previewMaterial;
         private ItemPlacementSurface destination;
         private Vector3 destinationPosition;
         private Transform flatPreview, rolledPreview;
+        private bool sessionEnded;
         public void Initialize(Transform camera)
         {
             hand = camera;
             foreach (HoldableItem item in sceneItems) Register(item);
         }
         public void Register(HoldableItem item) { if (item != null) item.Register(this); }
-        public void SetPresentationVisible(bool visible) { if (HeldItem != null) HeldItem.SetPresentationVisible(visible); }
+        public void SetPresentationVisible(bool visible) { if (HeldItem != null) HeldItem.SetPresentationVisible(visible && isActiveAndEnabled && !sessionEnded); }
         private void LateUpdate()
         { if (IsExamining) HeldItem.FrameForInspection(ViewCamera); }
         public bool TryPickup(HoldableItem item)
@@ -162,6 +163,14 @@ namespace Codetective.Interaction
         { return item != null && surface != null && !item.IsHeld && surface.PlaceAt(item, localPosition, true); }
         private static void Discard(UnityEngine.Object value)
         { if (value == null) return; if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
-        private void OnDisable() => PutDown();
+        // Disabling suspends the held object. Reparenting here is illegal while the
+        // camera (or the item's resting parent) is itself changing activation state.
+        private void OnDisable() { CancelPlacement(); SetPresentationVisible(false); }
+        private void OnEnable() { if (!sessionEnded) SetPresentationVisible(true); }
+        public void EndSession()
+        {
+            sessionEnded = true; CancelPlacement(); SetPresentationVisible(false); HeldItem = null;
+        }
+        private void OnDestroy() => EndSession();
     }
 }

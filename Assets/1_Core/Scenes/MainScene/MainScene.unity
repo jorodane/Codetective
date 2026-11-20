@@ -7344,11 +7344,7 @@ MonoBehaviour:
   font: {fileID: 12800000, guid: e1d6f57a609574bd982c425e64e02986, type: 3}
   dialoguePresentation: {fileID: 11400000, guid: 294f87ed3f348b61b63714caa50069e6, type: 2}
   newspaperAnchor: {fileID: 2000000131}
-  profilePaperAnchor: {fileID: 2000000181}
-  profilePaperSupports:
-  - {fileID: 414868070}
-  - {fileID: 1560031245}
-  - {fileID: 350070053}
+  profileArchiveStack: {fileID: 414868070}
   sceneLights:
   - {fileID: 114083513}
   - {fileID: 321446934}

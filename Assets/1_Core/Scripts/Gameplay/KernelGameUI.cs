@@ -54,6 +54,7 @@ namespace Codetective.Gameplay
         private CanvasGroup interfaceInteraction;
         private GameObject saveNoticeRoot;
         private Text saveNotice;
+        private ProfileArchiveView profileArchive;
         private float saveNoticeUntil;
         public bool IsInitialized { get; private set; }
         public bool SummaryVisible => clinicDay != null && clinicDay.SummaryVisible;
@@ -94,6 +95,10 @@ namespace Codetective.Gameplay
             if (dialogue == null) dialogue = gameObject.AddComponent<ConsultationOverlay>();
             dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation);
             BuildItemControls();
+            RectTransform archiveRoot = OverlayWidgets.Rect("ProfileArchive", root.transform, Vector2.zero, new Vector2(1160, 630), new Vector2(0.5f, 0.5f));
+            profileArchive = archiveRoot.gameObject.AddComponent<ProfileArchiveView>();
+            profileArchive.Initialize(game.Runtime, this.font, id => game.Monitor != null ? game.Monitor.PortraitFor(id) : null,
+                id => game.SelectedProfileId = id, () => Back());
             Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 · F5 빠른 저장 (입력 중 제외) · ESC 메뉴", 14);
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
@@ -181,7 +186,9 @@ namespace Codetective.Gameplay
             modal = name;
             inspection.ModalInputBlocked = true;
             if (newspaperReader != null) newspaperReader.gameObject.SetActive(false);
+            if (profileArchive != null) profileArchive.Hide();
             ClearControls();
+            if (name == "profiles") { profileArchive.Show(); panel.gameObject.SetActive(false); return; }
             if (name == "document") { BuildDocumentReader(); panel.gameObject.SetActive(false); return; }
             panel.gameObject.SetActive(true);
             if (name == "protocol") BuildProtocolEditor();
@@ -208,6 +215,7 @@ namespace Codetective.Gameplay
             modal = null;
             openedDocument = null;
             if (newspaperReader != null) newspaperReader.gameObject.SetActive(false);
+            if (profileArchive != null) profileArchive.Hide();
             if (inspection != null) inspection.ModalInputBlocked = false;
             ClearSelection();
         }
@@ -222,11 +230,7 @@ namespace Codetective.Gameplay
                 case "counsel":
                     HidePanel(); return;
                 case "profile":
-                    heading.text = "프로필 / 상담 기록";
-                    AddButton(new Vector2(20, -416), new Vector2(245, 40), "이전 인물", () => ChangeProfile(-1));
-                    AddButton(new Vector2(285, -416), new Vector2(245, 40), "다음 인물", () => ChangeProfile(1));
-                    AddButton(new Vector2(20, -468), new Vector2(510, 44), "모니터에서 상담 기록 작성", () => game.ShowMonitorPage("clinic-records"));
-                    break;
+                    HidePanel(); return;
                 case "clock":
                     heading.text = "업무 시간 / 날짜 기록";
                     AddButton(new Vector2(20, -428), new Vector2(245, 44), "현재 기록 저장", game.SaveNow);
@@ -264,12 +268,7 @@ namespace Codetective.Gameplay
             }
         }
         public void RefreshCommandLanguage() { if (languageLabel != null) RefreshLanguageLabel(); }
-        private void ChangeProfile(int direction)
-        {
-            string[] profiles = game.Runtime.VisibleProfileIds.ToArray(); if (profiles.Length == 0) return;
-            int index = Math.Max(0, Array.IndexOf(profiles, game.SelectedProfileId));
-            game.SelectedProfileId = profiles[(index + direction + profiles.Length) % profiles.Length]; RefreshBody();
-        }
+        public void ShowProfileArchive() { if (game.CanOpenProfileArchive) OpenModal("profiles"); }
         private void BuildItemControls()
         {
             heldBar = Box("HeldObject", root.transform, new Vector2(0, 24), new Vector2(1040, 54), new Vector2(0.5f, 0));

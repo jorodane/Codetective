@@ -30,9 +30,8 @@ namespace Codetective.Gameplay
         [SerializeField] private Font font;
         [SerializeField] private DialoguePresentationDefinition dialoguePresentation;
         [SerializeField] private Transform newspaperAnchor;
-        [SerializeField] private Transform profilePaperAnchor;
-        [Tooltip("Explicit paper stacks/surfaces supporting the profile sheet. No scene-wide name search.")]
-        [SerializeField] private Transform[] profilePaperSupports = Array.Empty<Transform>();
+        [Tooltip("Paper stack opening the acquired-person profile archive from the profile angle.")]
+        [SerializeField] private Transform profileArchiveStack;
         [Tooltip("Lights controlled by the headquarters light-off command.")]
         [SerializeField] private Light[] sceneLights = Array.Empty<Light>();
 
@@ -55,10 +54,7 @@ namespace Codetective.Gameplay
         }
         private string selectedProfile = "client";
         private DeskNewspaper newspaper;
-        private PaperDocument profileDocument;
-        private int paperRevision = -1;
-        private string printedProfile;
-        private int paperPageRevision = -1;
+        private int newspaperRevision = -1;
         private readonly List<ItemPlacementSurface> storageSurfaces = new List<ItemPlacementSurface>();
         private ClinicVisitPresentation visits;
         private int summaryShownDay;
@@ -157,7 +153,7 @@ namespace Codetective.Gameplay
             newspaper = gameObject.AddComponent<DeskNewspaper>();
             newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry, scenario != null ? scenario.newspaper : null); newspaper.Refresh(Runtime);
             newspaper.Document.AreaClicked += ReadPrintedArea;
-            InitializeProfilePaper();
+            InitializeProfileArchive();
             RestoreStoredItems();
             initialLights = Array.ConvertAll(sceneLights, light => light != null && light.enabled);
             if (Runtime.Facts.Contains("turnOffLights")) SetLightsOff();
@@ -167,7 +163,7 @@ namespace Codetective.Gameplay
             visits.Initialize(Runtime);
             if (Runtime.CurrentAppointment != null) SelectedProfileId = Runtime.CurrentAppointment.profileId;
             if (views.ActiveAngle == null && views.AngleSet != null) views.TryGoToIndex(views.AngleSet.InitialIndex, true);
-            presentationInitialized = true; RefreshRoomTime(); RefreshProfilePaper();
+            presentationInitialized = true; RefreshRoomTime();
             inspection.GetComponent<PauseMenuView>().Configure(new SystemMenuActions {
                 NewGame = () => RestartScene(SessionStart.NewGame), Load = LoadGame, Save = SaveNow,
                 Title = ReturnToTitle, Quit = QuitGame, ReadSaves = ReadSaveInfos,
@@ -188,8 +184,8 @@ namespace Codetective.Gameplay
                 ShowDaySummary();
             if (narrativeDirty && !quickSaving && Time.unscaledTime >= narrativeSaveAt) AutoSave();
             foreach (SlidingDrawer drawer in drawers) drawer.SetInteractionEnabled(CanOperateDrawers);
-            if (profileDocument != null && (paperRevision != Runtime.Revision || printedProfile != SelectedProfileId || paperPageRevision != (Monitor?.ProfilePageRevision ?? 0)))
-            { RefreshProfilePaper(); newspaper.Refresh(Runtime); paperRevision = Runtime.Revision; }
+            if (newspaperRevision != Runtime.Revision)
+            { newspaper.Refresh(Runtime); newspaperRevision = Runtime.Revision; }
             if (pendingView != null && !views.IsTransitioning && !IsDateTransitioning && !IsVisitPresenting)
             {
                 ui.ShowContext(pendingView);
@@ -253,54 +249,32 @@ namespace Codetective.Gameplay
             if (!document.Item.IsHeld) Carry.TryPickup(document.Item);
             else ui.ShowDocument(document, index);
         }
-        private void InitializeProfilePaper()
+        private void InitializeProfileArchive()
         {
-            Transform anchor = profilePaperAnchor;
-            if (anchor == null)
+            if (profileArchiveStack == null) return;
+            ProfileArchiveTarget target = profileArchiveStack.GetComponent<ProfileArchiveTarget>();
+            if (target == null) target = profileArchiveStack.gameObject.AddComponent<ProfileArchiveTarget>();
+            target.Initialize(this);
+            if (profileArchiveStack.GetComponentsInChildren<Collider>(true).Length == 0)
             {
-                InspectionTarget target = inspection.GetTarget("profile");
-                if (target != null) anchor = target.transform;
+                Bounds bounds = LocalBounds(profileArchiveStack, profileArchiveStack.GetComponentsInChildren<Renderer>(true));
+                BoxCollider collider = profileArchiveStack.gameObject.AddComponent<BoxCollider>();
+                collider.center = bounds.center; collider.size = new Vector3(bounds.size.x, Mathf.Max(0.02f, bounds.size.y), bounds.size.z);
+                collider.isTrigger = true;
             }
-            var paper = new GameObject("PatientProfilePaper"); paper.transform.SetParent(transform, false);
-            Vector3 position = anchor != null ? anchor.position + Vector3.up * 0.008f : new Vector3(-0.76f, 0.918f, -2.312f);
-            foreach (Transform stack in profilePaperSupports)
-            {
-                if (stack == null) continue;
-                foreach (Renderer renderer in stack.GetComponentsInChildren<Renderer>())
-                    if (Vector2.Distance(new Vector2(renderer.bounds.center.x, renderer.bounds.center.z), new Vector2(position.x, position.z)) < 0.32f)
-                        position.y = Mathf.Max(position.y, renderer.bounds.max.y + 0.004f);
-            }
-            paper.transform.position = position;
-            HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("desk.profile", "인물 프로필", HeldItemUse.Profile, SelectedProfileId);
-            profileDocument = paper.AddComponent<PaperDocument>();
-            profileDocument.Initialize(item, Carry, views.ControlledCamera, font, new Vector2(0.27f, 0.35f)); Carry.Register(item);
-            profileDocument.AreaClicked += ReadPrintedArea;
-            profileDocument.PageChanged += index => Monitor?.SelectJournalPage(printedProfile, index);
-            RefreshProfilePaper();
         }
-        private void RefreshProfilePaper()
+        public bool CanOpenProfileArchive => presentationInitialized && IsSessionActive && CurrentView == "profile" && inspection != null &&
+            inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !IsViewTransitioning &&
+            !IsDateTransitioning && !IsVisitPresenting && Carry != null && Carry.HeldItem == null;
+        public void OpenProfileArchive()
         {
-            if (!Runtime.VisibleProfileIds.Contains(SelectedProfileId)) SelectedProfileId = Runtime.VisibleProfileIds.FirstOrDefault();
-            printedProfile = SelectedProfileId;
-            paperPageRevision = Monitor?.ProfilePageRevision ?? 0;
-            string label = (printedProfile != null ? Runtime.Entity(printedProfile)?.Label : null) ?? printedProfile ?? "미등록";
-            profileDocument.Item.Configure("desk.profile", label + " / 프로필", HeldItemUse.Profile, printedProfile);
-            if (printedProfile == null)
-            {
-                profileDocument.SetContent("인물 프로필", new[] { new PaperSection { title = "미등록", text = "열람 가능한 프로필이 없습니다." } });
-                return;
-            }
-            PersonProfile profile = Runtime.ProfileCard(printedProfile); Sprite portrait = Monitor?.PortraitFor(printedProfile);
-            int count = Math.Max(1, Runtime.NotesFor(printedProfile).Count());
-            PaperSection[] pages = Enumerable.Range(0, count).Select(index => new PaperSection { title = "상담 일지 " + (index + 1) + " / " + count,
-                profile = profile, portrait = portrait, text = Runtime.ProfileJournalText(printedProfile, index) }).ToArray();
-            profileDocument.SetPagedContent("인물 프로필 / " + label, pages, Monitor?.JournalPageFor(printedProfile) ?? 0);
+            if (CanOpenProfileArchive) ui.ShowProfileArchive();
         }
         private void RestoreStoredItems()
         {
             foreach (StoredItemState state in Runtime.StoredItems)
             {
-                HoldableItem item = state.itemId == newspaper.Item.Id ? newspaper.Item : state.itemId == profileDocument.Item.Id ? profileDocument.Item :
+                HoldableItem item = state.itemId == newspaper.Item.Id ? newspaper.Item :
                     coffeeItem != null && state.itemId == coffeeItem.Id ? coffeeItem : guestCoffeeItem != null && state.itemId == guestCoffeeItem.Id ? guestCoffeeItem : null;
                 ItemPlacementSurface surface = storageSurfaces.FirstOrDefault(s => s.Id == state.containerId);
                 if (item == null || surface == null) continue;
@@ -556,8 +530,7 @@ namespace Codetective.Gameplay
             StopAllCoroutines();
             if (sceneLights != null && initialLights != null) for (int i = 0; i < Math.Min(sceneLights.Length, initialLights.Length); i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;
-            if (Carry != null) { Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; Carry.PutDown(); }
-            if (profileDocument != null) Destroy(profileDocument.gameObject);
+            if (Carry != null) { Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; Carry.EndSession(); }
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.QuickSaveRequested = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.Transitions = null; inspection.NavigationBlocked = false; }
             MonitorPageHost host = Monitor;
             if (host != null) { host.WaitForAppointment = null; host.FinishConsultation = null; host.ClinicActionsAllowed = null; }
