@@ -31,11 +31,17 @@ namespace Codetective.Operations
             Field("Relationship", "category", "구분", DataKind.Text);
             Field("Place", "items", "물품목록", DataKind.Array, "Item[]", Datum.List());
             Field("Place", "people", "인물목록", DataKind.Array, "Person[]", Datum.List());
-            Field("Place", "connection", "연결된장소", DataKind.Place, "Place");
+            Field("Place", "connection", "연결된장소", DataKind.Array, "Place[]", Datum.List());
             Action("Place", "enter", "진입하기"); Action("Place", "enter", "진입하기", P("password", "Text")); Action("Place", "enter", "진입하기", P("key", "Physical"));
             Field("Event", "subjects", "관련대상", DataKind.Dictionary, "Dict<Physical,Relationship[]>", Datum.Dict());
             Field("Event", "photo", "현장사진", DataKind.Photo, "Photo"); Field("Event", "time", "발생시각", DataKind.Time, "Time");
             Field("Event", "place", "발생장소", DataKind.Place, "Place"); Field("Event", "content", "내용", DataKind.Text); Field("Event", "note", "비고", DataKind.Text);
+            Field("Event", "subevents", "세부사건", DataKind.Array, "Event[]", Datum.List());
+            Field("Statement", "speaker", "화자", DataKind.Person, "Person");
+            Field("Statement", "topic", "소재", DataKind.Entity, "Concept");
+            Field("Statement", "time", "진술시각", DataKind.Time, "Time");
+            Field("Statement", "content", "내용", DataKind.Text);
+            Field("Statement", "subjects", "관련대상", DataKind.Array, "Physical[]", Datum.List());
             Field("Item", "owner", "소유자", DataKind.Person, "Person");
             Action("Item", "disassemble", "분해"); Action("Item", "disassemble", "분해하기", P("tool", "Tool"));
             Action("Item", "combine", "조합하기", P("other", "Physical")); Action("Item", "combine", "조합하기", P("other", "Physical"), P("tool", "Tool"));
@@ -48,8 +54,13 @@ namespace Codetective.Operations
             Action("Person", "checkRelationship", "관계확인", P("other", "Physical")); Action("Person", "checkRelationship", "관계확인", P("first", "Physical"), P("second", "Physical"));
             Action("Person", "alibi", "알리바이", P("time", "Time")); Action("Person", "alibi", "알리바이", P("time", "Time"), P("witness", "Person"));
             Field("Organization", "representative", "대표자", DataKind.Person, "Person");
-            Field("Organization", "members", "구성원", DataKind.Dictionary, "Dict<Physical,Text>", Datum.Dict());
+            Field("Organization", "members", "구성원", DataKind.Dictionary, "Dict<Person,Text>", Datum.Dict());
             Field("Organization", "places", "장소목록", DataKind.Dictionary, "Dict<Place,Text>", Datum.Dict());
+            foreach (var pair in new[] { ("Entity", DataViewerKind.Generic), ("Concept", DataViewerKind.Concept), ("Physical", DataViewerKind.Item),
+                ("Person", DataViewerKind.Person), ("Place", DataViewerKind.Place), ("Item", DataViewerKind.Item), ("Tool", DataViewerKind.Tool),
+                ("Event", DataViewerKind.Event), ("Statement", DataViewerKind.Statement), ("Photo", DataViewerKind.Photo), ("Keyword", DataViewerKind.Keyword),
+                ("Organization", DataViewerKind.Organization), ("Time", DataViewerKind.Time), ("Relationship", DataViewerKind.Relationship) })
+                r.Require(pair.Item1).Viewer = new DataViewerDefinition { kind = pair.Item2 };
             r.Require("Thread").Operations.Add(new Operation { Code = "move", Names = Ko("이동"), Parameters = new[] { P("place", "Place") },
                 ReturnKind = DataKind.Task, Invoke = c => c.Runtime.DispatchAction(c.Target.Id, c.Runtime.Entity(c.Arguments[0].id), "enter") });
             r.Require("Thread").Operations.Add(new Operation { Code = "ask", Names = Ko("질문하기"), Parameters = new[] { P("person", "Person"), P("topic", "Keyword") },

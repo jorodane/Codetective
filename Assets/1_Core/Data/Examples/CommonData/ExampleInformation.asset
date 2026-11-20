@@ -1,0 +1,245 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: df9401a7a0324e4fac95644c8104f582
+    type: 3
+  m_Name: ExampleInformation
+  m_EditorClassIdentifier: ''
+  informationId: example_information
+  discoveries:
+  - target:
+      fileID: 11400000
+      guid: 95171f9abf5655b14e53061bb42272eb
+      type: 2
+    source: 초기 작전 자료
+    observeFields: 0
+    listEvidence: 1
+  - target:
+      fileID: 11400000
+      guid: b77e141b5e4b6cf5f67d65ded96b137f
+      type: 2
+    source: 초기 작전 자료
+    observeFields: 0
+    listEvidence: 1
+  - target:
+      fileID: 11400000
+      guid: 81294bc09f1eb4aaeea38cab4c69f235
+      type: 2
+    source: 초기 작전 자료
+    observeFields: 1
+    listEvidence: 1
+  - target:
+      fileID: 11400000
+      guid: 0952a9101c7a1484b321c32d49458a35
+      type: 2
+    source: 초기 작전 자료
+    observeFields: 1
+    listEvidence: 1
+  - target:
+      fileID: 11400000
+      guid: 95d33951110c43caa6ad7d1c73902e61
+      type: 2
+    source: 초기 작전 자료
+    observeFields: 1
+    listEvidence: 1
+  - target:
+      fileID: 11400000
+      guid: 49394ff5d82c13e3e9a7cbaa915d8c18
+      type: 2
+    source: 초기 작전 자료
+    observeFields: 1
+    listEvidence: 1
+  - target:
+      fileID: 11400000
+      guid: c4544c0f7a38ae816717d46cb68fcc40
+      type: 2
+    source: 초기 작전 자료
+    observeFields: 1
+    listEvidence: 1
+  entries:
+  - subject:
+      fileID: 11400000
+      guid: 95171f9abf5655b14e53061bb42272eb
+      type: 2
+    sourceObject:
+      fileID: 0
+    referenceValue:
+      fileID: 0
+    keyword:
+      fileID: 0
+    field: age
+    source: 초기 작전 자료
+    statement: ''
+    kind: 0
+    observedAt:
+      year: 0
+      month: 0
+      day: 0
+      hour: 0
+      minute: 0
+    aboutTime:
+      year: 0
+      month: 0
+      day: 0
+      hour: 0
+      minute: 0
+    readWorldField: 1
+    value:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+      collection:
+        nodes: []
+  - subject:
+      fileID: 11400000
+      guid: 95171f9abf5655b14e53061bb42272eb
+      type: 2
+    sourceObject:
+      fileID: 0
+    referenceValue:
+      fileID: 0
+    keyword:
+      fileID: 0
+    field: occupation
+    source: 초기 작전 자료
+    statement: ''
+    kind: 0
+    observedAt:
+      year: 0
+      month: 0
+      day: 0
+      hour: 0
+      minute: 0
+    aboutTime:
+      year: 0
+      month: 0
+      day: 0
+      hour: 0
+      minute: 0
+    readWorldField: 1
+    value:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+      collection:
+        nodes: []
+  - subject:
+      fileID: 11400000
+      guid: 95171f9abf5655b14e53061bb42272eb
+      type: 2
+    sourceObject:
+      fileID: 11400000
+      guid: b77e141b5e4b6cf5f67d65ded96b137f
+      type: 2
+    referenceValue:
+      fileID: 11400000
+      guid: c0a196a3fe36981dbad63482e6b0ade3
+      type: 2
+    keyword:
+      fileID: 0
+    field: currentPlace
+    source: Rachel 진술
+    statement: 행사장에서 Victor를 보았습니다.
+    kind: 1
+    observedAt:
+      year: 1994
+      month: 6
+      day: 2
+      hour: 14
+      minute: 32
+    aboutTime:
+      year: 0
+      month: 0
+      day: 0
+      hour: 0
+      minute: 0
+    readWorldField: 0
+    value:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+      collection:
+        nodes: []
+  - subject:
+      fileID: 11400000
+      guid: 95171f9abf5655b14e53061bb42272eb
+      type: 2
+    sourceObject:
+      fileID: 0
+    referenceValue:
+      fileID: 0
+    keyword:
+      fileID: 0
+    field: currentPlace
+    source: 최종 행사 기록
+    statement: Victor Hale / 개인 사정으로 불참
+    kind: 0
+    observedAt:
+      year: 1994
+      month: 6
+      day: 2
+      hour: 18
+      minute: 0
+    aboutTime:
+      year: 0
+      month: 0
+      day: 0
+      hour: 0
+      minute: 0
+    readWorldField: 0
+    value:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+      collection:
+        nodes: []
+  inferences:
+  - id: example_hypothesis
+    name: 참석 기준에 대한 가설
+    type: Concept
+    source: Kernel 추론
+    content: 공식 참석 기록이 실제 입장 여부와 다를 수 있다.
+    kind: 2
+  references:
+  - name: 피해자
+    target:
+      fileID: 11400000
+      guid: 95171f9abf5655b14e53061bb42272eb
+      type: 2
+    informationId: ''
+  - name: 참석여부
+    target:
+      fileID: 11400000
+      guid: c4544c0f7a38ae816717d46cb68fcc40
+      type: 2
+    informationId: ''
+  - name: 가설
+    target:
+      fileID: 0
+    informationId: example_hypothesis

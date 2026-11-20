@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 4513111be8c04d9fb65e9e9cb3f5f474
+    type: 3
+  m_Name: example_warehouse
+  m_EditorClassIdentifier: ''
+  viewer:
+    fileID: 0
+  reuseExisting: 0
+  instanceId: example_warehouse
+  displayName: 창고
+  schema:
+    fileID: 0
+  exposeRoot: 0
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields: []
+  functions: []
+  disabledVariables: []
+  disabledFunctions: []
+  initialValues: []
+  children: []
+  description: ''
+  features: []
+  portrait:
+    fileID: 0
+  history: []
+  relations: []
+  items: []
+  people: []
+  connections:
+  - fileID: 11400000
+    guid: c0a196a3fe36981dbad63482e6b0ade3
+    type: 2

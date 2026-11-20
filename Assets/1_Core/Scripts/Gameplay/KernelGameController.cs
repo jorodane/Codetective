@@ -125,6 +125,7 @@ namespace Codetective.Gameplay
             if (start != SessionStart.Title) Transitions.BeginLoadedSceneCovered();
             inspection.Transitions = Transitions;
             Monitor?.AttachProfiles(scenario != null ? scenario.profiles : null);
+            Monitor?.AttachWorldData(scenario != null ? scenario.worldData : null);
             inspection.AngleEntered += EnterView;
             inspection.OverviewEntered += LeaveView;
             initialized = true;

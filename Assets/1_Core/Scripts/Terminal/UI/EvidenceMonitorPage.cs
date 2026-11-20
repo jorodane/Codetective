@@ -20,6 +20,7 @@ namespace Codetective.Terminal
         private Button bind;
         private Button shortcut;
         private Image photo;
+        private DataViewerView viewer;
         private readonly List<Button> filters = new List<Button>();
         private readonly Dictionary<string, Button> entries = new Dictionary<string, Button>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> drafts = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -61,6 +62,7 @@ namespace Codetective.Terminal
             detail = MonitorWidgets.ScrollText(transform, font, new Vector2(472, -212), new Vector2(620, 382));
             photo = MonitorWidgets.Rect("EvidencePhoto", transform, new Vector2(472, -212), new Vector2(200, 250)).gameObject.AddComponent<Image>();
             photo.preserveAspect = true; photo.raycastTarget = false; photo.gameObject.AddComponent<CrtMeshEffect>(); photo.enabled = false;
+            viewer = gameObject.AddComponent<DataViewerView>(); viewer.Initialize(detail, photo, host.DataPhotoFor);
             MonitorWidgets.Label(transform, font, new Vector2(472, -612), new Vector2(110, 36), "참조 이름", 22);
             referenceName = SingleLine(new Vector2(590, -608), new Vector2(240, 40), "예: 단서1"); referenceName.characterLimit = 64;
             referenceName.onValueChanged.AddListener(text => { if (selectedId != null) drafts[selectedId] = text; });
@@ -122,15 +124,16 @@ namespace Codetective.Terminal
             foreach (var row in entries) { row.Value.image.color = row.Key == selectedId ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor; row.Value.interactable = Interactive; }
             for (int i = 0; i < filters.Count; i++) filters[i].image.color = i == filter ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor;
             EvidenceEntry selected = shown.FirstOrDefault(e => e.Id == selectedId);
-            Sprite image = selected != null ? host.EvidencePhotoFor(selected.Id) : null;
-            photo.sprite = image; photo.enabled = image != null;
+            string acquisition = selected == null ? "" : "확보: " + (selected.HasAcquiredTime ? "DAY " + selected.Day + " / " + KernelRuntime.TimeOfDay(selected.Minute) : "이전 기록 · 시각 미기록") +
+                "\n출처: " + selected.Source + "\n명령용 참조: " + (selected.References.Length == 0 ? "없음" : string.Join(", ", selected.References));
+            if (selected != null && runtime.Entity(selected.Id) != null) viewer.Show(runtime.ViewData(selected.Id), acquisition, host.EvidencePhotoFor(selected.Id));
+            else viewer.Clear(selected == null ? (all.Count == 0 ? "아직 확보한 자료가 없습니다.\n\n상담 단서, 신문 기사, 조사 결과와 전달받은 도구가 여기에 등록됩니다." : "조건에 맞는 자료가 없습니다.") :
+                selected.Name + "\n\n분류: " + runtime.TypeName(selected.Value) + "\n" + acquisition + "\n\n" + selected.Description);
+            bool hasImage = photo.enabled;
             RectTransform descriptionArea = (RectTransform)detail.transform.parent;
-            descriptionArea.anchoredPosition = new Vector2(image != null ? 690 : 472, -212);
-            descriptionArea.sizeDelta = new Vector2(image != null ? 402 : 620, 382);
+            descriptionArea.anchoredPosition = new Vector2(hasImage ? 690 : 472, -212);
+            descriptionArea.sizeDelta = new Vector2(hasImage ? 402 : 620, 382);
             bind.interactable = referenceName.interactable = selected != null && Interactive;
-            detail.text = selected == null ? (all.Count == 0 ? "아직 확보한 자료가 없습니다.\n\n상담 단서, 신문 기사, 조사 결과와 전달받은 도구가 여기에 등록됩니다." : "조건에 맞는 자료가 없습니다.") :
-                selected.Name + "\n\n분류: " + runtime.TypeName(selected.Value) + "\n확보: " + (selected.HasAcquiredTime ? "DAY " + selected.Day + " / " + KernelRuntime.TimeOfDay(selected.Minute) : "이전 기록 · 시각 미기록") +
-                "\n출처: " + selected.Source + "\n\n" + selected.Description + "\n\n명령용 참조: " + (selected.References.Length == 0 ? "없음" : string.Join(", ", selected.References));
         }
         private void BindSelected()
         {

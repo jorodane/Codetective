@@ -169,6 +169,7 @@ namespace Codetective.Operations
                 target = new Entity(value.id, value.label, schema);
                 target.SetValue("description", Datum.Text(value.text));
                 IndexEntity(target, new HashSet<Entity>());
+                knowledgeOnly.Add(target.Id);
             }
             return TagReference(value);
         }
@@ -226,6 +227,7 @@ namespace Codetective.Operations
                 if (entities.TryGetValue(saved.id, out Entity original))
                 {
                     entity.Access = original.Access;
+                    entity.Viewer = original.Viewer?.Copy();
                     entity.Operations.AddRange(original.Operations);
                 }
                 restored.Add(entity.Id, entity);
@@ -258,12 +260,14 @@ namespace Codetective.Operations
             foreach (EntitySnapshot saved in savedEntities)
             {
                 Entity entity = restored[saved.id];
+                if (saved.hasViewerOverride && saved.viewer != null) entity.Viewer = saved.viewer.Copy();
                 foreach (DataSlot value in saved.values ?? Array.Empty<DataSlot>())
                 {
                     VariableDefinition field = entity.GetVariableDefinition(value.name) ?? throw new CommandException("저장된 변수의 스키마가 없습니다: " + value.name);
                     Datum datum = value.value;
                     if (legacyKnowledge && field.Code == "age" && field.Kind == DataKind.Number && datum.kind == DataKind.Text)
                         datum = double.TryParse(datum.text, out double age) ? Datum.Number(age) : Datum.Empty;
+                    if (field.Code == "connection" && field.SchemaId == "Place[]" && datum.kind == DataKind.Place) datum = Datum.List(datum);
                     if (datum.kind != DataKind.Empty && !Schemas.Accepts(field.Kind, field.SchemaId, datum,
                         id => restored.TryGetValue(id, out Entity target) ? target : null)) throw new CommandException("저장된 변수의 자료형이 다릅니다: " + value.name);
                     entity.SetValue(field.Code, datum);

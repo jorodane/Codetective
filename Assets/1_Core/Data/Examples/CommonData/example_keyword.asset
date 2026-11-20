@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 18fa5397bf4a403b8b5d729f6fbffe30
+    type: 3
+  m_Name: example_keyword
+  m_EditorClassIdentifier: ''
+  viewer:
+    fileID: 0
+  reuseExisting: 0
+  instanceId: example_keyword
+  displayName: 참석 여부
+  schema:
+    fileID: 0
+  exposeRoot: 0
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields: []
+  functions: []
+  disabledVariables: []
+  disabledFunctions: []
+  initialValues: []
+  children: []
+  description: ''
+  features: []
+  topic:
+    fileID: 11400000
+    guid: c58aec111e78b491a9dd1d93d82011df
+    type: 2
+  relations: []

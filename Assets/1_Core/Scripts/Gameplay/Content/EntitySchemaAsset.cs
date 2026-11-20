@@ -9,6 +9,7 @@ namespace Codetective.Gameplay
     {
         public string schemaId;
         public string displayName;
+        public DataViewerAsset viewer;
         [Tooltip("Inherited fields, functions and access requirements remain available on this type.")]
         public EntitySchemaAsset parent;
         [Tooltip("Used when Parent is empty: Entity, Place, Person, Item, Document, etc.")]

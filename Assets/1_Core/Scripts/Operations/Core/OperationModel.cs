@@ -188,6 +188,9 @@ namespace Codetective.Operations
         public int version = 1;
         public int day;
         public double minute;
+        public GameDateTime calendarStart;
+        public string[] knowledgeOnlyIds;
+        public string[] occurredEventIds;
         public double suspicion;
         public double exposure;
         public double responseMinutes;
@@ -227,6 +230,8 @@ namespace Codetective.Operations
     [Serializable]
     public sealed class EntitySnapshot
     {
+        public DataViewerDefinition viewer;
+        public bool hasViewerOverride;
         public string id;
         public string label;
         public string schemaId;

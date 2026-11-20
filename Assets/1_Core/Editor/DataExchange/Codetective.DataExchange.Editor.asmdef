@@ -1,0 +1,6 @@
+{
+  "name": "Codetective.DataExchange.Editor",
+  "references": ["Codetective.Operations.Core", "Codetective.Operations.Authoring"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

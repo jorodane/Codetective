@@ -30,6 +30,7 @@ namespace Codetective.Operations
     /// <summary>A data type, separate from its instances and from containment between world objects.</summary>
     public sealed class EntitySchema
     {
+        public DataViewerDefinition Viewer;
         public string Id;
         public string Label;
         public DataKind Kind;

@@ -116,7 +116,7 @@ namespace Codetective.Operations
         {
             return new KernelSnapshot
             {
-                day = Day, minute = Minute, suspicion = Suspicion, exposure = Exposure,
+                day = Day, minute = Minute, calendarStart = GameDateTime.From(calendarStart), knowledgeOnlyIds = knowledgeOnly.ToArray(), occurredEventIds = occurredEvents.ToArray(), suspicion = Suspicion, exposure = Exposure,
                 responseMinutes = ResponseMinutes, consultationIndex = ConsultationIndex,
                 dayEnded = IsDayEnded, coffeeReceived = CoffeeReceived,
                 facts = Facts.ToArray(), authorities = Authorities.ToArray(), recordedClues = RecordedClues.ToArray(),
@@ -142,7 +142,7 @@ namespace Codetective.Operations
                     id = e.Id, label = e.Label, schemaId = e.Schema.Id, aliases = e.Aliases.ToArray(), names = e.Names.ToArray(),
                     rootNames = roots.Where(r => r.Value == e).Select(r => r.Key).ToArray(), values = e.CaptureValues(),
                     children = e.Children.Select(c => new EntityChildSnapshot { name = c.Key, id = c.Value.Id }).ToArray(),
-                    localVariables = e.CaptureLocalVariables(), localFunctions = e.CaptureLocalFunctions(),
+                    localVariables = e.CaptureLocalVariables(), localFunctions = e.CaptureLocalFunctions(), viewer = e.Viewer?.Copy(), hasViewerOverride = e.Viewer != null,
                     disabledVariables = e.CaptureDisabledVariables(), disabledFunctions = e.CaptureDisabledFunctions(), playerAccess = e.CapturePlayerAccess()
                 }).ToArray(),
                 agents = Threads.Select(a => new AgentSnapshot
@@ -187,6 +187,7 @@ namespace Codetective.Operations
                 }
                 restoredAgents.Add(agent);
             }
+            if (snapshot.calendarStart?.IsSpecified == true) calendarStart = snapshot.calendarStart.Value.Date;
             Day = snapshot.day; Minute = snapshot.minute; IsDayEnded = snapshot.dayEnded;
             RestoreStoryState(snapshot);
             RestoreEntities(snapshot.entities, snapshot.discoveries == null);

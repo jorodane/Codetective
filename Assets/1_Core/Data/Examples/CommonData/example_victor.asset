@@ -1,0 +1,111 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 2909949d4dd04b0ea89eaa71569a7e04
+    type: 3
+  m_Name: example_victor
+  m_EditorClassIdentifier: ''
+  viewer:
+    fileID: 11400000
+    guid: 2b88638680d09541e8a7fb46e6ed7869
+    type: 2
+  reuseExisting: 0
+  instanceId: example_victor
+  displayName: Victor Hale
+  schema:
+    fileID: 0
+  exposeRoot: 0
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields:
+  - code: currentPlace
+    label: 현재 위치
+    kind: 10
+    typeName: Place
+    referenceType:
+      fileID: 0
+    defaultValue:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+      collection:
+        nodes: []
+    writable: 0
+    overrides: 0
+    aliases: []
+    names: []
+    access:
+      playerAccess: 0
+      story:
+        triggersOn: []
+        triggersOff: []
+        quests: []
+      requiredFacts: []
+      requiredAuthorities: []
+      forbiddenFacts: []
+  functions: []
+  disabledVariables: []
+  disabledFunctions: []
+  initialValues:
+  - field: currentPlace
+    value:
+      kind: 0
+      id: ''
+      label: ''
+      text: ''
+      number: 0
+      schemaId: ''
+      collection:
+        nodes: []
+    reference:
+      fileID: 11400000
+      guid: 667acd2a741f36a676a7d0f08bcf20a4
+      type: 2
+  children: []
+  description: ''
+  features: []
+  portrait:
+    fileID: 11400000
+    guid: 233b87d601889f4f955cded22d840d5a
+    type: 2
+  history:
+  - fileID: 11400000
+    guid: 9e8faa8ac1cdab752ef887af15fce83e
+    type: 2
+  relations: []
+  gender: ''
+  occupation: Meridian Profile Services 대표
+  age: 48
+  inventory:
+  - fileID: 11400000
+    guid: 800b2430c9c3e9906f7d4abf48530965
+    type: 2
+  topics: []

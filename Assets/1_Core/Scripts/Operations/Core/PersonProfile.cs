@@ -58,8 +58,8 @@ namespace Codetective.Operations
                         text.Append(string.IsNullOrWhiteSpace(field.Label) ? field.NameFor(Language) : field.Label).Append(": ").Append(value).Append('\n');
                 }
             foreach (ObservationRecord report in Observations.Where(o => o.subjectId == profileId && !string.IsNullOrWhiteSpace(o.statement)))
-                text.Append("[관측 · ").Append(report.source).Append(" / DAY ").Append(report.observedDay).Append(" ").Append(TimeOfDay(report.observedMinute))
-                    .Append(" → 수신 DAY ").Append(report.receivedDay).Append(" ").Append(TimeOfDay(report.receivedMinute)).Append("]\n").Append(report.statement).Append("\n\n");
+                text.Append("[관측 · ").Append(report.source).Append(" / ").Append(report.observedAt?.ToString() ?? "DAY " + report.observedDay + " " + TimeOfDay(report.observedMinute))
+                    .Append(" → 수신 ").Append(report.receivedAt?.ToString() ?? "DAY " + report.receivedDay + " " + TimeOfDay(report.receivedMinute)).Append("]\n").Append(report.statement).Append("\n\n");
             foreach (ConsultationLine line in Consultation.Where(l => ProfileOf(l) == profileId && RecordedClues.Contains(l.fact)).GroupBy(l => l.fact).Select(g => g.First()))
                 if (!observations.Any(o => o.subjectId == profileId && o.statement == line.sentence))
                     text.Append("● ").Append(line.keyword).Append('\n').Append(line.sentence).Append("\n\n");

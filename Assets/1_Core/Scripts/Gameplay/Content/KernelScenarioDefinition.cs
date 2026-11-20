@@ -13,6 +13,7 @@ namespace Codetective.Gameplay
         public ConsultationLine[] consultation = Array.Empty<ConsultationLine>();
         public EntitySchemaAsset[] schemas = Array.Empty<EntitySchemaAsset>();
         public EntityInstanceAsset[] instances = Array.Empty<EntityInstanceAsset>();
+        public WorldDefinition worldData;
         public EntityDefinition[] additionalObjects = Array.Empty<EntityDefinition>();
         public StoryMailAsset[] mail = Array.Empty<StoryMailAsset>();
         public NewspaperArticleAsset[] newspaper = Array.Empty<NewspaperArticleAsset>();
@@ -28,15 +29,18 @@ namespace Codetective.Gameplay
         public KernelRuntime CreateRuntime()
         {
             KernelRuntime runtime = ClinicScenario.Create();
+            worldData?.ConfigureClock(runtime);
             runtime.Language = commandLanguage;
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
             profiles?.Validate();
             EntityInstanceAsset[] profileInstances = profiles != null ? profiles.All.Select(p => p.entity).Where(p => p != null).ToArray() : Array.Empty<EntityInstanceAsset>();
-            EntityAssetCompiler.Install(runtime, schemas, instances.Concat(profileInstances).Distinct().ToArray(), additionalObjects);
+            EntityAssetCompiler.Install(runtime, schemas.Concat(worldData != null ? worldData.schemas : Array.Empty<EntitySchemaAsset>()).Distinct().ToArray(),
+                instances.Concat(profileInstances).Concat(worldData != null ? worldData.Roots : Array.Empty<EntityInstanceAsset>()).Distinct().ToArray(), additionalObjects);
             profiles?.ApplyDescriptions(runtime);
             runtime.StoryStartFact = storyStartFact;
             runtime.ApplyStoryEffects(initialStoryState);
             runtime.RefreshInitialKnowledge();
+            worldData?.ApplyInformation(runtime);
             foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);
             runtime.DeliverNewspaper();
             foreach (ClinicDayPlanAsset item in clinicDays) if (item != null) runtime.RegisterClinicDay(item.plan);

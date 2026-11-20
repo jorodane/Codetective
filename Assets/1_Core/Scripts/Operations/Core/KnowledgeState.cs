@@ -15,18 +15,22 @@ namespace Codetective.Operations
         public string subjectId = "", keywordId = "", field = "", sourceId = "", source = "", statement = "";
         public int observedDay, receivedDay;
         public double observedMinute, receivedMinute;
+        public GameDateTime observedAt, receivedAt, aboutTime;
+        public InformationKind kind;
         public Datum value = Datum.Empty;
         public ObservationRecord Copy() => new ObservationRecord { number = number, subjectId = subjectId, keywordId = keywordId,
             field = field, sourceId = sourceId, source = source, statement = statement, observedDay = observedDay,
-            receivedDay = receivedDay, observedMinute = observedMinute, receivedMinute = receivedMinute, value = value.Copy() };
+            receivedDay = receivedDay, observedMinute = observedMinute, receivedMinute = receivedMinute, value = value.Copy(),
+            observedAt = observedAt?.Copy(), receivedAt = receivedAt?.Copy(), aboutTime = aboutTime?.Copy(), kind = kind };
     }
     [Serializable] public sealed class WorldEventRecord
     {
         public int number, day; public double minute;
+        public GameDateTime at;
         public string subjectId, field, description;
         public Datum before = Datum.Empty, after = Datum.Empty;
         public WorldEventRecord Copy() => new WorldEventRecord { number = number, day = day, minute = minute, subjectId = subjectId,
-            field = field, description = description, before = before.Copy(), after = after.Copy() };
+            field = field, description = description, before = before.Copy(), after = after.Copy(), at = at?.Copy() };
     }
     // K/S/F is authoring metadata; no player-facing API exposes this classification.
     public enum InformationRole { Unclassified, Key, Supporting, Flavor }
@@ -35,9 +39,12 @@ namespace Codetective.Operations
         public string subjectId = "", keywordId = "", field = "", sourceId = "", source = "", statement = "";
         public Datum value = Datum.Empty;
         public bool useCurrentField;
+        public GameDateTime observedAt, aboutTime;
+        public InformationKind kind;
         public InformationRole role;
         public ObservationDefinition Copy() => new ObservationDefinition { subjectId = subjectId, keywordId = keywordId, field = field,
-            sourceId = sourceId, source = source, statement = statement, value = value.Copy(), useCurrentField = useCurrentField, role = role };
+            sourceId = sourceId, source = source, statement = statement, value = value.Copy(), useCurrentField = useCurrentField, role = role,
+            observedAt = observedAt?.Copy(), aboutTime = aboutTime?.Copy(), kind = kind };
     }
 
     public sealed partial class KernelRuntime
@@ -57,7 +64,7 @@ namespace Codetective.Operations
             else { agent.KnowledgeFlags.UnionWith(flags); agent.GrantedAuthorities.UnionWith(authorities); }
         }
         public IReadOnlyList<DiscoveryRecord> Discoveries => discoveries.Values.Where(d => Entity(d.entityId) == null || IsPlayerVisible(Entity(d.entityId))).Select(d => d.Copy()).ToArray();
-        public IReadOnlyList<ObservationRecord> Observations => observations.Where(o => Entity(o.subjectId) == null || IsPlayerVisible(Entity(o.subjectId))).Select(o => o.Copy()).ToArray();
+        public IReadOnlyList<ObservationRecord> Observations => observations.Where(ObservationVisible).Select(o => o.Copy()).ToArray();
         /// <summary>Designer/world API. The terminal never exposes undiscovered truth or this event history.</summary>
         public IReadOnlyList<WorldEventRecord> WorldHistory => worldEvents.Select(e => e.Copy()).ToArray();
         public bool IsDiscovered(string id) => id != null && discoveries.ContainsKey(id);
@@ -96,6 +103,9 @@ namespace Codetective.Operations
         public ObservationRecord Observe(ObservationDefinition definition, int observedDay = 0, double observedMinute = -1)
         {
             if (definition == null) throw new CommandException("관측 정보가 비어 있습니다.");
+            if (definition.value == null) throw new CommandException("관측 값이 비어 있습니다. 빈 데이터는 Datum.Empty로 지정하세요.");
+            definition = definition.Copy();
+            if (!Enum.IsDefined(typeof(InformationKind), definition.kind)) throw new CommandException("정보 구분이 유효하지 않습니다.");
             string subject = definition.subjectId ?? "";
             Entity target = Entity(subject);
             if (subject.Length > 0 && target == null) throw new CommandException("관측 대상이 세계에 없습니다: " + subject);
@@ -103,12 +113,16 @@ namespace Codetective.Operations
                 throw new CommandException("관측할 세계 변수가 없습니다: " + definition.field);
             int day = observedDay == 0 ? Day : observedDay;
             double minute = observedMinute < 0 ? Minute : observedMinute;
-            if (day < 1 || day > Day || minute < 0 || minute > 1440 || double.IsNaN(minute) || double.IsInfinity(minute) || day == Day && minute > Minute)
+            if (definition.observedAt != null)
+            { DateTime absolute = definition.observedAt.Value; day = (absolute.Date - calendarStart).Days + 1; minute = absolute.TimeOfDay.TotalMinutes; }
+            if ((day < 1 && definition.observedAt == null) || day > Day || minute < 0 || minute > 1440 || double.IsNaN(minute) || double.IsInfinity(minute) || day == Day && minute > Minute)
                 throw new CommandException("관측 시각이 유효하지 않습니다.");
+            if (definition.aboutTime != null) _ = definition.aboutTime.Value;
             var record = new ObservationRecord { number = nextObservation++, subjectId = subject, keywordId = definition.keywordId ?? "",
                 field = definition.field ?? "", sourceId = definition.sourceId ?? "", source = definition.source ?? "", statement = definition.statement ?? "",
                 value = definition.useCurrentField ? target.GetValue(definition.field) : definition.value.Copy(),
-                observedDay = day, observedMinute = minute, receivedDay = Day, receivedMinute = Minute };
+                observedDay = day, observedMinute = minute, receivedDay = Day, receivedMinute = Minute,
+                observedAt = definition.observedAt?.Copy() ?? DateAt(day, minute), receivedAt = CurrentTime, aboutTime = definition.aboutTime?.Copy(), kind = definition.kind };
             ThreadAgent agent = string.IsNullOrEmpty(executingAgent) ? null : Agent(executingAgent);
             if (agent != null) agent.Observations.Add(record);
             else PublishObservation(record);
@@ -116,13 +130,14 @@ namespace Codetective.Operations
         }
         private void PublishObservation(ObservationRecord record)
         {
-            record = record.Copy(); record.receivedDay = Day; record.receivedMinute = Minute;
+            record = record.Copy(); record.receivedDay = Day; record.receivedMinute = Minute; record.receivedAt = CurrentTime;
             if (!string.IsNullOrEmpty(record.subjectId) && !IsDiscovered(record.subjectId)) Discover(record.subjectId, record.source);
             DiscoverReferences(record.value, record.source);
             observations.Add(record); Revision++; NarrativeUpdated();
             if (!string.IsNullOrWhiteSpace(record.statement))
                 CollectEvidence(Datum.Ref(DataKind.Statement, "observation_" + record.number, record.source + " / 관측 " + record.number,
-                    record.statement + "\n관측 DAY " + record.observedDay + " " + TimeOfDay(record.observedMinute) + " / 수신 DAY " + record.receivedDay + " " + TimeOfDay(record.receivedMinute)), record.source);
+                    record.statement + "\n관측 " + (record.observedAt?.ToString() ?? "DAY " + record.observedDay + " " + TimeOfDay(record.observedMinute)) +
+                    " / 수신 " + (record.receivedAt?.ToString() ?? "DAY " + record.receivedDay + " " + TimeOfDay(record.receivedMinute))), record.source);
         }
         private void DiscoverReferences(Datum value, string source)
         {
@@ -134,7 +149,7 @@ namespace Codetective.Operations
         {
             foreach (var group in observations.Where(o => o.subjectId == parent.Id && o.field.StartsWith("$child:", StringComparison.Ordinal)).GroupBy(o => o.field))
             {
-                ObservationRecord record = group.OrderByDescending(o => o.observedDay).ThenByDescending(o => o.observedMinute).ThenByDescending(o => o.number).First();
+                ObservationRecord record = group.OrderByDescending(ObservationOrder).ThenByDescending(o => o.number).First();
                 Entity child = record.value.CanReferenceEntity ? Entity(record.value.id) : null;
                 if (child != null) yield return new KeyValuePair<string, Entity>(group.Key.Substring(7), child);
             }
@@ -153,7 +168,7 @@ namespace Codetective.Operations
             VariableDefinition definition = entity.GetVariableDefinition(field);
             if (definition == null || VariableDenial(entity, definition, null) != null) return Datum.Empty;
             ObservationRecord last = observations.Where(o => o.subjectId == subjectId && o.field == definition.Code)
-                .OrderByDescending(o => o.observedDay).ThenByDescending(o => o.observedMinute).ThenByDescending(o => o.number).FirstOrDefault();
+                .OrderByDescending(ObservationOrder).ThenByDescending(o => o.number).FirstOrDefault();
             return last != null && IsPlayerVisible(last.value) ? last.value.Copy() : Datum.Empty;
         }
         private Datum ReadPlayerField(Entity entity, VariableDefinition field)
@@ -161,14 +176,15 @@ namespace Codetective.Operations
             if (!string.IsNullOrEmpty(executingAgent)) return entity.GetValue(field.Code);
             if (!observations.Any(o => o.subjectId == entity.Id && o.field == field.Code)) throw new CommandException("아직 보고받지 않은 정보입니다: " + field.Code);
             ObservationRecord last = observations.Where(o => o.subjectId == entity.Id && o.field == field.Code)
-                .OrderByDescending(o => o.observedDay).ThenByDescending(o => o.observedMinute).ThenByDescending(o => o.number).First();
+                .OrderByDescending(ObservationOrder).ThenByDescending(o => o.number).First();
             if (!IsPlayerVisible(last.value)) throw new CommandException("현재 제공되지 않는 참조 정보입니다.");
             return LastKnownValue(entity.Id, field.Code);
         }
         private void RecordWorldChange(Entity entity, string field, Datum before, Datum after)
         {
+            if (knowledgeOnly.Contains(entity.Id)) return;
             worldEvents.Add(new WorldEventRecord { number = nextWorldEvent++, day = Day, minute = Minute, subjectId = entity.Id,
-                field = field, before = before.Copy(), after = after.Copy(), description = "세계 상태 변경" });
+                field = field, before = before.Copy(), after = after.Copy(), description = "세계 상태 변경", at = CurrentTime });
             if (invokingAction) Observe(new ObservationDefinition { subjectId = entity.Id, field = field, value = after.Copy(), source = executingAgent ?? "Kernel 명령" });
         }
         private void DeliverAgentKnowledge(ThreadAgent agent)
@@ -187,7 +203,15 @@ namespace Codetective.Operations
         }
         private void RestoreKnowledge(KernelSnapshot snapshot)
         {
-            discoveries.Clear(); observations.Clear(); worldEvents.Clear(); nextObservation = nextWorldEvent = 1;
+            discoveries.Clear(); observations.Clear(); worldEvents.Clear(); knowledgeOnly.Clear(); nextObservation = nextWorldEvent = 1;
+            foreach (string id in snapshot.knowledgeOnlyIds ?? Array.Empty<string>())
+            { if (Entity(id) == null) throw new CommandException("저장된 독립 정보가 없습니다: " + id); knowledgeOnly.Add(id); }
+            if (snapshot.occurredEventIds != null)
+            {
+                occurredEvents.Clear();
+                foreach (string id in snapshot.occurredEventIds)
+                { if (World.Find(id)?.Schema.IsA(Schemas.Require("Event")) != true || !occurredEvents.Add(id)) throw new CommandException("저장된 실제 사건이 유효하지 않습니다: " + id); }
+            }
             if (snapshot.discoveries == null)
             {
                 // Saves authored before separate knowledge retain their previous public information.
@@ -199,12 +223,19 @@ namespace Codetective.Operations
                 if (Entity(item.entityId) == null || discoveries.ContainsKey(item.entityId)) throw new CommandException("저장된 발견 대상이 유효하지 않습니다.");
                 discoveries.Add(item.entityId, item.Copy());
             }
-            foreach (ObservationRecord item in snapshot.observations ?? Array.Empty<ObservationRecord>())
+            foreach (ObservationRecord saved in snapshot.observations ?? Array.Empty<ObservationRecord>())
             {
-                if (item.number < 1 || observations.Any(o => o.number == item.number) || item.observedDay < 1 || item.receivedDay > Day ||
-                    item.observedDay > item.receivedDay || item.value == null || !string.IsNullOrEmpty(item.subjectId) && Entity(item.subjectId) == null)
+                ObservationRecord item = saved?.Copy() ?? throw new CommandException("저장된 관측 정보가 비어 있습니다.");
+                if (item.number < 1 || observations.Any(o => o.number == item.number) || item.observedDay < 1 && item.observedAt == null || item.receivedDay < 1 || item.receivedDay > Day ||
+                    item.observedDay > item.receivedDay || !ValidRecordMinute(item.observedMinute) || !ValidRecordMinute(item.receivedMinute) ||
+                    item.receivedDay == Day && item.receivedMinute > Minute || !Enum.IsDefined(typeof(InformationKind), item.kind) || item.value == null || !string.IsNullOrEmpty(item.subjectId) && Entity(item.subjectId) == null)
                     throw new CommandException("저장된 관측 정보가 유효하지 않습니다.");
-                observations.Add(item.Copy()); nextObservation = Math.Max(nextObservation, item.number + 1);
+                if (item.observedAt != null && item.observedAt.Value > (item.receivedAt ?? DateAt(item.receivedDay, item.receivedMinute)).Value)
+                    throw new CommandException("관측 시각이 수신 시각보다 늦습니다.");
+                ObservationRecord record = item.Copy();
+                if (record.field == "connection" && Entity(record.subjectId)?.GetVariableDefinition("connection")?.SchemaId == "Place[]" && record.value.kind == DataKind.Place)
+                    record.value = Datum.List(record.value);
+                observations.Add(record); nextObservation = Math.Max(nextObservation, item.number + 1);
             }
             foreach (WorldEventRecord item in snapshot.worldEvents ?? Array.Empty<WorldEventRecord>())
             { worldEvents.Add(item.Copy()); nextWorldEvent = Math.Max(nextWorldEvent, item.number + 1); }
@@ -214,5 +245,6 @@ namespace Codetective.Operations
             foreach (DiscoveryRecord initial in scenarioDiscoveryDefaults.Where(d => !previouslyExisting.Contains(d.entityId) && !IsDiscovered(d.entityId)))
                 Discover(initial.entityId, "초기 작전망", true);
         }
+        private static bool ValidRecordMinute(double value) => !double.IsNaN(value) && !double.IsInfinity(value) && value >= 0 && value <= 1440;
     }
 }

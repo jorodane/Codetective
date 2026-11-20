@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 574fb5c8af9444338d7b397c96703550
+    type: 3
+  m_Name: example_relation
+  m_EditorClassIdentifier: ''
+  viewer:
+    fileID: 0
+  reuseExisting: 0
+  instanceId: example_relation
+  displayName: 명찰 전달
+  schema:
+    fileID: 0
+  exposeRoot: 0
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields: []
+  functions: []
+  disabledVariables: []
+  disabledFunctions: []
+  initialValues: []
+  children: []
+  category: 목격
+  description: 명찰을 직접 전달했다.

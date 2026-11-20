@@ -16,12 +16,20 @@ namespace Codetective.Gameplay
         private readonly HashSet<EntityDefinition> legacyVisiting = new HashSet<EntityDefinition>();
 
         private EntityAssetCompiler(KernelRuntime runtime) { this.runtime = runtime; }
+        public static EntityInstanceAsset[] ReferencedInstances(EntitySchemaAsset[] schemas, EntityInstanceAsset[] instances)
+        {
+            var compiler = new EntityAssetCompiler(null);
+            foreach (EntitySchemaAsset schema in schemas ?? Array.Empty<EntitySchemaAsset>()) compiler.Collect(schema);
+            foreach (EntityInstanceAsset instance in instances ?? Array.Empty<EntityInstanceAsset>()) compiler.Collect(instance);
+            return compiler.objects.ToArray();
+        }
         public static void Install(KernelRuntime runtime, EntitySchemaAsset[] schemas, EntityInstanceAsset[] instances,
             EntityDefinition[] legacyObjects = null)
         {
             var compiler = new EntityAssetCompiler(runtime);
             foreach (EntitySchemaAsset schema in schemas ?? Array.Empty<EntitySchemaAsset>()) compiler.Collect(schema);
             foreach (EntityInstanceAsset instance in instances ?? Array.Empty<EntityInstanceAsset>()) compiler.Collect(instance);
+            if (compiler.objects.GroupBy(a => a.instanceId, StringComparer.Ordinal).Any(g => g.Count() > 1)) throw new CommandException("자료 에셋의 인스턴스 ID가 중복됩니다.");
             foreach (EntitySchemaAsset schema in compiler.types) compiler.Declare(schema);
             foreach (EntitySchemaAsset schema in compiler.types) compiler.Fields(schema);
             foreach (EntitySchemaAsset schema in compiler.types)
@@ -30,9 +38,14 @@ namespace Codetective.Gameplay
             // Declare all identities before filling references, including cycles between two instances.
             foreach (EntityInstanceAsset asset in compiler.objects)
             {
-                if (asset.schema == null) throw new CommandException("인스턴스 스키마가 없습니다: " + asset.name);
-                Entity entity = runtime.CreateInstance(asset.schema.schemaId, asset.instanceId, asset.displayName, false);
+                if (string.IsNullOrEmpty(asset.SchemaId)) throw new CommandException("인스턴스 스키마가 없습니다: " + asset.name);
+                Entity entity = runtime.Entity(asset.instanceId);
+                if (entity == null) entity = runtime.CreateInstance(asset.SchemaId, asset.instanceId, string.IsNullOrWhiteSpace(asset.displayName) ? asset.name : asset.displayName, false);
+                else if (!asset.reuseExisting || !entity.Schema.IsA(runtime.Schemas.Require(asset.SchemaId))) throw new CommandException("인스턴스 ID가 중복되거나 재사용 자료형이 다릅니다: " + asset.instanceId);
+                if (!string.IsNullOrEmpty(asset.BuiltinSchemaId) && !entity.Schema.IsA(runtime.Schemas.Require(asset.BuiltinSchemaId))) throw new CommandException("에셋의 기본 자료형과 스키마가 다릅니다: " + asset.instanceId);
+                entity.Label = string.IsNullOrWhiteSpace(asset.displayName) ? asset.name : asset.displayName;
                 entity.Aliases = asset.aliases; entity.Names = asset.names; entity.Access = asset.access.Compile();
+                entity.Viewer = asset.viewer != null ? asset.viewer.Compile() : null;
             }
             foreach (EntityInstanceAsset asset in compiler.objects)
             {
@@ -43,7 +56,7 @@ namespace Codetective.Gameplay
             {
                 Entity entity = runtime.Entity(asset.instanceId);
                 foreach (ActionDefinition action in asset.functions) entity.AddFunction(compiler.Function(action, entity.GetVariableDefinition));
-                foreach (InitialFieldDefinition initial in asset.initialValues) entity.SetValue(initial.field, compiler.Value(initial.value, initial.reference));
+                foreach (InitialFieldDefinition initial in asset.Values) entity.SetValue(initial.field, compiler.Value(initial.value, initial.reference));
                 foreach (ChildInstanceDefinition child in asset.children)
                 {
                     if (child.instance == null || !CommandParser.IsIdentifier(child.name)) throw new CommandException("하위 개체 연결이 유효하지 않습니다: " + asset.instanceId);
@@ -73,7 +86,8 @@ namespace Codetective.Gameplay
             Collect(asset.schema);
             foreach (FieldDefinition field in asset.fields) Collect(field.referenceType);
             foreach (ActionDefinition function in asset.functions) Collect(function);
-            foreach (InitialFieldDefinition initial in asset.initialValues) Collect(initial.reference);
+            foreach (InitialFieldDefinition initial in asset.Values) Collect(initial.reference);
+            foreach (EntityInstanceAsset dependency in asset.Dependencies) Collect(dependency);
             foreach (ChildInstanceDefinition child in asset.children) Collect(child.instance);
         }
         private EntitySchema Declare(EntitySchemaAsset asset)
@@ -82,7 +96,7 @@ namespace Codetective.Gameplay
             if (!visiting.Add(asset) || visiting.Count > 64) throw new CommandException("스키마 부모에 순환이 있거나 깊이(64)를 초과했습니다: " + asset.name);
             EntitySchema parent = asset.parent != null ? Declare(asset.parent) : runtime.Schemas.Require(asset.builtinParent);
             var schema = new EntitySchema(asset.schemaId, asset.displayName, asset.inheritKind ? parent.Kind : asset.kind, parent)
-            { Aliases = asset.aliases, Names = asset.names, Access = asset.access.Compile() };
+            { Aliases = asset.aliases, Names = asset.names, Access = asset.access.Compile(), Viewer = asset.viewer != null ? asset.viewer.Compile() : null };
             runtime.Schemas.Register(schema);
             compiled.Add(asset, schema); visiting.Remove(asset);
             return schema;
@@ -112,7 +126,7 @@ namespace Codetective.Gameplay
                 throw new CommandException("반환 변수가 없습니다: " + action.returnField);
             var operation = new OperationDefinition { Code = action.code, Label = action.label, Aliases = action.aliases, Names = action.names,
                 ReturnKind = returned?.Kind ?? (action.returnInstance != null ? DataKind.Entity : action.result.kind),
-                ReturnSchemaId = returned?.SchemaId ?? (action.returnInstance != null ? action.returnInstance.schema.schemaId : ""),
+                ReturnSchemaId = returned?.SchemaId ?? (action.returnInstance != null ? action.returnInstance.SchemaId : ""),
                 Property = action.property, Overrides = action.overrides,
                 Parameters = Array.ConvertAll(action.parameters, p => new OperationInput { Name = p.name,
                     Kind = string.IsNullOrEmpty(p.typeName) ? p.kind : DataTypes.Parameter(p.name, p.typeName).Kind,
@@ -127,7 +141,7 @@ namespace Codetective.Gameplay
                 FieldWrites = action.fieldWrites.Select(w => new OperationFieldWrite { Field = w.field, ArgumentIndex = w.argumentIndex,
                     TargetArgumentIndex = w.useArgumentTarget ? w.targetArgumentIndex : -1,
                     Value = w.reference != null ? new Datum { kind = DataKind.Entity, id = w.reference.instanceId, label = w.reference.displayName,
-                        schemaId = w.reference.schema != null ? w.reference.schema.schemaId : "" } : w.value.Copy() }).ToArray() };
+                        schemaId = w.reference.SchemaId } : w.value.Copy() }).ToArray() };
             foreach (FieldWriteDefinition write in action.fieldWrites)
             {
                 if (write.useArgumentTarget) continue;

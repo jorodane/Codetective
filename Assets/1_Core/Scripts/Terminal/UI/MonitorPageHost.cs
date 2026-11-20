@@ -34,6 +34,8 @@ namespace Codetective.Terminal
         private KernelRuntime runtime;
         private bool initialized;
         private ProfileCatalog profiles;
+        private readonly Dictionary<string, PhotoAsset> dataPhotos = new Dictionary<string, PhotoAsset>(StringComparer.Ordinal);
+        private readonly HashSet<string> worldDataIds = new HashSet<string>(StringComparer.Ordinal);
         private float nextMailRefresh;
         private Image headerBackground;
         private Color headingColor, mailBannerColor;
@@ -62,9 +64,22 @@ namespace Codetective.Terminal
             journalPages[profileId] = page; ProfilePageRevision++;
         }
         public void AttachProfiles(ProfileCatalog value) { profiles = value; ProfilePageRevision++; }
+        public void AttachWorldData(WorldDefinition value)
+        {
+            dataPhotos.Clear(); worldDataIds.Clear();
+            if (value != null) foreach (EntityInstanceAsset asset in value.AllObjects)
+            { worldDataIds.Add(asset.instanceId); if (asset is PhotoAsset photo) dataPhotos.Add(asset.instanceId, photo); }
+            ProfilePageRevision++;
+        }
+        public Sprite DataPhotoFor(string id)
+        {
+            if (runtime == null || string.IsNullOrEmpty(id) || !dataPhotos.TryGetValue(id, out PhotoAsset photo) || runtime.LastKnownValue(id, "image").text != id) return null;
+            return photo.image;
+        }
         public Sprite PortraitFor(string profileId)
         {
             if (runtime == null || !runtime.VisibleProfileIds.Contains(profileId)) return null;
+            if (worldDataIds.Contains(profileId)) return DataPhotoFor(runtime.ViewData(profileId).PhotoId);
             CharacterProfileAsset profile = profiles != null ? profiles.Character(profileId) : null;
             if (profile != null)
             {
@@ -79,6 +94,7 @@ namespace Codetective.Terminal
         public Sprite EvidencePhotoFor(string id)
         {
             if (runtime == null || !runtime.Evidence.Any(e => e.Id == id)) return null;
+            if (worldDataIds.Contains(id)) return DataPhotoFor(runtime.ViewData(id).PhotoId);
             VisualProfileAsset profile = profiles != null ? profiles.Find(id) : null;
             return profile != null && (profile.availability == null || profile.availability.Matches(runtime)) ? profile.photo : null;
         }

@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 2909949d4dd04b0ea89eaa71569a7e04
+    type: 3
+  m_Name: example_rachel
+  m_EditorClassIdentifier: ''
+  viewer:
+    fileID: 0
+  reuseExisting: 0
+  instanceId: example_rachel
+  displayName: Rachel Kim
+  schema:
+    fileID: 0
+  exposeRoot: 0
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields: []
+  functions: []
+  disabledVariables: []
+  disabledFunctions: []
+  initialValues: []
+  children: []
+  description: ''
+  features: []
+  portrait:
+    fileID: 0
+  history: []
+  relations:
+  - target:
+      fileID: 11400000
+      guid: 95171f9abf5655b14e53061bb42272eb
+      type: 2
+    relations:
+    - fileID: 11400000
+      guid: 720d8f544df4da2343ae5b3e5b559435
+      type: 2
+  gender: ''
+  occupation: 행사 담당 직원
+  age: 0
+  inventory: []
+  topics:
+  - fileID: 11400000
+    guid: c4544c0f7a38ae816717d46cb68fcc40
+    type: 2

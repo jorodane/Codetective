@@ -41,7 +41,7 @@ namespace Codetective.EditorTools
         }
     }
 
-    [CustomEditor(typeof(EntityInstanceAsset))]
+    [CustomEditor(typeof(EntityInstanceAsset), true)]
     public sealed class EntityInstanceAssetEditor : global::UnityEditor.Editor
     {
         public override void OnInspectorGUI()

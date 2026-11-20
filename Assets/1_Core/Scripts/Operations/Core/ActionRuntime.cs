@@ -68,10 +68,13 @@ namespace Codetective.Operations
             Report(threadId + " / 명령 송신: " + agent.Message);
             return Datum.Ref(DataKind.Task, threadId, agent.Message);
         }
-        public void RecordIncident(string subjectId, string description)
+        public void RecordIncident(string subjectId, string description, GameDateTime at = null)
         {
             if (Entity(subjectId) == null || string.IsNullOrWhiteSpace(description)) throw new CommandException("세계 사건의 대상/내용이 유효하지 않습니다.");
-            worldEvents.Add(new WorldEventRecord { number = nextWorldEvent++, day = Day, minute = Minute, subjectId = subjectId, field = "", description = description });
+            GameDateTime time = at?.Copy() ?? CurrentTime;
+            if (time.Value > CurrentTime.Value) throw new CommandException("미래의 사건을 발생 이력에 기록할 수 없습니다.");
+            worldEvents.Add(new WorldEventRecord { number = nextWorldEvent++, day = at?.IsSpecified == true ? (time.Value.Date - calendarStart).Days + 1 : Day,
+                minute = at?.IsSpecified == true ? time.Value.TimeOfDay.TotalMinutes : Minute, at = time, subjectId = subjectId, field = "", description = description });
             Revision++;
         }
         internal void ApplyReports(Invocation invocation, ObservationDefinition[] reports, string[] discovered, string[] incidents)

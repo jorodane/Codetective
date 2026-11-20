@@ -1,12 +1,20 @@
 using System;
+using System.Collections.Generic;
 using Codetective.Operations;
 using UnityEngine;
 
 namespace Codetective.Gameplay
 {
     [CreateAssetMenu(menuName = "Codetective/Operations/Entity Instance", fileName = "EntityInstance")]
-    public sealed class EntityInstanceAsset : ScriptableObject
+    public class EntityInstanceAsset : ScriptableObject
     {
+        public virtual string BuiltinSchemaId => "";
+        public string SchemaId => schema != null ? schema.schemaId : BuiltinSchemaId;
+        public virtual IEnumerable<InitialFieldDefinition> Values => initialValues;
+        public virtual IEnumerable<EntityInstanceAsset> Dependencies => Array.Empty<EntityInstanceAsset>();
+        public DataViewerAsset viewer;
+        [Tooltip("Explicitly customize an existing built-in instance instead of creating another identity.")]
+        public bool reuseExisting;
         [Tooltip("Stable world identity. Reference aliases and save files use this ID.")]
         public string instanceId;
         public string displayName;

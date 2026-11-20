@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: 4a1a5e3ce87e4809bc2aefd3e71c7135
+    type: 3
+  m_Name: example_statement
+  m_EditorClassIdentifier: ''
+  viewer:
+    fileID: 0
+  reuseExisting: 0
+  instanceId: example_statement
+  displayName: Rachel의 진술
+  schema:
+    fileID: 0
+  exposeRoot: 0
+  informationVersion: 2
+  initiallyKnown: 0
+  aliases: []
+  names: []
+  access:
+    playerAccess: 0
+    story:
+      triggersOn: []
+      triggersOff: []
+      quests: []
+    requiredFacts: []
+    requiredAuthorities: []
+    forbiddenFacts: []
+  fields: []
+  functions: []
+  disabledVariables: []
+  disabledFunctions: []
+  initialValues: []
+  children: []
+  speaker:
+    fileID: 11400000
+    guid: b77e141b5e4b6cf5f67d65ded96b137f
+    type: 2
+  topic:
+    fileID: 11400000
+    guid: c58aec111e78b491a9dd1d93d82011df
+    type: 2
+  spokenAt:
+    fileID: 11400000
+    guid: 0952a9101c7a1484b321c32d49458a35
+    type: 2
+  content: 제가 Hale 대표님께 직접 명찰을 전달했어요.
+  subjects:
+  - fileID: 11400000
+    guid: 95171f9abf5655b14e53061bb42272eb
+    type: 2
+  - fileID: 11400000
+    guid: c0a196a3fe36981dbad63482e6b0ade3
+    type: 2
