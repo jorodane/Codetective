@@ -114,6 +114,7 @@ namespace Codetective.Operations
         }
         private Datum Invoke(Entity target, Operation operation, Datum[] arguments, string agent)
         {
+            if (terminalCommandTrace != null && string.IsNullOrEmpty(agent)) terminalCommandTrace.actions.Add(new TerminalActionProof { targetId = target.Id, operation = operation.Code, arguments = arguments.Length });
             bool fieldAction = operation.DispatchToThread;
             if (fieldAction && string.IsNullOrEmpty(agent) && !DryRun)
             {
@@ -190,6 +191,7 @@ namespace Codetective.Operations
             foreach (EntitySchema schema in Schemas.All) registry.Register(schema);
             var copy = new KernelRuntime(registry) { DryRun = true, Language = Language, StoryStartFact = StoryStartFact };
             Texts.CopyTo(copy.Texts); copy.DisplayLanguage = DisplayLanguage;
+            foreach (TerminalConversationDefinition definition in terminalConversations.Values) copy.RegisterTerminalConversation(definition);
             foreach (StoryMail message in mail.Values) copy.mail.Add(message.id, message.Copy());
             foreach (var entry in worldSchedule) copy.worldSchedule.Add(entry.Key, entry.Value.Copy());
             foreach (NewsArticle article in news.Values) copy.RegisterNews(article);

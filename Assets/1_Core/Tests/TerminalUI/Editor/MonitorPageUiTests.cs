@@ -38,6 +38,19 @@ namespace Codetective.Terminal.Tests.UI
         }
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
         [Test]
+        public void ReturningFromAssignmentMailStartsDialogueAndBlocksOnlyTheCommandInput()
+        {
+            var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
+            Assert.That(scenario, Is.Not.Null); KernelRuntime r = scenario.CreateRuntime(); terminal.AttachRuntime(r); terminal.SetInteractionEnabled(true);
+            r.ReadMail("government-intro"); host.ShowPage("kernel");
+            Assert.That(r.TerminalInputLocked, Is.True); Assert.That(input.interactable, Is.False); Assert.That(input.readOnly, Is.True);
+            Assert.That(terminal.InteractionEnabled, Is.True); Assert.That(host.TryNavigate("mail"), Is.True);
+            host.ShowPage("kernel"); r.AdvanceTerminalConversation(1000);
+            typeof(TerminalController).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(terminal, null);
+            Assert.That(input.interactable, Is.True); Assert.That(input.isFocused, Is.False);
+            Assert.That(r.ConversationProgress("kernel-onboarding").deviations, Is.Zero);
+        }
+        [Test]
         public void SerializedCase01SampleRetainsContradictoryReportsThroughUnityJsonSaving()
         {
             var sample = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Story/InformationSample/Case01InformationSample.asset");

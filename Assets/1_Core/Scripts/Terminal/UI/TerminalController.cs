@@ -10,7 +10,7 @@ namespace Codetective.Terminal
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasGroup))]
-    public sealed class TerminalController : MonoBehaviour
+    public sealed partial class TerminalController : MonoBehaviour
     {
         [SerializeField] private TerminalInputField input;
         [SerializeField] private Text transcript;
@@ -29,18 +29,20 @@ namespace Codetective.Terminal
         public bool IsCompositionProtected => (AcceptsInput && input != null && input.IsCompositionProtected) ||
             (GetComponent<MonitorPageHost>()?.IsCompositionProtected ?? false);
         private bool pageVisible = true;
-        private bool AcceptsInput => interactionEnabled && pageVisible;
+        private bool AcceptsInput => interactionEnabled && pageVisible && !session.Runtime.TerminalInputLocked;
 
         public void SetPageVisible(bool visible)
         {
             if (pageVisible == visible) return;
             pageVisible = visible;
+            if (!visible) ClearConversationDisturbance();
             ApplyInputInteraction();
         }
 
         public void SetInteractionEnabled(bool enabled)
         {
             interactionEnabled = enabled;
+            if (!enabled) ClearConversationDisturbance();
             if (!enabled)
             {
                 var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
@@ -58,6 +60,7 @@ namespace Codetective.Terminal
 
         private void ApplyInputInteraction()
         {
+            conversationInputLocked = session.Runtime.TerminalInputLocked;
             if (!AcceptsInput)
             {
                 var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
@@ -79,10 +82,12 @@ namespace Codetective.Terminal
             session.Runtime.Message -= QueueReport;
             session = new TerminalSession(runtime);
             session.Runtime.Message += QueueReport;
+            ResetConversationPresentation();
             runtimeRevision = -1;
             GetComponent<MonitorPageHost>()?.AttachRuntime(runtime);
         }
-        private void QueueReport(string message) => reports.Enqueue(message);
+        private void QueueReport(string message)
+        { if (session.Runtime.TerminalConversationActive) session.Runtime.AppendTerminalConversationReport(message); else reports.Enqueue(message); }
         private void OnDestroy() => session.Runtime.Message -= QueueReport;
         private readonly TerminalHistory history = new TerminalHistory();
         private IReadOnlyList<TerminalCompletion> completions = Array.Empty<TerminalCompletion>();
@@ -120,7 +125,7 @@ namespace Codetective.Terminal
             if (canvas != null && canvas.worldCamera == null)
                 canvas.worldCamera = Camera.main;
 
-            history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
+            history.Append(session.Runtime.TerminalUsesGuidedStartup ? "CODETECTIVE / KERNEL\n" + session.Runtime.Text("terminal.dialogue.standby", "작전망 연결 대기") : "CODETECTIVE 메모리 터미널 준비 완료\n\n" +
                            "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
                            "입력창 클릭 후 명령 입력 · 입력 중 Tab / Enter / Space 자동완성 확정 · 다음 Enter 실행\n" +
                            "입력하지 않을 때 Tab 다음 페이지 / Shift+Tab 이전 페이지\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
@@ -132,6 +137,7 @@ namespace Codetective.Terminal
 
         private void OnDisable()
         {
+            ClearConversationDisturbance();
             input.LineSubmitted -= Submit;
             input.CompletionQuery = null;
             input.CompletionApplied -= CompletionApplied;
@@ -146,12 +152,15 @@ namespace Codetective.Terminal
         private void LateUpdate()
         {
             while (reports.Count > 0) AppendHistory("[보고] " + reports.Dequeue());
+            UpdateConversationPresentation();
             if (runtimeRevision != session.Runtime.Revision)
             {
                 runtimeRevision = session.Runtime.Revision;
                 RefreshMemory();
                 if (input.placeholder is Text placeholder)
-                    placeholder.text = session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 저장 이름" : "Command · help / save name";
+                    placeholder.text = session.Runtime.TerminalInputLocked ? session.Runtime.Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.") :
+                        session.Runtime.TerminalConversationActive ? session.Runtime.Text("terminal.dialogue.command", "안내 명령") + " · " + session.Runtime.TerminalExpectedCommand :
+                        session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 저장 이름" : "Command · help / save name";
                 RefreshCompletions();
             }
             TerminalCompletionInput current = input.CompletionInput;
@@ -189,12 +198,15 @@ namespace Codetective.Terminal
             if (!AcceptsInput || string.IsNullOrWhiteSpace(line))
                 return;
 
+            bool conversation = session.Runtime.TerminalConversationActive;
+            MergeCompletedConversation();
             CommandResult result = session.Execute(line);
-            AppendHistory("> " + line + "\n" + (result.Success ? "" : "오류 ") + result.Message);
+            if (!conversation) AppendHistory("> " + line + "\n" + (result.Success ? "" : "오류 ") + result.Message);
             RefreshMemory();
 
             input.SetTextWithoutNotify(string.Empty);
-            input.FocusAtEnd();
+            ApplyInputInteraction();
+            if (AcceptsInput) input.FocusAtEnd();
             visibility.Edit();
             RefreshCompletions();
         }
@@ -215,7 +227,7 @@ namespace Codetective.Terminal
                 string remaining = before.Substring(Math.Min(removed.Length, before.Length));
                 preservedTranscriptPosition.y -= MeasureHistory(before) - MeasureHistory(remaining);
             }
-            transcript.text = history.Text;
+            transcript.text = ConversationTranscript();
             scrollTranscript = true;
         }
 

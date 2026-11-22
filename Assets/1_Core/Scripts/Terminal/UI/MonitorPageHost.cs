@@ -215,6 +215,7 @@ namespace Codetective.Terminal
                 CurrentPage.Hide();
             }
             CurrentPage = pages[id];
+            runtime?.EnterTerminalPage(id);
             CurrentPage.Show();
             terminal?.SetPageVisible(CurrentPage.TerminalPage);
             RefreshHeader();

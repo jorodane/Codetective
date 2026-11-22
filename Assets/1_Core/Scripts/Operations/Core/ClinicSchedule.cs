@@ -65,8 +65,8 @@ namespace Codetective.Operations
         public AppointmentProgress CurrentAppointment => ActiveVisit?.Copy();
         public AppointmentProgress NextAppointment => clinicDay?.appointments.FirstOrDefault(a => a.phase == VisitPhase.Waiting)?.Copy();
         public bool IsClinicTransitioning => !AwaitingAssignment && ActiveVisit != null && ActiveVisit.phase != VisitPhase.Talking;
-        public bool CanWaitForNextAppointment => HasClinicSchedule && !AwaitingAssignment && !IsDayEnded && ActiveVisit == null && NextAppointment != null;
-        public bool CanWaitUntilClosing => HasClinicSchedule && !AwaitingAssignment && !IsDayEnded && ActiveVisit == null && NextAppointment == null;
+        public bool CanWaitForNextAppointment => HasClinicSchedule && !AwaitingAssignment && !TerminalConversationPausesWorld && !IsDayEnded && ActiveVisit == null && NextAppointment != null;
+        public bool CanWaitUntilClosing => HasClinicSchedule && !AwaitingAssignment && !TerminalConversationPausesWorld && !IsDayEnded && ActiveVisit == null && NextAppointment == null;
         public string VisitPresentationText
         {
             get

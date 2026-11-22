@@ -14,6 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   secondsPerGameMinute: 2
   commandLanguage: 1
+  terminalConversations:
+  - {fileID: 11400000, guid: 164e9f5d2ea80bb983f64acaf58a8cd2, type: 2}
   consultation: []
   schemas:
   - {fileID: 11400000, guid: 7a7b5acfa9f224e0eef60045fb0d7a1f, type: 2}

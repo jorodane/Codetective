@@ -121,6 +121,28 @@ namespace Codetective.Operations
 
         public ExecutionResult Execute(string source)
         {
+            if (TerminalInputLocked) return ExecutionResult.Error(Text("terminal.dialogue.receiving", "수신 중입니다. 안내가 끝난 뒤 입력하세요."));
+            bool observed = TerminalConversationActive && terminalCommandTrace == null && !string.IsNullOrWhiteSpace(source);
+            TerminalCommandTrace previous = terminalCommandTrace;
+            if (observed)
+            {
+                terminalCommandTrace = new TerminalCommandTrace();
+                AddConversationLog(new TerminalConversationLog { text = "> " + source, complete = true });
+            }
+            try
+            {
+                ExecutionResult result = ExecuteTerminalCommand(source);
+                if (observed)
+                {
+                    AddConversationLog(new TerminalConversationLog { text = (result.Success ? "" : "오류 ") + result.Message, complete = true });
+                    ObserveTerminalCommand(terminalCommandTrace, result);
+                }
+                return result;
+            }
+            finally { terminalCommandTrace = previous; }
+        }
+        private ExecutionResult ExecuteTerminalCommand(string source)
+        {
             if (string.IsNullOrWhiteSpace(source)) return ExecutionResult.Error("");
             if (source.IndexOfAny(new[] { '\r', '\n' }) >= 0) return ExecutionResult.Error("한 번에 한 줄만 입력하세요. 여러 줄은 프로토콜 편집창에서 작성하세요.");
             try
@@ -129,6 +151,7 @@ namespace Codetective.Operations
                 if (source.Length == 0) return ExecutionResult.Error("실행할 명령을 입력하세요.");
                 string[] words = source.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
                 string keyword = CommandVocabulary.Keyword(words[0]);
+                if (terminalCommandTrace != null) { terminalCommandTrace.keyword = keyword; terminalCommandTrace.argument = words.Length == 2 ? words[1] : ""; }
                 if (keyword == "help") return words.Length == 1 ? ExecutionResult.Ok(HelpForLanguage) : ExecutionResult.Error("사용법: " + words[0]);
                 if (keyword == "save" || keyword == "free")
                 {
@@ -139,6 +162,7 @@ namespace Codetective.Operations
                 }
                 budget = 1024; depth = 0;
                 Statement statement = new CommandParser(source).ReadSingle();
+                if (terminalCommandTrace != null) terminalCommandTrace.assigned = statement.Assign;
                 Datum value = ExecuteStatement(statement, null, null);
                 Revision++;
                 return ExecutionResult.Ok(value.kind == DataKind.Empty ? "명령을 수행했습니다." : Format(value), value);

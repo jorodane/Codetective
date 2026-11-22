@@ -48,9 +48,10 @@ Shader "UI/Codetective/CrtDisplay"
             };
             sampler2D _MainTex;
             fixed4 _Color, _TextureSampleAdd;
-            float4 _MainTex_ST, _ClipRect, _CrtSignal, _CrtRight;
+            float4 _MainTex_ST, _ClipRect, _CrtSignal, _CrtRight, _CrtStory;
             float _CrtTime, _CrtScanSeconds;
             float bandDistance(float y) { return abs(frac(y + _CrtTime / _CrtScanSeconds + 0.5) - 0.5); }
+            float signalNoise(float2 p) { return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
             v2f vert(appdata v)
             {
                 v2f o;
@@ -58,6 +59,10 @@ Shader "UI/Codetective/CrtDisplay"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 float band = 1 - smoothstep(0.006, 0.045, bandDistance(v.panel.y));
                 float slip = band * sin(_CrtTime * 5.7) * _CrtSignal.w * _CrtSignal.x;
+                float row = floor(v.panel.y * 90.0);
+                float frame = floor(_CrtTime * 65.0);
+                slip += _CrtStory.x * _CrtStory.y * (signalNoise(float2(frame, 0.0)) - 0.5 +
+                    0.7 * (signalNoise(float2(row, frame)) - 0.5));
                 float4 world = mul(unity_ObjectToWorld, v.vertex);
                 world.xyz += _CrtRight.xyz * slip;
                 o.vertex = mul(UNITY_MATRIX_VP, world);
@@ -76,6 +81,14 @@ Shader "UI/Codetective/CrtDisplay"
                 float band = 1 - smoothstep(0.008, 0.065, distance);
                 float edge = 1 - smoothstep(0.0008, 0.003, distance);
                 color.rgb *= 1 - _CrtSignal.x * (_CrtSignal.y * lines * filtered + 0.045 * band - 0.025 * edge);
+                // A single short red pulse with rapid sync jitter; normal luminance is never amplified.
+                float story = saturate(_CrtStory.x);
+                float luminance = max(color.r, max(color.g, color.b));
+                float3 warning = float3(max(luminance, 0.055), luminance * 0.12, luminance * 0.08);
+                color.rgb = lerp(color.rgb, warning, story * 0.95);
+                float grain = signalNoise(float2(floor(i.panel.x * 700.0), floor(i.panel.y * 450.0) + floor(_CrtTime * 55.0)));
+                float tear = 1.0 - smoothstep(0.005, 0.035, abs(frac(i.panel.y + _CrtTime * 2.7) - 0.5));
+                color.rgb *= 1.0 - story * _CrtStory.z * saturate(grain * 0.55 + tear * 0.75);
                 #ifdef UNITY_UI_CLIP_RECT
                 color.a *= UnityGet2DClipping(i.localPosition.xy, _ClipRect);
                 #endif

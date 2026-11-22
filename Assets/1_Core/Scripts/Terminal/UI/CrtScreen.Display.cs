@@ -14,6 +14,17 @@ namespace Codetective.Terminal
         [SerializeField, Min(1)] private float scanSeconds = 7.5f;
         [Tooltip("Maximum horizontal sync slip in panel units; intentionally less than a text character.")]
         [SerializeField, Range(0, 8)] private float syncSlip = 1.75f;
+        [Tooltip("Maximum horizontal panel displacement during an authored conversation signal disturbance.")]
+        [SerializeField, Range(0, 12)] private float conversationJitter = 6;
+        [SerializeField, Range(0, 1)] private float conversationNoise = 0.35f;
+        private float conversationDisturbance;
+        public void SetConversationDisturbance(float strength)
+        {
+            strength = Mathf.Clamp01(strength);
+            if (Mathf.Approximately(conversationDisturbance, strength)) return;
+            conversationDisturbance = strength;
+            foreach (Material material in displayMaterials.Values) if (material != null) ApplyDisplayParameters(material);
+        }
 
         private readonly Dictionary<Material, Material> displayMaterials = new Dictionary<Material, Material>();
         private Shader displayShader;
@@ -46,6 +57,7 @@ namespace Codetective.Terminal
             material.SetFloat("_CrtTime", Application.isPlaying ? Time.unscaledTime : 0);
             material.SetFloat("_CrtScanSeconds", Mathf.Max(1, scanSeconds));
             material.SetVector("_CrtRight", Panel.TransformVector(Vector3.right));
+            material.SetVector("_CrtStory", new Vector4(conversationDisturbance, conversationJitter, conversationNoise, 0));
         }
         private void UpdateDisplayMaterials()
         {
@@ -54,6 +66,7 @@ namespace Codetective.Terminal
         }
         private void ReleaseDisplayMaterials()
         {
+            conversationDisturbance = 0;
             foreach (Material material in displayMaterials.Values)
                 if (material != null) { if (Application.isPlaying) Destroy(material); else DestroyImmediate(material); }
             displayMaterials.Clear();

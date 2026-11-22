@@ -13,6 +13,7 @@ namespace Codetective.Gameplay
         [Tooltip("Empty uses the World's Display Language (or ko without a World). Independent of Command Language.")]
         public string displayLanguage = "";
         public ContentTextTableAsset[] textTables = Array.Empty<ContentTextTableAsset>();
+        public TerminalConversationAsset[] terminalConversations = Array.Empty<TerminalConversationAsset>();
         public ConsultationLine[] consultation = Array.Empty<ConsultationLine>();
         public EntitySchemaAsset[] schemas = Array.Empty<EntitySchemaAsset>();
         public EntityInstanceAsset[] instances = Array.Empty<EntityInstanceAsset>();
@@ -35,7 +36,8 @@ namespace Codetective.Gameplay
             worldData?.ConfigureClock(runtime);
             runtime.Language = commandLanguage;
             runtime.DisplayLanguage = string.IsNullOrWhiteSpace(displayLanguage) ? worldData != null ? worldData.displayLanguage : "ko" : displayLanguage;
-            ContentTextTableAsset.Install(runtime, textTables.Concat(worldData != null ? worldData.textTables : Array.Empty<ContentTextTableAsset>()).Distinct().ToArray());
+            ContentTextTableAsset.Install(runtime, textTables.Concat(worldData != null ? worldData.textTables : Array.Empty<ContentTextTableAsset>())
+                .Concat(terminalConversations.Where(c => c != null).SelectMany(c => c.textTables)).Distinct().ToArray());
             if (consultation.Length > 0) { runtime.Consultation.Clear(); runtime.Consultation.AddRange(consultation); }
             profiles?.Validate();
             EntityInstanceAsset[] profileInstances = profiles != null ? profiles.All.Select(p => p.entity).Where(p => p != null).ToArray() : Array.Empty<EntityInstanceAsset>();
@@ -50,6 +52,7 @@ namespace Codetective.Gameplay
             runtime.DeliverNewspaper();
             foreach (ClinicDayPlanAsset item in clinicDays) if (item != null) runtime.RegisterClinicDay(item.plan);
             foreach (StoryMailAsset item in mail) if (item != null) runtime.RegisterMail(item.message);
+            foreach (TerminalConversationAsset item in terminalConversations) if (item != null) runtime.RegisterTerminalConversation(item.conversation);
             runtime.InitializeClinicDay(); runtime.InitializeDailyRecord();
             foreach (string id in initialDiscoveries ?? Array.Empty<string>()) runtime.Discover(id, "초기 작전 자료");
             foreach (ObservationDefinition report in initialObservations ?? Array.Empty<ObservationDefinition>()) runtime.Observe(report);

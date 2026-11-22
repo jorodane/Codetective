@@ -188,6 +188,8 @@ namespace Codetective.Operations
     [Serializable]
     public sealed class KernelSnapshot
     {
+        public string activeTerminalConversation;
+        public TerminalConversationProgress[] terminalConversations;
         public int contentTextVersion;
         public int version = 1;
         public int day;

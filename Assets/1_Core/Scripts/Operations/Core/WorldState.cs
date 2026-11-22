@@ -20,7 +20,7 @@ namespace Codetective.Operations
 
         public void Tick(double minutes)
         {
-            if (AwaitingAssignment || IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
+            if (AwaitingAssignment || TerminalConversationPausesWorld || IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
             InitializeDailyRecord(); SyncClinicClock();
             ApplyWorldSchedule();
             if (IsClinicTransitioning) return;
@@ -117,6 +117,7 @@ namespace Codetective.Operations
             return new KernelSnapshot
             {
                 contentTextVersion = 1,
+                activeTerminalConversation = activeTerminalConversation, terminalConversations = terminalConversationProgress.Values.Select(p => p.Copy()).ToArray(),
                 day = Day, minute = Minute, calendarStart = GameDateTime.From(calendarStart), knowledgeOnlyIds = knowledgeOnly.ToArray(), occurredEventIds = occurredEvents.ToArray(), suspicion = Suspicion, exposure = Exposure,
                 responseMinutes = ResponseMinutes, consultationIndex = ConsultationIndex,
                 dayEnded = IsDayEnded, coffeeReceived = CoffeeReceived,
@@ -213,6 +214,7 @@ namespace Codetective.Operations
             RestoreReservations(snapshot.confirmedReservations); RestoreClinic(snapshot); RestoreDailyRecord(snapshot);
             RestoreEvidence(snapshot);
             RestoreKnowledge(snapshot);
+            RestoreTerminalConversations(snapshot);
             completedWorldEvents.Clear(); completedWorldEvents.UnionWith(snapshot.completedWorldEvents ?? Array.Empty<string>());
             Revision++;
         }

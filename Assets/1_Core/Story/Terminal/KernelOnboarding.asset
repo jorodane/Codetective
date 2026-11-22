@@ -1,0 +1,279 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject:
+    fileID: 0
+  m_PrefabInstance:
+    fileID: 0
+  m_PrefabAsset:
+    fileID: 0
+  m_GameObject:
+    fileID: 0
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script:
+    fileID: 11500000
+    guid: e3dfe70aba5641e18179a1ce8fef487d
+    type: 3
+  m_Name: KernelOnboarding
+  m_EditorClassIdentifier: ''
+  conversation:
+    id: kernel-onboarding
+    requiredMailRead: government-intro
+    pageId: kernel
+    variableBase: practice
+    speaker: 현장지원과
+    speakerKey: onboarding.speaker
+    firstDay: 1
+    lastDay: 1
+    pauseWorld: 1
+    replacesStartupGuide: 1
+    skipIfMailAlreadyReadOnExistingSave: 1
+    condition:
+      triggersOn: []
+      triggersOff:
+      - terminal.onboarding.complete
+      quests: []
+    steps:
+    - id: help
+      lines:
+      - text: Kernel을 찾으셨군요.
+        textKey: onboarding.welcome
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      - text: 현장지원과입니다. 메일은 확인하셨겠지요. 먼저 작전망의 기본 사용법부터 확인하겠습니다.
+        textKey: onboarding.connection
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      - text: '안내가 수신되는 동안에는 명령을 입력할 수 없습니다. 안내가 끝나면 다음 명령을 입력해 보십시오:
+
+          {command}'
+        textKey: onboarding.listen
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      goal:
+        kind: 1
+        dataName: '{slot}'
+        targetId: ''
+        operation: ''
+        argumentCount: 0
+        preferVariable: 1
+        acceptExisting: 1
+        condition:
+          triggersOn: []
+          triggersOff: []
+          quests: []
+      onComplete:
+        triggers: []
+        quests: []
+    - id: allocate
+      lines:
+      - text: 잘하셨습니다. 권한 목록은 현재 사용할 수 있는 정보와 행동을 보여줍니다.
+        textKey: onboarding.permissions
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      - text: '이번에는 빈 치환문을 등록하겠습니다.
+
+          입력: {command}
+
+          {slot}는 이번 연습에 사용할 이름입니다.'
+        textKey: onboarding.allocate
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      goal:
+        kind: 2
+        dataName: '{slot}'
+        targetId: ''
+        operation: ''
+        argumentCount: 0
+        preferVariable: 1
+        acceptExisting: 1
+        condition:
+          triggersOn: []
+          triggersOff: []
+          quests: []
+      onComplete:
+        triggers: []
+        quests: []
+    - id: reference
+      lines:
+      - text: '이름만으로는 아직 대상을 가리킬 수 없습니다. 다음 명령으로 {slot}를 지휘소에 연결하십시오:
+
+          {command}'
+        textKey: onboarding.reference
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      goal:
+        kind: 3
+        dataName: '{slot}'
+        targetId: hq
+        operation: ''
+        argumentCount: 0
+        preferVariable: 1
+        acceptExisting: 1
+        condition:
+          triggersOn: []
+          triggersOff: []
+          quests: []
+      onComplete:
+        triggers: []
+        quests: []
+    - id: invoke
+      lines:
+      - text: 이제 {slot}는 지휘소를 가리킵니다. 지휘소를 복제하거나 새로 만든 것은 아닙니다.
+        textKey: onboarding.substitution
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      - text: 대상 뒤에 마침표를 입력하면 그 대상의 권한 목록이 나옵니다. Tab이나 Enter로 후보를 확정하고, 다음 Enter로 명령을 보냅니다.
+        textKey: onboarding.dot
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      - text: '연결 상태를 확인하겠습니다. 다음 명령을 입력하십시오:
+
+          {command}'
+        textKey: onboarding.invoke
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      goal:
+        kind: 4
+        dataName: '{slot}'
+        targetId: hq
+        operation: checkComms
+        argumentCount: 0
+        preferVariable: 1
+        acceptExisting: 1
+        condition:
+          triggersOn: []
+          triggersOff: []
+          quests: []
+      onComplete:
+        triggers: []
+        quests: []
+    - id: release
+      lines:
+      - text: '통신 확인. 마지막으로 다음 명령으로 연습용 치환문을 폐기하겠습니다:
+
+          {command}'
+        textKey: onboarding.release
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      goal:
+        kind: 5
+        dataName: '{slot}'
+        targetId: ''
+        operation: ''
+        argumentCount: 0
+        preferVariable: 1
+        acceptExisting: 1
+        condition:
+          triggersOn: []
+          triggersOff: []
+          quests: []
+      onComplete:
+        triggers: []
+        quests: []
+    - id: finish
+      lines:
+      - text: 치환문을 폐기해도 실제 지휘소는 사라지지 않습니다. 대상을 부르는 규칙만 정리한 것입니다.
+        textKey: onboarding.world
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      - text: 지휘소의 권한 목록에서 커피 요청도 찾아보십시오. 명령은 화면 밖의 실제 행동으로 이어집니다.
+        textKey: onboarding.coffee
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      - text: 기본 연결 확인을 마쳤습니다. 남은 임무 안내와 수락 여부는 메일에서 확인하십시오. 이제 귀하의 명령을 기다리겠습니다.
+        textKey: onboarding.finish
+        charactersPerSecond: 32
+        pauseAfter: 0.7
+        effectSeconds: 0.55
+        emotion: 0
+      goal:
+        kind: 0
+        dataName: '{slot}'
+        targetId: ''
+        operation: ''
+        argumentCount: 0
+        preferVariable: 1
+        acceptExisting: 1
+        condition:
+          triggersOn: []
+          triggersOff: []
+          quests: []
+      onComplete:
+        triggers: []
+        quests: []
+    forgivingReplies:
+    - text: '그 명령도 유효합니다만, 지금은 다음 명령을 확인하는 중입니다:
+
+        {command}
+
+        계속해 볼까요?'
+      textKey: onboarding.detour1
+      charactersPerSecond: 32
+      pauseAfter: 0.7
+      effectSeconds: 0.55
+      emotion: 0
+    - text: 호기심은 좋습니다. 순서만 지켜 주십시오. 지금 요청한 명령은 {command}입니다.
+      textKey: onboarding.detour2
+      charactersPerSecond: 32
+      pauseAfter: 0.7
+      effectSeconds: 0.55
+      emotion: 0
+    angryReplies:
+    - text: 'Kernel. 지금은 장난칠 때가 아닙니다.
+
+        {command}
+
+        지시를 이행하십시오.'
+      textKey: onboarding.angry1
+      charactersPerSecond: 32
+      pauseAfter: 0.7
+      effectSeconds: 0.55
+      emotion: 1
+    - text: '같은 설명을 반복하게 하지 마십시오.
+
+        {command}
+
+        듣고 계십니까, Kernel?'
+      textKey: onboarding.angry2
+      charactersPerSecond: 32
+      pauseAfter: 0.7
+      effectSeconds: 0.55
+      emotion: 1
+    angryAfter: 3
+    onComplete:
+      triggers:
+      - id: terminal.onboarding.complete
+        value: 1
+      quests: []
+  textTables:
+  - fileID: 11400000
+    guid: 0e6c66d071641d084a51b307f866fb6a
+    type: 2
