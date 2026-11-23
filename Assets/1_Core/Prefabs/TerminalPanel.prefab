@@ -714,7 +714,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "CODETECTIVE 메모리 터미널 준비 완료\n\nsave 이름 / free 이름\nhelp로 명령어 목록을 확인하세요.\n\nEnter 실행 · Tab 자동완성\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다."
+  m_Text: "CODETECTIVE / KERNEL\n작전망 연결 대기"
 --- !u!114 &100034
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -932,7 +932,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "할당된 공간 없음\n\nsave 이름\n명령으로 공간을\n만들어 보세요."
+  m_Text: "등록된 치환문 없음\n\n암호 이름 = 대상"
 --- !u!114 &100045
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1315,7 +1315,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "명령 입력 · help / save 이름"
+  m_Text: "명령 입력 · 도움말 / 암호 이름 = 대상"
 --- !u!1 &100064
 GameObject:
   m_ObjectHideFlags: 0

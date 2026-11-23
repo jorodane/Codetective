@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using Codetective.Gameplay;
 using Codetective.Operations;
 using NUnit.Framework;
@@ -25,15 +23,23 @@ namespace Codetective.Tests.Operations
         public void AuthoredTutorialTeachesFiveRealCommandsWithoutAdvancingTheWorkday(CommandLocale commands, string display)
         {
             KernelRuntime r = World(commands, display); int sent = 0; int entities = r.World.Objects.Count;
+            string[] expected = commands == CommandLocale.Korean
+                ? new[] { "도움말", "암호 연습", "암호 연습 = 지휘소;", "연습.통신확인();", "삭제 연습" }
+                : new[] { "help", "var practice", "var practice = hq;", "practice.checkComms();", "free practice" };
             while (r.TerminalConversationActive && sent < 10)
             {
                 r.AdvanceTerminalConversation(1000);
                 if (!r.TerminalConversationActive) break;
-                string command = r.TerminalExpectedCommand; Assert.That(r.Execute(command).Success, Is.True, command); sent++;
+                string command = r.TerminalExpectedCommand;
+                Assert.That(sent, Is.LessThan(expected.Length));
+                Assert.That(command, Is.EqualTo(expected[sent]));
+                Assert.That(r.TerminalConversationTranscript(), Does.Contain(command));
+                Assert.That(r.Execute(command).Success, Is.True, command);
+                sent++;
             }
             r.AdvanceTerminalConversation(1000);
             Assert.That(sent, Is.EqualTo(5)); Assert.That(r.TerminalConversationActive, Is.False);
-            Assert.That(r.GetTrigger("terminal.onboarding.complete"), Is.True); Assert.That(r.Data.ContainsKey("practice"), Is.False);
+            Assert.That(r.GetTrigger("terminal.onboarding.complete"), Is.True); Assert.That(r.Data.ContainsKey(r.ConversationProgress("kernel-onboarding").slotName), Is.False);
             Assert.That(r.World.Objects.Count, Is.EqualTo(entities)); Assert.That(r.Minute, Is.EqualTo(540));
             Assert.That(r.TerminalConversationTranscript(), display == "en" ? Does.Contain("You found Kernel.") : Does.Contain("Kernel을 찾으셨군요."));
         }

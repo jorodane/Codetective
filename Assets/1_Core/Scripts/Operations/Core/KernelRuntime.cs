@@ -30,8 +30,8 @@ namespace Codetective.Operations
         public event Action<string, string> SceneActionRequested;
         public event Action DayEnded;
 
-        public const string Help = "save <name> / free <name> / help\n" +
-            "save registers a substitution; free discards its binding, preserving the world and acquired information.\n" +
+        public const string Help = "var <name> = <target> : register a substitution\n" +
+            "var <name> : register an empty substitution\nfree <name> : discard a substitution\nhelp : list commands\n\n" +
             "Assign references to existing objects; new/malloc are unavailable.\n" +
             "object. lists currently available commands.\nname = object.command(input);\n" +
             "Examples: hq.requestCoffee();\ndoc = archive.inspect();\nthread01.run(recon, archive);\n" +
@@ -151,6 +151,10 @@ namespace Codetective.Operations
                 if (source.Length == 0) return ExecutionResult.Error("실행할 명령을 입력하세요.");
                 string[] words = source.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
                 string keyword = CommandVocabulary.Keyword(words[0]);
+                // A declaration with a right-hand side is parsed as an assignment.
+                // A bare declaration uses the same operation as the older save command.
+                if (keyword == "var" && words.Length == 2 && CommandParser.IsIdentifier(words[1]))
+                    keyword = "save";
                 if (terminalCommandTrace != null) { terminalCommandTrace.keyword = keyword; terminalCommandTrace.argument = words.Length == 2 ? words[1] : ""; }
                 if (keyword == "help") return words.Length == 1 ? ExecutionResult.Ok(HelpForLanguage) : ExecutionResult.Error("사용법: " + words[0]);
                 if (keyword == "save" || keyword == "free")
@@ -404,7 +408,7 @@ namespace Codetective.Operations
                         string preferred = CommandVocabulary.Name(child.Key, child.Value.Names, Language);
                         string name = CommandVocabulary.Match(preferred, child.Value.AllNames.Concat(new[] { child.Key }), prefix, composing);
                         if (name != null && EntityDenial(child.Value, locals) == null)
-                            output.Add(new Completion(name + " · " + Text(child.Value.LabelKey, child.Value.LabelFor(Language)), leading + objectPath + "." + name + "."));
+                            output.Add(new Completion(name + " · " + Text(child.Value.LabelKey, child.Value.LabelFor(Language)), leading + objectPath + "." + name + (equal < 0 ? "." : "")));
                     }
                     foreach (VariableDefinition field in entity.Variables)
                     {
@@ -425,7 +429,7 @@ namespace Codetective.Operations
                 catch (CommandException) { return Array.Empty<Completion>(); }
             }
             return AvailableValues(locals, input, composing).Where(v => Prefix(v.Key, input, composing)).Select(v =>
-                new Completion(v.Key + " : " + TypeName(v.Value), leading + v.Key + (ReferenceTarget(v.Value) != null ? "." : ""))).ToArray();
+                new Completion(v.Key + " : " + TypeName(v.Value), leading + v.Key + (equal < 0 && ReferenceTarget(v.Value) != null ? "." : ""))).ToArray();
         }
 
         private IEnumerable<KeyValuePair<string, Datum>> AvailableValues(Dictionary<string, Datum> locals, string prefix, bool composing)

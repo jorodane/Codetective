@@ -77,30 +77,30 @@ MonoBehaviour:
 
       입력: {command}
 
-      {slot}는 이번 연습에 사용할 이름입니다.'
+      이번 연습에 사용할 이름은 {slot}입니다.'
   - key: onboarding.allocate
     language: en
     text: Let's register an empty substitution. Enter {command}. We will use the name {slot} for this exercise.
   - key: onboarding.reference
     language: ko
-    text: '이름만으로는 아직 대상을 가리킬 수 없습니다. 다음 명령으로 {slot}를 지휘소에 연결하십시오:
+    text: '다음 명령으로 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.
 
       {command}'
   - key: onboarding.reference
     language: en
-    text: A name alone does not refer to a target yet. Enter {command} to connect {slot} to headquarters.
+    text: Enter {command} to bind {slot} to headquarters. Write the target on the right of the equals sign.
   - key: onboarding.substitution
     language: ko
-    text: 이제 {slot}는 지휘소를 가리킵니다. 지휘소를 복제하거나 새로 만든 것은 아닙니다.
+    text: 이제 지휘소를 가리키는 이름은 {slot}입니다.
   - key: onboarding.substitution
     language: en
-    text: Now {slot} refers to headquarters. You have not copied or created another headquarters.
+    text: Now you can use {slot} to refer to headquarters.
   - key: onboarding.dot
     language: ko
-    text: 대상 뒤에 마침표를 입력하면 그 대상의 권한 목록이 나옵니다. Tab이나 Enter로 후보를 확정하고, 다음 Enter로 명령을 보냅니다.
+    text: 대상 뒤에 마침표를 입력하면 권한 목록이 나옵니다. Tab이나 Enter로 후보를 확정하십시오. 후보 이름을 쓰기 시작하면 Space로도 확정할 수 있습니다. 다음 Enter로 명령을 보냅니다.
   - key: onboarding.dot
     language: en
-    text: Type a dot after a target to see its permissions. Tab or Enter accepts a suggestion; the next Enter sends the command.
+    text: Type a dot after a target to see its permissions. Accept a suggestion with Tab or Enter. Space also accepts after you start typing its name. Press Enter again to send the command.
   - key: onboarding.invoke
     language: ko
     text: '연결 상태를 확인하겠습니다. 다음 명령을 입력하십시오:

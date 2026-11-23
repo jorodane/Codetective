@@ -79,6 +79,38 @@ namespace Codetective.Terminal.Tests
             Assert.That(InlineCompletion.Resolve(CompletionKey.Tab, input, null, true), Is.EqualTo(CompletionKeyAction.None));
         }
 
+        [TestCase("", "암호 ")]
+        [TestCase("   ", "암호 ")]
+        [TestCase("암호 대상 =", "암호 대상 =지휘소")]
+        [TestCase("암호 대상 = ", "암호 대상 = 지휘소")]
+        [TestCase("지휘소.", "지휘소.통신확인()")]
+        [TestCase("삭제 ", "삭제 단서")]
+        [TestCase("자료실.분석( ", "자료실.분석( 문서")]
+        public void SpaceTypesWhitespaceUntilTheCurrentCandidateHasATypedPrefix(string typed, string replacement)
+        {
+            TerminalCompletionInput input = Input(typed);
+            var suggestion = new InlineCompletion(replacement, replacement.Length);
+            Assert.That(InlineCompletion.Resolve(CompletionKey.Space, input, suggestion, true), Is.EqualTo(CompletionKeyAction.TypeCharacter));
+            Assert.That(InlineCompletion.Resolve(CompletionKey.Tab, input, suggestion, true), Is.EqualTo(CompletionKeyAction.Accept));
+            Assert.That(InlineCompletion.Resolve(CompletionKey.Enter, input, suggestion, true), Is.EqualTo(CompletionKeyAction.Accept));
+        }
+
+        [Test]
+        public void SpaceCompletesATypedAssignmentTargetThatCanBeSubmittedOnTheNextEnter()
+        {
+            var runtime = ClinicScenario.Create();
+            runtime.Language = CommandLocale.Korean;
+            var session = new TerminalSession(runtime);
+            const string typed = "암호 대상 = 지";
+            string replacement = session.Complete(typed).Single().ReplacementText;
+            Assert.That(replacement, Is.EqualTo("암호 대상 = 지휘소"));
+            var suggestion = new InlineCompletion(replacement, replacement.Length);
+            Assert.That(InlineCompletion.Resolve(CompletionKey.Space, Input(typed), suggestion, true), Is.EqualTo(CompletionKeyAction.Accept));
+            Assert.That(InlineCompletion.Resolve(CompletionKey.Enter, Input(replacement), suggestion, true), Is.EqualTo(CompletionKeyAction.Submit));
+            Assert.That(session.Execute(replacement).Success, Is.True);
+            Assert.That(runtime.Data["대상"].value.id, Is.EqualTo("hq"));
+        }
+
         [Test]
         public void AnAlreadyTypedCandidateDoesNotRequireAnExtraConfirmOrReplaceTheName()
         {

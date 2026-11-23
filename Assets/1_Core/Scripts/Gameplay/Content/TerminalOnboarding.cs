@@ -27,14 +27,14 @@ namespace Codetective.Gameplay
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
                 new TerminalConversationStep { id = "allocate", lines = new[] {
                     Line("permissions", "잘하셨습니다. 권한 목록은 현재 사용할 수 있는 정보와 행동을 보여줍니다.", "Good. The permissions list shows the information and actions currently available to you."),
-                    Line("allocate", "이번에는 빈 치환문을 등록하겠습니다.\n입력: {command}\n{slot}는 이번 연습에 사용할 이름입니다.", "Let's register an empty substitution. Enter {command}. We will use the name {slot} for this exercise.") },
+                    Line("allocate", "이번에는 빈 치환문을 등록하겠습니다.\n입력: {command}\n이번 연습에 사용할 이름은 {slot}입니다.", "Let's register an empty substitution. Enter {command}. We will use the name {slot} for this exercise.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate } },
                 new TerminalConversationStep { id = "reference", lines = new[] {
-                    Line("reference", "이름만으로는 아직 대상을 가리킬 수 없습니다. 다음 명령으로 {slot}를 지휘소에 연결하십시오:\n{command}", "A name alone does not refer to a target yet. Enter {command} to connect {slot} to headquarters.") },
+                    Line("reference", "다음 명령으로 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.\n{command}", "Enter {command} to bind {slot} to headquarters. Write the target on the right of the equals sign.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } },
                 new TerminalConversationStep { id = "invoke", lines = new[] {
-                    Line("substitution", "이제 {slot}는 지휘소를 가리킵니다. 지휘소를 복제하거나 새로 만든 것은 아닙니다.", "Now {slot} refers to headquarters. You have not copied or created another headquarters."),
-                    Line("dot", "대상 뒤에 마침표를 입력하면 그 대상의 권한 목록이 나옵니다. Tab이나 Enter로 후보를 확정하고, 다음 Enter로 명령을 보냅니다.", "Type a dot after a target to see its permissions. Tab or Enter accepts a suggestion; the next Enter sends the command."),
+                    Line("substitution", "이제 지휘소를 가리키는 이름은 {slot}입니다.", "Now you can use {slot} to refer to headquarters."),
+                    Line("dot", "대상 뒤에 마침표를 입력하면 권한 목록이 나옵니다. Tab이나 Enter로 후보를 확정하십시오. 후보 이름을 쓰기 시작하면 Space로도 확정할 수 있습니다. 다음 Enter로 명령을 보냅니다.", "Type a dot after a target to see its permissions. Accept a suggestion with Tab or Enter. Space also accepts after you start typing its name. Press Enter again to send the command."),
                     Line("invoke", "연결 상태를 확인하겠습니다. 다음 명령을 입력하십시오:\n{command}", "Let's check the connection. Enter {command}.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Invoke, targetId = "hq", operation = "checkComms" } },
                 new TerminalConversationStep { id = "release", lines = new[] {
@@ -47,6 +47,7 @@ namespace Codetective.Gameplay
             };
             var asset = ScriptableObject.CreateInstance<TerminalConversationAsset>(); asset.name = "KernelOnboarding";
             asset.conversation = new TerminalConversationDefinition { id = "kernel-onboarding", requiredMailRead = "government-intro", firstDay = 1, lastDay = 1,
+                koreanVariableBase = "연습",
                 speaker = "현장지원과", speakerKey = "onboarding.speaker", pauseWorld = true, replacesStartupGuide = true, skipIfMailAlreadyReadOnExistingSave = true, angryAfter = 3, steps = steps,
                 condition = new StoryCondition { triggersOff = new[] { "terminal.onboarding.complete" } },
                 forgivingReplies = new[] {

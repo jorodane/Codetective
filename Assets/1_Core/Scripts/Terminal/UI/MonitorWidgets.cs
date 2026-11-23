@@ -9,6 +9,7 @@ namespace Codetective.Terminal
     {
         public static readonly Color Foreground = new Color(0.70f, 0.93f, 0.78f);
         public static readonly Color ButtonColor = new Color(0.075f, 0.16f, 0.12f);
+        public static readonly Color SelectedButtonColor = new Color(0.16f, 0.32f, 0.23f);
         public static RectTransform Rect(string name, Transform parent, Vector2 position, Vector2 size)
         {
             var rect = (RectTransform)new GameObject(name, typeof(RectTransform)).transform;

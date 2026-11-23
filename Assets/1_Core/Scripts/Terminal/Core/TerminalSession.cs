@@ -48,11 +48,8 @@ namespace Codetective.Terminal
     /// <summary>One play session. Allocations and completion candidates share the same source of truth.</summary>
     public sealed class TerminalSession
     {
-        private static readonly string[] Commands = { "save", "free", "help" };
-        public const string HelpText = "save <name>  : 메모리 공간 할당\n" +
-                                       "free <name>  : 메모리 공간 해제\n" +
-                                       "help         : 명령어 목록 보기\n\n" +
-                                       "예: save 단서 / free 단서\n이름에는 공백을 넣을 수 없습니다.";
+        private static readonly string[] Commands = { "var", "free", "help" };
+        public const string HelpText = KernelRuntime.Help;
         private readonly Dictionary<int, MemorySlot> wrappers = new Dictionary<int, MemorySlot>();
         public KernelRuntime Runtime { get; }
         public TerminalSession(KernelRuntime runtime = null) { Runtime = runtime ?? new KernelRuntime(); }

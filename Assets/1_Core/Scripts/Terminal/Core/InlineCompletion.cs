@@ -39,9 +39,19 @@ namespace Codetective.Terminal
             Caret - Math.Max(0, Math.Min(visibleStart, Caret)));
         public static CompletionKeyAction Resolve(CompletionKey key, TerminalCompletionInput input, InlineCompletion? suggestion, bool submitOnEnter)
         {
-            if (suggestion.HasValue && suggestion.Value.Changes(input)) return CompletionKeyAction.Accept;
+            if (suggestion.HasValue && suggestion.Value.Changes(input) &&
+                (key != CompletionKey.Space || HasTypedPrefix(input)))
+                return CompletionKeyAction.Accept;
             if (key == CompletionKey.Enter) return submitOnEnter ? CompletionKeyAction.Submit : CompletionKeyAction.TypeCharacter;
             return key == CompletionKey.Space ? CompletionKeyAction.TypeCharacter : CompletionKeyAction.None;
+        }
+
+        private static bool HasTypedPrefix(TerminalCompletionInput input)
+        {
+            if (input.Caret == 0) return false;
+            // After '=', '.', '(' or a separator, the next name has not been typed yet.
+            char last = input.Text[input.Caret - 1];
+            return char.IsLetterOrDigit(last) || last == '_';
         }
     }
 }

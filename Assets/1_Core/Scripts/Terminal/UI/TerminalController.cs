@@ -144,7 +144,7 @@ namespace Codetective.Terminal
 
             history.Append(session.Runtime.TerminalUsesGuidedStartup ? "CODETECTIVE / KERNEL\n" + session.Runtime.Text("terminal.dialogue.standby", "작전망 연결 대기") : "CODETECTIVE 메모리 터미널 준비 완료\n\n" +
                            "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
-                           "입력창 클릭 후 명령 입력 · 입력 중 Tab / Enter / Space 자동완성 확정 · 다음 Enter 실행\n" +
+                           "입력창 클릭 후 명령 입력 · Tab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정 · 다음 Enter 실행\n" +
                            "입력하지 않을 때 Tab 다음 페이지 / Shift+Tab 이전 페이지\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
             transcript.text = history.Text;
             RefreshMemory();
@@ -179,7 +179,7 @@ namespace Codetective.Terminal
                 if (input.placeholder is Text placeholder)
                     placeholder.text = session.Runtime.TerminalInputLocked ? session.Runtime.Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.") :
                         session.Runtime.TerminalConversationActive ? session.Runtime.Text("terminal.dialogue.command", "안내 명령") + " · " + session.Runtime.TerminalExpectedCommand :
-                        session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 저장 이름" : "Command · help / save name";
+                        session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 암호 이름 = 대상" : "Command · help / var name = target";
                 RefreshCompletions();
             }
             TerminalCompletionInput current = input.CompletionInput;

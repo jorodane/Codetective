@@ -19,10 +19,10 @@ namespace Codetective.Tests.Operations
         public void KoreanBuiltinsCompleteAndShareLiveMemoryWithEnglishIncludingImePrefixes()
         {
             var session = new TerminalSession(Korean());
-            Assert.That(session.Complete("").Take(3).Select(c => c.DisplayText), Is.EqualTo(new[] { "저장", "삭제", "도움말" }));
-            Assert.That(session.Complete("ㅈ", true).Any(c => c.ReplacementText == "저장 "), Is.True);
-            Assert.That(session.Complete("sa").Single().ReplacementText, Is.EqualTo("save "));
-            session.Execute("저장 단서");
+            Assert.That(session.Complete("").Take(3).Select(c => c.DisplayText), Is.EqualTo(new[] { "암호", "삭제", "도움말" }));
+            Assert.That(session.Complete("ㅇ", true).Any(c => c.ReplacementText == "암호 "), Is.True);
+            Assert.That(session.Complete("va").Single().ReplacementText, Is.EqualTo("var "));
+            session.Execute("암호 단서");
             Assert.That(session.Complete("삭제 다", true).Single().ReplacementText, Is.EqualTo("삭제 단서"));
             Assert.That(session.Complete("해제 ").Single().ReplacementText, Is.EqualTo("해제 단서"));
             Assert.That(session.Execute("free 단서").Success, Is.True);
@@ -170,9 +170,9 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Execute("save 지휘소").Success, Is.False);
             Assert.That(r.Execute("저장 도움말").Success, Is.False);
             Assert.That(r.SaveProtocol("프로토콜 도움말() { 반환 1; }").Success, Is.False);
-            Assert.That(r.Execute("도움말").Message, Does.Contain("저장 <이름>"));
+            Assert.That(r.Execute("도움말").Message, Does.Contain("암호 이름 = 대상").And.Not.Contain("저장"));
             r.Language = CommandLocale.English;
-            Assert.That(r.Execute("도움말").Message, Does.Contain("save <name>"));
+            Assert.That(r.Execute("도움말").Message, Does.Contain("var <name> = <target>"));
         }
     }
 }

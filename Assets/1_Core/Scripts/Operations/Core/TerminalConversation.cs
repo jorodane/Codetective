@@ -37,6 +37,7 @@ namespace Codetective.Operations
     [Serializable] public sealed class TerminalConversationDefinition
     {
         public string id = "", requiredMailRead = "", pageId = "kernel", variableBase = "practice", speaker = "운영자", speakerKey = "";
+        public string koreanVariableBase = "";
         public int firstDay = 1, lastDay = int.MaxValue;
         public bool pauseWorld = true;
         public bool replacesStartupGuide;
@@ -47,11 +48,13 @@ namespace Codetective.Operations
         public int angryAfter = 3;
         public StoryEffects onComplete = new StoryEffects();
         public TerminalConversationDefinition Copy() => new TerminalConversationDefinition { id = id, requiredMailRead = requiredMailRead, pageId = pageId,
-            variableBase = variableBase, speaker = speaker, speakerKey = speakerKey, firstDay = firstDay, lastDay = lastDay, pauseWorld = pauseWorld, replacesStartupGuide = replacesStartupGuide, skipIfMailAlreadyReadOnExistingSave = skipIfMailAlreadyReadOnExistingSave,
+            variableBase = variableBase, koreanVariableBase = koreanVariableBase, speaker = speaker, speakerKey = speakerKey, firstDay = firstDay, lastDay = lastDay, pauseWorld = pauseWorld, replacesStartupGuide = replacesStartupGuide, skipIfMailAlreadyReadOnExistingSave = skipIfMailAlreadyReadOnExistingSave,
             condition = condition.Copy(), steps = steps.Select(s => s.Copy()).ToArray(), forgivingReplies = forgivingReplies.Select(l => l.Copy()).ToArray(),
             angryReplies = angryReplies.Select(l => l.Copy()).ToArray(), angryAfter = angryAfter, onComplete = onComplete.Copy() };
         public void Validate()
         {
+            if (!string.IsNullOrEmpty(koreanVariableBase) && !CommandParser.IsIdentifier(koreanVariableBase))
+                throw new CommandException("한국어 연습용 암호 이름이 유효하지 않습니다.");
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(pageId) || !CommandParser.IsIdentifier(variableBase) || firstDay < 1 || lastDay < firstDay || angryAfter < 1 ||
                 steps == null || steps.Length == 0 || steps.Length > 64 || steps.Any(s => s == null || string.IsNullOrWhiteSpace(s.id) || s.goal == null || s.lines == null) || steps.Select(s => s.id).Distinct().Count() != steps.Length ||
                 forgivingReplies == null || angryReplies == null || condition == null || onComplete == null || steps.Sum(s => s.lines.Length) + forgivingReplies.Length + angryReplies.Length > 1024) throw new CommandException("터미널 대화의 ID, 단계 또는 시작 조건이 유효하지 않습니다.");
@@ -154,7 +157,10 @@ namespace Codetective.Operations
             if (!terminalConversations.TryGetValue(id ?? "", out var definition)) throw new CommandException("터미널 대화가 없습니다: " + id);
             if (TerminalConversationActive || terminalConversationProgress[id].phase != TerminalConversationPhase.Dormant) return;
             var p = terminalConversationProgress[id]; activeTerminalConversation = id;
-            string basis = definition.variableBase, candidate = basis; int suffix = 2;
+            string basis = Language == CommandLocale.Korean && !string.IsNullOrEmpty(definition.koreanVariableBase) ?
+                definition.koreanVariableBase : definition.variableBase;
+            string candidate = basis;
+            int suffix = 2;
             while (true)
             {
                 try { CheckName(candidate); if (!data.ContainsKey(candidate)) break; }
@@ -171,10 +177,10 @@ namespace Codetective.Operations
         {
             string name = GoalDataName(goal, p);
             if (goal.kind == TerminalGoalKind.Help) return CommandVocabulary.KeywordName("help", locale);
-            if (goal.kind == TerminalGoalKind.Allocate) return CommandVocabulary.KeywordName("save", locale) + " " + name;
+            if (goal.kind == TerminalGoalKind.Allocate) return CommandVocabulary.KeywordName("var", locale) + " " + name;
             if (goal.kind == TerminalGoalKind.Free) return CommandVocabulary.KeywordName("free", locale) + " " + name;
             Entity target = Entity(goal.targetId); string receiver = target?.NameFor(locale) ?? goal.targetId;
-            if (goal.kind == TerminalGoalKind.BindReference) return name + " = " + receiver + ";";
+            if (goal.kind == TerminalGoalKind.BindReference) return CommandVocabulary.KeywordName("var", locale) + " " + name + " = " + receiver + ";";
             if (goal.kind == TerminalGoalKind.Invoke)
             {
                 if (goal.preferVariable && data.TryGetValue(name, out DataSlot slot) && slot.value.CanReferenceEntity && slot.value.id == goal.targetId) receiver = name;
@@ -183,8 +189,16 @@ namespace Codetective.Operations
             }
             return "";
         }
-        private string ConversationText(TerminalConversationLog entry, TerminalConversationProgress p) => Text(entry.textKey, entry.text)
-            .Replace("{slot}", p.slotName).Replace("{command}", Language == CommandLocale.Korean ? entry.koreanCommand : entry.englishCommand);
+        private string ConversationText(TerminalConversationLog entry, TerminalConversationProgress p)
+        {
+            bool korean = Language == CommandLocale.Korean;
+            string command = (korean ? entry.koreanCommand : entry.englishCommand) ?? "";
+            // Older saves keep the generated lesson command alongside the dialogue.
+            string legacyDeclaration = korean ? "저장 " : "save ";
+            if (command.StartsWith(legacyDeclaration, StringComparison.Ordinal))
+                command = CommandVocabulary.KeywordName("var", Language) + " " + command.Substring(legacyDeclaration.Length);
+            return Text(entry.textKey, entry.text).Replace("{slot}", p.slotName).Replace("{command}", command);
+        }
         private int AddConversationLog(TerminalConversationLog entry)
         {
             var p = Conversation;

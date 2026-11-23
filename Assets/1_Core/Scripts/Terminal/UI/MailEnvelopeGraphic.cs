@@ -19,11 +19,13 @@ namespace Codetective.Terminal
         private void Line(VertexHelper mesh, Vector2 from, Vector2 to)
         {
             Vector2 direction = to - from;
-            Vector2 normal = new Vector2(-direction.y, direction.x).normalized * Mathf.Clamp(rectTransform.rect.height * 0.018f, 2, 8);
+            Vector2 normal = new Vector2(-direction.y, direction.x).normalized * (rectTransform.rect.height * 0.027f);
             int index = mesh.currentVertCount;
             mesh.AddVert(from - normal, color, Vector2.zero); mesh.AddVert(from + normal, color, Vector2.zero);
             mesh.AddVert(to + normal, color, Vector2.zero); mesh.AddVert(to - normal, color, Vector2.zero);
-            mesh.AddTriangle(index, index + 1, index + 2); mesh.AddTriangle(index, index + 2, index + 3);
+            // Use the same quad indices as uGUI so CrtScreen samples all four corners.
+            mesh.AddTriangle(index, index + 1, index + 2);
+            mesh.AddTriangle(index + 2, index + 3, index);
         }
     }
 }

@@ -57,7 +57,7 @@ namespace Codetective.Terminal.Tests.UI
             field.textComponent.alignment = TextAnchor.MiddleLeft;
             field.textComponent.horizontalOverflow = HorizontalWrapMode.Overflow;
             placeholder = Label(input.transform, "Placeholder");
-            placeholder.text = "명령 입력 · 도움말 / 저장 이름";
+            placeholder.text = "명령 입력 · 도움말 / 암호 이름 = 대상";
             field.placeholder = placeholder;
             input.SetActive(true);
             Focus();
@@ -136,10 +136,10 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void SpaceConfirmsLiveKoreanCompletionWithoutAppendingADelimiterEcho()
         {
-            Compose("ㅈ"); field.CompletionQuery = _ => new InlineCompletion("저장 ", 3);
+            Compose("ㅇ"); field.CompletionQuery = _ => new InlineCompletion("암호 ", 3);
             PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
                 new Event { type = EventType.KeyDown, character = ' ' });
-            Assert.That(field.text, Is.EqualTo("저장 "));
+            Assert.That(field.text, Is.EqualTo("암호 "));
         }
 
         [Test]

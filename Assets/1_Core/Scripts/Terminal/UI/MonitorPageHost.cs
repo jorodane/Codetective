@@ -15,6 +15,7 @@ namespace Codetective.Terminal
     [DefaultExecutionOrder(-150), DisallowMultipleComponent]
     public sealed class MonitorPageHost : MonoBehaviour
     {
+        private static readonly Color UnreadMailColor = Color.Lerp(MonitorWidgets.SelectedButtonColor, MonitorWidgets.Foreground, 0.30f);
         [SerializeField] private TerminalController terminal;
         [SerializeField] private Text heading;
         [SerializeField] private RectTransform navigationRoot;
@@ -37,8 +38,9 @@ namespace Codetective.Terminal
         private readonly Dictionary<string, PhotoAsset> dataPhotos = new Dictionary<string, PhotoAsset>(StringComparer.Ordinal);
         private readonly HashSet<string> worldDataIds = new HashSet<string>(StringComparer.Ordinal);
         private float nextMailRefresh;
+        private int unreadMailCount;
         private Image headerBackground;
-        private Color headingColor, mailBannerColor;
+        private float mailBlinkSeconds = 0.55f;
         private float mailBannerUntil;
         private int receivedMailCount;
         private readonly HashSet<object> overlays = new HashSet<object>();
@@ -115,16 +117,13 @@ namespace Codetective.Terminal
         private void Awake() => Initialize();
         private void LateUpdate()
         {
-            if (initialized) RefreshHeader();
-            if (initialized && runtime != null && Time.unscaledTime >= nextMailRefresh)
+            if (!initialized) return;
+            if (Time.unscaledTime >= nextMailRefresh)
             {
                 nextMailRefresh = Time.unscaledTime + 0.2f;
-                if (tabs.TryGetValue("mail", out Button mailTab))
-                {
-                    int unread = runtime.UnreadMailCount(Mailbox.Kernel) + runtime.UnreadMailCount(Mailbox.Clinic);
-                    mailTab.GetComponentInChildren<Text>().text = pages["mail"].Title + (unread > 0 ? " (" + unread + ")" : "");
-                }
+                RefreshUnreadMail();
             }
+            RefreshHeader();
 #if ENABLE_INPUT_SYSTEM
             // EventSystem has already selected any clicked input. Never steal its Tab/completion key.
             Keyboard keyboard = Keyboard.current;
@@ -150,6 +149,7 @@ namespace Codetective.Terminal
             runtime = value;
             if (!initialized) return;
             foreach (MonitorPage page in pages.Values) InitializeContent(page);
+            RefreshUnreadMail();
         }
         public void Register(MonitorPage page)
         {
@@ -253,7 +253,6 @@ namespace Codetective.Terminal
         private void BuildHeader()
         {
             if (heading == null) return;
-            headingColor = heading.color;
             RectTransform bar = MonitorWidgets.Rect("TerminalHeaderBackground", transform, Vector2.zero, Vector2.zero);
             bar.anchorMin = new Vector2(0, 1); bar.anchorMax = Vector2.one;
             bar.offsetMin = new Vector2(16, -72); bar.offsetMax = new Vector2(-16, -12);
@@ -265,27 +264,38 @@ namespace Codetective.Terminal
         {
             if (!initialized || heading == null || headerBackground == null || SystemMenuVisible || count <= 0) return false;
             receivedMailCount = MailNotificationVisible ? receivedMailCount + count : count;
-            mailBannerUntil = Time.unscaledTime + Mathf.Max(0.5f, settings != null ? settings.mailBannerSeconds : 3f);
-            mailBannerColor = settings != null ? settings.mailBannerColor : new Color(0.33f, 0.22f, 0.06f, 0.98f);
-            RefreshHeader(); return true;
+            mailBannerUntil = Time.unscaledTime + Mathf.Max(0.5f, settings != null ? settings.mailBannerSeconds : 1.2f);
+            mailBlinkSeconds = Mathf.Max(0.15f, settings != null ? settings.mailBlinkSeconds : 0.55f);
+            RefreshUnreadMail();
+            RefreshHeader();
+            return true;
+        }
+        private void RefreshUnreadMail()
+        {
+            if (!tabs.TryGetValue("mail", out Button tab)) return;
+            unreadMailCount = runtime != null ? runtime.UnreadMailCount(Mailbox.Kernel) + runtime.UnreadMailCount(Mailbox.Clinic) : 0;
+            tab.GetComponentInChildren<Text>(true).text = pages["mail"].Title + (unreadMailCount > 0 ? " (" + unreadMailCount + ")" : "");
         }
         private void RefreshHeader()
         {
             bool notifying = MailNotificationVisible && !SystemMenuVisible;
-            if (headerBackground != null) headerBackground.color = notifying ? mailBannerColor : Color.clear;
+            bool blinkMail = !notifying && !SystemMenuVisible && unreadMailCount > 0 &&
+                Mathf.Repeat(Time.unscaledTime - mailBannerUntil, mailBlinkSeconds * 2) < mailBlinkSeconds;
+            Color selected = MonitorWidgets.SelectedButtonColor;
+            if (headerBackground != null) headerBackground.color = notifying ? selected : Color.clear;
             if (heading != null)
-            {
                 heading.text = notifying ? "메일 수신 · " + receivedMailCount + "건" : "CODETECTIVE / " + (CurrentPage != null ? CurrentPage.Title : "");
-                heading.color = notifying ? new Color(1, 0.92f, 0.62f) : headingColor;
-            }
-            TintHeaderButton(back, MonitorWidgets.ButtonColor, notifying);
-            TintHeaderButton(forward, MonitorWidgets.ButtonColor, notifying);
-            TintHeaderButton(home, MonitorWidgets.ButtonColor, notifying);
+            Color navigationColor = notifying ? selected : MonitorWidgets.ButtonColor;
+            back.image.color = navigationColor;
+            forward.image.color = navigationColor;
+            home.image.color = navigationColor;
             foreach (var tab in tabs)
-                TintHeaderButton(tab.Value, tab.Key == CurrentMenuId ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor, notifying);
+            {
+                Color color = notifying || tab.Key == CurrentMenuId ? selected : MonitorWidgets.ButtonColor;
+                if (blinkMail && tab.Key == "mail") color = UnreadMailColor;
+                tab.Value.image.color = color;
+            }
         }
-        private void TintHeaderButton(Button button, Color normal, bool notifying)
-        { if (button != null) button.image.color = notifying ? Color.Lerp(normal, mailBannerColor, 0.85f) : normal; }
         private void OnDestroy() => navigation.Changed -= Display;
     }
 }

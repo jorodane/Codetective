@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using System.Reflection;
 using Codetective.Operations;
 using NUnit.Framework;
@@ -10,12 +11,17 @@ namespace Codetective.Terminal.Tests.UI
     public sealed class MailNotificationTests
     {
         private static void Set(object target, string field, object value) => target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance).SetValue(target, value);
+        private static void Invoke(MonitorPageHost host, string method) =>
+            typeof(MonitorPageHost).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(host, null);
         private static MonitorPageHost Monitor(GameObject root, KernelRuntime runtime, params MonitorPage[] pages)
         {
             var navigation = new GameObject("Navigation", typeof(RectTransform)); navigation.transform.SetParent(root.transform, false);
             navigation.GetComponent<RectTransform>().sizeDelta = new Vector2(1090, 44);
+            var heading = new GameObject("Heading", typeof(RectTransform), typeof(Text));
+            heading.transform.SetParent(root.transform, false);
             foreach (MonitorPage page in pages) page.transform.SetParent(root.transform, false);
             MonitorPageHost host = root.AddComponent<MonitorPageHost>(); Set(host, "navigationRoot", navigation.GetComponent<RectTransform>());
+            Set(host, "heading", heading.GetComponent<Text>());
             host.AttachRuntime(runtime); host.Initialize(); return host;
         }
         [Test]
@@ -32,8 +38,15 @@ namespace Codetective.Terminal.Tests.UI
                 TerminalMailNotice notice = panel.AddComponent<TerminalMailNotice>(); notice.Initialize(host, 0.55f);
                 int acknowledged = 0; notice.Acknowledged += () => acknowledged++;
                 Assert.That(notice.Show(1), Is.True); Assert.That(host.SystemMenuVisible, Is.True); Assert.That(kernel.activeSelf, Is.False);
-                Assert.That(panel.GetComponentsInChildren<Canvas>(), Is.Empty, "The envelope must use the existing physical CRT canvas.");
-                Assert.That(panel.GetComponentInChildren<MailEnvelopeGraphic>().GetComponent<CrtMeshEffect>(), Is.Not.Null);
+                Assert.That(panel.GetComponentsInChildren<Canvas>(true), Is.Empty, "The envelope must use the existing physical CRT canvas.");
+                Assert.That(panel.GetComponentsInChildren<Text>(true), Is.Empty, "The notice must be readable from the overview without text.");
+                MailEnvelopeGraphic envelope = panel.GetComponentInChildren<MailEnvelopeGraphic>(true);
+                Assert.That(envelope.GetComponent<CrtMeshEffect>(), Is.Not.Null);
+                Assert.That((envelope.rectTransform.anchorMin + envelope.rectTransform.anchorMax) / 2, Is.EqualTo(new Vector2(0.5f, 0.5f)));
+                var cover = panel.GetComponent<RectTransform>();
+                Assert.That(cover.anchorMin, Is.EqualTo(Vector2.zero));
+                Assert.That(cover.anchorMax, Is.EqualTo(Vector2.one));
+                Assert.That(panel.GetComponent<Image>().color.a, Is.EqualTo(1f));
                 Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel"));
                 object menu = new object(); host.SetOverlayVisible(menu, true); notice.Hide();
                 Assert.That(host.SystemMenuVisible, Is.True); Assert.That(kernel.activeSelf, Is.False); Assert.That(notice.Show(1), Is.False);
@@ -45,6 +58,51 @@ namespace Codetective.Terminal.Tests.UI
             }
             finally { Object.DestroyImmediate(root); }
         }
+
+        [Test]
+        public void MailArrivalUsesTheSelectedColorThenOnlyTheUnreadMailTabPulses()
+        {
+            var root = new GameObject("Monitor", typeof(RectTransform));
+            root.SetActive(false);
+            var kernel = new GameObject("Kernel", typeof(RectTransform), typeof(MonitorPage)).GetComponent<MonitorPage>();
+            var mail = new GameObject("Mail", typeof(RectTransform), typeof(MonitorPage)).GetComponent<MonitorPage>();
+            kernel.Configure("kernel", "커널");
+            mail.Configure("mail", "메일");
+            try
+            {
+                var runtime = new KernelRuntime();
+                MonitorPageHost host = Monitor(root, runtime, kernel, mail);
+                host.ShowPage("kernel");
+                var tabs = (Dictionary<string, Button>)typeof(MonitorPageHost)
+                    .GetField("tabs", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(host);
+                Image bar = root.transform.Find("TerminalHeaderBackground").GetComponent<Image>();
+                Color selected = tabs["kernel"].image.color;
+                Color idle = tabs["mail"].image.color;
+
+                runtime.RegisterMail(new StoryMail { id = "new", subject = "임무", mailbox = Mailbox.Kernel });
+                Assert.That(host.ShowMailReceived(1, null), Is.True);
+                Assert.That(bar.color, Is.EqualTo(selected));
+                Assert.That(tabs["mail"].image.color, Is.EqualTo(selected));
+
+                Set(host, "mailBannerUntil", Time.unscaledTime - 0.1f);
+                Invoke(host, "RefreshHeader");
+                Assert.That(bar.color, Is.EqualTo(Color.clear));
+                Assert.That(tabs["kernel"].image.color, Is.EqualTo(selected));
+                Assert.That(tabs["mail"].image.color, Is.Not.EqualTo(idle));
+
+                Set(host, "mailBannerUntil", Time.unscaledTime - 0.65f);
+                Invoke(host, "RefreshHeader");
+                Assert.That(tabs["mail"].image.color, Is.EqualTo(idle));
+
+                runtime.ReadMail("new");
+                Set(host, "mailBannerUntil", Time.unscaledTime - 0.1f);
+                Invoke(host, "RefreshUnreadMail");
+                Invoke(host, "RefreshHeader");
+                Assert.That(tabs["mail"].image.color, Is.EqualTo(idle));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
         [Test]
         public void BackgroundMailboxDoesNotAutomaticallyReadIncomingMail()
         {
