@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
@@ -11,7 +10,7 @@ namespace Codetective.Interaction
     {
         private readonly RectTransform root, tag;
         private readonly Text label;
-        private readonly Material silhouetteMask, outline;
+        private readonly bool supportsOutline;
         private readonly List<(MeshFilter filter, Renderer renderer)> parts = new List<(MeshFilter, Renderer)>();
         private readonly List<(Mesh mesh, Renderer renderer)> visibleParts = new List<(Mesh, Renderer)>();
         private Transform visualRoot;
@@ -29,35 +28,25 @@ namespace Codetective.Interaction
             tag.SetParent(root, false); tag.pivot = new Vector2(0.5f, 0);
             tag.anchorMin = tag.anchorMax = new Vector2(0.5f, 0.5f);
             Image plate = tag.GetComponent<Image>();
-            plate.color = new Color(0.11f, 0.09f, 0.035f, 0.9f); plate.raycastTarget = false;
+            plate.color = new Color(0.06f, 0.06f, 0.06f); plate.raycastTarget = false;
             Outline border = tag.GetComponent<Outline>();
-            border.effectColor = new Color(1f, 0.81f, 0.31f, 0.82f);
+            border.effectColor = new Color(0.52f, 0.52f, 0.52f);
             border.effectDistance = Vector2.one;
-            border.useGraphicAlpha = false;
             label = new GameObject("Label", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
             RectTransform text = label.rectTransform; text.SetParent(tag, false);
             text.anchorMin = Vector2.zero; text.anchorMax = Vector2.one; text.offsetMin = text.offsetMax = Vector2.zero;
             label.font = font != null ? font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             label.fontSize = 15; label.alignment = TextAnchor.MiddleCenter; label.raycastTarget = label.supportRichText = false;
-            label.color = new Color(1f, 0.89f, 0.55f);
+            label.color = new Color(0.92f, 0.92f, 0.92f);
 
             Shader shader = Resources.Load<Shader>("InspectionHighlight");
-            if (shader != null && shader.isSupported)
-            {
-                silhouetteMask = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
-                outline = new Material(shader) { hideFlags = HideFlags.HideAndDontSave, renderQueue = silhouetteMask.renderQueue + 1 };
-                outline.SetFloat("_Outline", 1);
-                outline.SetInt("_ColorMask", (int)ColorWriteMask.All);
-                outline.SetInt("_Cull", (int)CullMode.Front);
-                outline.SetInt("_StencilComp", (int)CompareFunction.NotEqual);
-                outline.SetInt("_StencilWrite", 0);
-            }
+            supportsOutline = shader != null && shader.isSupported;
             Hide();
         }
 
         internal void Draw(Camera camera, Transform visual, string name, BoxCollider frontFace = null)
         {
-            if (silhouetteMask == null) { Hide(); return; }
+            if (!supportsOutline) { Hide(); return; }
             if (visualRoot != visual)
             {
                 visualRoot = visual;
@@ -101,19 +90,7 @@ namespace Codetective.Interaction
                 }
             }
 
-            foreach (var (mesh, renderer) in visibleParts)
-            {
-                var parameters = new RenderParams(silhouetteMask)
-                {
-                    camera = camera, worldBounds = renderer.bounds, layer = renderer.gameObject.layer,
-                    receiveShadows = false, shadowCastingMode = ShadowCastingMode.Off
-                };
-                Matrix4x4 matrix = renderer.localToWorldMatrix;
-                for (int i = 0; i < mesh.subMeshCount; i++) Graphics.RenderMesh(parameters, mesh, i, matrix);
-                parameters.material = outline;
-                for (int i = 0; i < mesh.subMeshCount; i++) Graphics.RenderMesh(parameters, mesh, i, matrix);
-            }
-
+            InspectionOutlineFeature.Show(camera, visibleParts);
             tag.gameObject.SetActive(true);
             if (label.text != name) label.text = name;
             tag.sizeDelta = new Vector2(Mathf.Max(52, label.preferredWidth + 18), 25);
@@ -124,13 +101,16 @@ namespace Codetective.Interaction
                 Mathf.Clamp(point.y + 7, rect.yMin + 6, rect.yMax - tag.sizeDelta.y - 6));
         }
 
-        internal void Hide() { if (tag != null && tag.gameObject.activeSelf) tag.gameObject.SetActive(false); }
+        internal void Hide()
+        {
+            InspectionOutlineFeature.Hide(visibleParts);
+            if (tag != null && tag.gameObject.activeSelf) tag.gameObject.SetActive(false);
+        }
 
         public void Dispose()
         {
+            Hide();
             if (root != null) Object.Destroy(root.gameObject);
-            if (silhouetteMask != null) Object.Destroy(silhouetteMask);
-            if (outline != null) Object.Destroy(outline);
         }
     }
 }
