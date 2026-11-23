@@ -157,7 +157,7 @@ namespace Codetective.Operations
                 quests = quests.Values.Select(q => q.Copy()).ToArray(),
                 newspapers = editions.Values.Select(e => e.Copy()).ToArray(),
                 clinicDay = clinicDay?.Copy(), heardConsultationLines = heardConsultationLines.ToArray(),
-                dayPresentation = new DayPresentationState { day = dayPresentation.day, introduced = dayPresentation.introduced, mailDeferred = dayPresentation.mailDeferred },
+                dayPresentation = dayPresentation.Copy(),
                 dayLedger = CopyLedger(dayLedger), dailyRecords = dailyRecords.Values.Select(r => r.Copy()).ToArray(),
                 data = data.Values.Select(CloneSlot).ToArray(), nextDataId = nextDataId, protocols = protocols.Values.Select(p => p.Source).ToArray(),
                 evidence = evidence.Values.Select(e => e.Copy()).ToArray(), nextEvidenceNumber = nextEvidenceNumber,

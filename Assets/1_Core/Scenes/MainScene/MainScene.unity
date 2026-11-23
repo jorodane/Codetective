@@ -6993,14 +6993,6 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 100042, guid: 2ab261c0ca2aef95d123f6b4d0d6d5db, type: 3}
-      propertyPath: m_SizeDelta.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100042, guid: 2ab261c0ca2aef95d123f6b4d0d6d5db, type: 3}
-      propertyPath: m_AnchoredPosition.y
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 110000, guid: 2ab261c0ca2aef95d123f6b4d0d6d5db, type: 3}
       propertyPath: centerBulge
       value: 95

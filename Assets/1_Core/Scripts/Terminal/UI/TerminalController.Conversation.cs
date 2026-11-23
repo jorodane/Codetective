@@ -19,7 +19,7 @@ namespace Codetective.Terminal
         private const float AnswerInset = 40f;
         private RectTransform answerRow;
         private Text answerOptions, answerQuestion;
-        private Vector2 logBottom, completionPosition;
+        private Vector2 logBottom, scrollbarBottom, completionPosition;
 
         private void ResetConversationPresentation()
         { mergedConversations.Clear(); renderedConversationRevision = -1; renderedConversationLocale = null; renderedConversationId = null; conversationInputLocked = false; restoreCommandFocus = false; ClearConversationDisturbance(); }
@@ -94,8 +94,11 @@ namespace Codetective.Terminal
             if (answerRow.gameObject.activeSelf != waiting)
             {
                 answerRow.gameObject.SetActive(waiting);
-                TranscriptViewport.offsetMin = logBottom + (waiting ? Vector2.up * AnswerInset : Vector2.zero);
-                ((RectTransform)completionPanel.transform).anchoredPosition = completionPosition + (waiting ? Vector2.up * AnswerInset : Vector2.zero);
+                Vector2 inset = waiting ? Vector2.up * AnswerInset : Vector2.zero;
+                TranscriptViewport.offsetMin = logBottom + inset;
+                if (transcriptScroll.verticalScrollbar != null)
+                    ((RectTransform)transcriptScroll.verticalScrollbar.transform).offsetMin = scrollbarBottom + inset;
+                ((RectTransform)completionPanel.transform).anchoredPosition = completionPosition + inset;
             }
             if (waiting)
             {
@@ -107,6 +110,8 @@ namespace Codetective.Terminal
         private void BuildAnswerPrompt()
         {
             logBottom = TranscriptViewport.offsetMin;
+            if (transcriptScroll.verticalScrollbar != null)
+                scrollbarBottom = ((RectTransform)transcriptScroll.verticalScrollbar.transform).offsetMin;
             completionPosition = ((RectTransform)completionPanel.transform).anchoredPosition;
             RectTransform field = (RectTransform)input.transform;
             field.SetAsLastSibling();

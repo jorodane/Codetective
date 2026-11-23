@@ -165,6 +165,7 @@ namespace Codetective.Operations
                     return PrepareTerminalAnswer(words);
                 if (keyword == "save" || keyword == "free")
                 {
+                    if (!CanUseTerminalKeyword(keyword)) throw new CommandException(TutorialPermissionMessage);
                     if (words.Length != 2) return ExecutionResult.Error($"사용법: {words[0]} 이름");
                     if (keyword == "save") { Allocate(words[1]); return ExecutionResult.Ok($"'{words[1]}' 치환문을 등록했습니다."); }
                     return Free(words[1]) ? ExecutionResult.Ok($"'{words[1]}' 치환 규칙을 폐기했습니다.") :
@@ -172,6 +173,7 @@ namespace Codetective.Operations
                 }
                 budget = 1024; depth = 0;
                 Statement statement = new CommandParser(source).ReadSingle();
+                RequireTutorialStatementPermission(statement);
                 if (terminalCommandTrace != null) terminalCommandTrace.assigned = statement.Assign;
                 Datum value = ExecuteStatement(statement, null, null);
                 Revision++;
@@ -373,9 +375,14 @@ namespace Codetective.Operations
             string leading = equal >= 0 ? source.Substring(0, equal + 1) : "";
             string input = source.Substring(equal + 1).TrimStart();
             leading += source.Substring(equal + 1, source.Substring(equal + 1).Length - input.Length);
+            var tutorial = locals == null ? TutorialGoals() : null;
+            bool canBind = HasTutorialPermission(tutorial, TerminalGoalKind.BindReference);
+            if (tutorial != null && equal >= 0 && (!canBind || input.IndexOfAny(new[] { '.', '(' }) >= 0))
+                return Array.Empty<Completion>();
             int open = input.LastIndexOf('(');
             if (open >= 0 && input.LastIndexOf(')') < open)
             {
+                if (tutorial != null) return Array.Empty<Completion>();
                 int comma = input.LastIndexOf(',');
                 int start = Math.Max(open, comma) + 1;
                 string prefix = input.Substring(start).TrimStart();
@@ -404,19 +411,21 @@ namespace Codetective.Operations
             if (dot >= 0)
             {
                 string objectPath = input.Substring(0, dot);
+                if (tutorial != null && (objectPath.Contains(".") || !HasTutorialPermission(tutorial, TerminalGoalKind.Invoke)))
+                    return Array.Empty<Completion>();
                 string prefix = input.Substring(dot + 1);
                 try
                 {
                     Entity entity = ResolveCompletionEntity(objectPath.Split('.'), locals);
                     var output = new List<Completion>();
-                    foreach (var child in KnownChildren(entity))
+                    foreach (var child in KnownChildren(entity).Where(_ => tutorial == null))
                     {
                         string preferred = CommandVocabulary.Name(child.Key, child.Value.Names, Language);
                         string name = CommandVocabulary.Match(preferred, child.Value.AllNames.Concat(new[] { child.Key }), prefix, composing);
                         if (name != null && EntityDenial(child.Value, locals) == null)
                             output.Add(new Completion(name + " · " + Text(child.Value.LabelKey, child.Value.LabelFor(Language)), leading + objectPath + "." + name + (equal < 0 ? "." : "")));
                     }
-                    foreach (VariableDefinition field in entity.Variables)
+                    foreach (VariableDefinition field in entity.Variables.Where(_ => tutorial == null))
                     {
                         string name = CommandVocabulary.Match(field.NameFor(Language), field.AllNames, prefix, composing);
                         if (name != null && VariableDenial(entity, field, locals) == null)
@@ -425,6 +434,7 @@ namespace Codetective.Operations
                     }
                     foreach (Operation op in entity.EffectiveOperations)
                     {
+                        if (tutorial != null && (op.Property || !TutorialAllowsOperation(tutorial, entity, op, op.Parameters.Length))) continue;
                         string name = CommandVocabulary.Match(op.NameFor(Language), op.AllNames, prefix, composing);
                         if (name != null && (!IsDayEnded || DryRun || op.Property) && OperationDenial(entity, op, locals) == null)
                             output.Add(new Completion(op.SignatureFor(Language, name) + " · " + op.LabelFor(Language),
@@ -434,8 +444,15 @@ namespace Codetective.Operations
                 }
                 catch (CommandException) { return Array.Empty<Completion>(); }
             }
-            return AvailableValues(locals, input, composing).Where(v => Prefix(v.Key, input, composing)).Select(v =>
-                new Completion(v.Key + " : " + TypeName(v.Value), leading + v.Key + (equal < 0 && ReferenceTarget(v.Value) != null ? "." : ""))).ToArray();
+            bool canReadSlots = HasTutorialPermission(tutorial, TerminalGoalKind.Allocate);
+            if (!canBind && !canReadSlots) return Array.Empty<Completion>();
+            return AvailableValues(locals, input, composing).Where(v => Prefix(v.Key, input, composing) &&
+                (tutorial == null || (v.Value.kind != DataKind.Protocol && (canBind || data.ContainsKey(v.Key))))).Select(v =>
+            {
+                Entity target = equal < 0 ? ReferenceTarget(v.Value) : null;
+                bool memberAccess = target != null && (tutorial == null || tutorial.Any(goal => goal.kind == TerminalGoalKind.Invoke && goal.targetId == target.Id));
+                return new Completion(v.Key + " : " + TypeName(v.Value), leading + v.Key + (memberAccess ? "." : ""));
+            }).ToArray();
         }
 
         private IEnumerable<KeyValuePair<string, Datum>> AvailableValues(Dictionary<string, Datum> locals, string prefix, bool composing)

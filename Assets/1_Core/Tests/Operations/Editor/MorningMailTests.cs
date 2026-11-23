@@ -51,6 +51,36 @@ namespace Codetective.Tests.Operations
             Assert.That(delivered.UnreadMailCount(Mailbox.Kernel), Is.EqualTo(1)); Assert.That(delivered.IsMailRead("intro"), Is.False);
         }
         [Test]
+        public void TimedMorningMailResumesFromTheRemainingDelayAndNotifiesOnce()
+        {
+            KernelRuntime runtime = World();
+            runtime.DeferDayMailUntilIntro();
+            runtime.MarkDayIntroSeen(5);
+            runtime.AdvanceDayMailDelay(4.75);
+            Assert.That(runtime.Inbox(Mailbox.Kernel), Is.Empty);
+            Assert.That(() => runtime.ReadMail("intro"), Throws.TypeOf<CommandException>());
+
+            KernelRuntime restored = World();
+            restored.Restore(runtime.Capture());
+            var arrivals = new MailArrivalTracker();
+            arrivals.Initialize(restored);
+            Assert.That(restored.DayIntroSeen, Is.True);
+            restored.MarkDayIntroSeen(5);
+            restored.AdvanceDayMailDelay(0.24);
+            arrivals.Observe(restored);
+            Assert.That(arrivals.TakeSignal(), Is.False);
+
+            restored.AdvanceDayMailDelay(0.01);
+            arrivals.Observe(restored);
+            Assert.That(restored.DayMailDeferred, Is.False);
+            Assert.That(restored.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("intro"));
+            Assert.That(restored.IsMailRead("intro"), Is.False);
+            Assert.That(arrivals.TakeSignal(), Is.True);
+            restored.AdvanceDayMailDelay(1);
+            arrivals.Observe(restored);
+            Assert.That(arrivals.TakeSignal(), Is.False);
+        }
+        [Test]
         public void LegacySavesDoNotHideMailOrReplayAnAlreadyStartedDay()
         {
             KernelRuntime runtime = World(); KernelSnapshot snapshot = runtime.Capture(); snapshot.dayPresentation = null;

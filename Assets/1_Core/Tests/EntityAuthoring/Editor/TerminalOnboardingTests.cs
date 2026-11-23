@@ -72,18 +72,24 @@ namespace Codetective.Tests.Operations
             restored.AdvanceTerminalConversation(1000);
             Assert.That(restored.TerminalExpectedCommand, Is.EqualTo("practice = hq"));
             Assert.That(restored.TerminalConversationTranscript(), Does.Contain("\npractice = hq").And.Not.Contain("code practice = hq;"));
+            Assert.That(restored.CanUseTerminalKeyword("code"), Is.True);
+            Assert.That(restored.CanUseTerminalKeyword("free"), Is.False);
+            Assert.That(restored.Execute("hq.checkComms()").Success, Is.False);
             Assert.That(restored.Execute("practice = hq").Success, Is.True);
             Assert.That(restored.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("invoke"));
         }
         [Test] public void ThirdSuccessfulDetourUsesTheAuthoredAngryReplyAndRecoversToTheSameLesson()
         {
             KernelRuntime r = World(); r.AdvanceTerminalConversation(1000);
-            foreach (string command in new[] { "save first", "free first", "save second" })
-            { Assert.That(r.Execute(command).Success, Is.True); if (command != "save second") r.AdvanceTerminalConversation(1000); }
+            Assert.That(r.Execute("도움말").Success, Is.True);
+            r.AdvanceTerminalConversation(1000);
+            foreach (string command in new[] { "암호 첫번째", "암호 두번째", "암호 세번째" })
+            { Assert.That(r.Execute(command).Success, Is.True); if (command != "암호 세번째") r.AdvanceTerminalConversation(1000); }
             Assert.That(r.TerminalDisturbance, Is.GreaterThan(0));
             r.AdvanceTerminalConversation(1000); Assert.That(r.TerminalConversationTranscript(), Does.Contain("지금은 장난칠 때가 아닙니다."));
-            Assert.That(r.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("help"));
-            r.Execute("help"); Assert.That(r.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("allocate"));
+            Assert.That(r.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("allocate"));
+            Assert.That(r.Execute("암호 연습").Success, Is.True);
+            Assert.That(r.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("reference"));
         }
         [Test] public void ConversationUsesTheScenarioRegistryAndCanBeSavedWithLocalizedPendingLines()
         {

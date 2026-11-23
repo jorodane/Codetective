@@ -91,7 +91,7 @@ namespace Codetective.Terminal
 
             if (separator < 0)
             {
-                return Commands.Where(command => command != "answer" || Runtime.TerminalAwaitingAnswer)
+                return Commands.Where(Runtime.CanUseTerminalKeyword)
                     .Select(command => new { Code = command, Name = CommandVocabulary.Match(CommandVocabulary.KeywordName(command, Runtime.Language),
                         CommandVocabulary.KeywordNames(command), line, isComposing) }).Where(c => c.Name != null)
                     .Select(command => new TerminalCompletion(command.Name, command.Code == "help" ? command.Name : command.Name + " "))
@@ -100,8 +100,12 @@ namespace Codetective.Terminal
 
             string enteredCommand = line.Substring(0, separator);
             string canonicalCommand = CommandVocabulary.Keyword(enteredCommand);
-            if (canonicalCommand == "save" || canonicalCommand == "help") return Array.Empty<TerminalCompletion>();
             string prefix = line.Substring(separator).TrimStart();
+            // These spellings also work as reference names on the left of an assignment.
+            if ((canonicalCommand == "code" || canonicalCommand == "answer") && prefix.StartsWith("=", StringComparison.Ordinal))
+                canonicalCommand = null;
+            if (!Runtime.CanUseTerminalKeyword(canonicalCommand)) return Array.Empty<TerminalCompletion>();
+            if (canonicalCommand == "save" || canonicalCommand == "help") return Array.Empty<TerminalCompletion>();
             if (canonicalCommand == "code" && prefix.IndexOf('=') < 0)
             {
                 string name = Runtime.TerminalDeclarationName;
@@ -112,7 +116,7 @@ namespace Codetective.Terminal
                     return new[] { new TerminalCompletion(name, replacement) };
                 }
             }
-            if (canonicalCommand == "answer" && !prefix.StartsWith("=", StringComparison.Ordinal))
+            if (canonicalCommand == "answer")
             {
                 // The question lists all options. An empty argument must not select one by default.
                 if (prefix.Length == 0 || Runtime.IsTerminalAnswerKey(prefix))

@@ -31,6 +31,7 @@ MonoBehaviour:
     lastDay: 1
     pauseWorld: 1
     replacesStartupGuide: 1
+    unlockCommandsByStep: 1
     skipIfMailAlreadyReadOnExistingSave: 1
     condition:
       triggersOn: []

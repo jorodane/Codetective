@@ -62,6 +62,7 @@ namespace Codetective.Operations
         public int firstDay = 1, lastDay = int.MaxValue;
         public bool pauseWorld = true;
         public bool replacesStartupGuide;
+        public bool unlockCommandsByStep;
         public bool skipIfMailAlreadyReadOnExistingSave;
         public StoryCondition condition = new StoryCondition();
         public TerminalConversationStep[] steps = Array.Empty<TerminalConversationStep>();
@@ -69,7 +70,8 @@ namespace Codetective.Operations
         public int angryAfter = 3;
         public StoryEffects onComplete = new StoryEffects();
         public TerminalConversationDefinition Copy() => new TerminalConversationDefinition { id = id, requiredMailRead = requiredMailRead, pageId = pageId,
-            variableBase = variableBase, koreanVariableBase = koreanVariableBase, speaker = speaker, speakerKey = speakerKey, firstDay = firstDay, lastDay = lastDay, pauseWorld = pauseWorld, replacesStartupGuide = replacesStartupGuide, skipIfMailAlreadyReadOnExistingSave = skipIfMailAlreadyReadOnExistingSave,
+            variableBase = variableBase, koreanVariableBase = koreanVariableBase, speaker = speaker, speakerKey = speakerKey, firstDay = firstDay, lastDay = lastDay, pauseWorld = pauseWorld, replacesStartupGuide = replacesStartupGuide,
+            unlockCommandsByStep = unlockCommandsByStep, skipIfMailAlreadyReadOnExistingSave = skipIfMailAlreadyReadOnExistingSave,
             condition = condition.Copy(), steps = steps.Select(s => s.Copy()).ToArray(), forgivingReplies = forgivingReplies.Select(l => l.Copy()).ToArray(),
             angryReplies = angryReplies.Select(l => l.Copy()).ToArray(), angryAfter = angryAfter, onComplete = onComplete.Copy() };
         public void Validate()
@@ -183,6 +185,70 @@ namespace Codetective.Operations
         public string TerminalQuestion => TerminalAwaitingAnswer ? string.Join("\n\n", ConversationStep.lines.Select(line =>
             Text(line.textKey, line.text).Replace("{slot}", Conversation.slotName).Replace("{command}", TerminalExpectedCommand))) : "";
         public bool IsTerminalAnswerKey(string key) => FindWaitingAnswer(key) != null;
+
+        // A missing restriction means ordinary story permissions apply. A dormant tutorial starts with help alone.
+        private IEnumerable<TerminalCommandGoal> TutorialGoals()
+        {
+            if (IsDayEnded || (!string.IsNullOrEmpty(StoryStartFact) && !AwaitingAssignment)) return null;
+            TerminalConversationDefinition tutorial = terminalConversations.Values.FirstOrDefault(definition =>
+                definition.unlockCommandsByStep && Day >= definition.firstDay && Day <= definition.lastDay &&
+                terminalConversationProgress[definition.id].phase != TerminalConversationPhase.Completed && definition.condition.Matches(this));
+            if (tutorial == null) return null;
+            string step = terminalConversationProgress[tutorial.id].stepId;
+            int current = Array.FindIndex(tutorial.steps, item => item.id == step);
+            return tutorial.steps.Take(current + 1).Select(item => item.goal);
+        }
+
+        private static bool HasTutorialPermission(IEnumerable<TerminalCommandGoal> goals, TerminalGoalKind kind) =>
+            goals == null || goals.Any(goal => goal.kind == kind);
+
+        private static bool TutorialAllowsOperation(IEnumerable<TerminalCommandGoal> goals, Entity target, Operation operation, int arguments) =>
+            goals == null || goals.Any(goal => goal.kind == TerminalGoalKind.Invoke && goal.targetId == target.Id &&
+                goal.operation == operation.Code && (goal.argumentCount < 0 || goal.argumentCount == arguments));
+
+        public bool CanUseTerminalKeyword(string keyword)
+        {
+            switch (keyword)
+            {
+                case "answer": return TerminalAwaitingAnswer;
+                case "code": case "save": return HasTutorialPermission(TutorialGoals(), TerminalGoalKind.Allocate);
+                case "free": return HasTutorialPermission(TutorialGoals(), TerminalGoalKind.Free);
+                default: return true;
+            }
+        }
+
+        private string TutorialPermissionMessage => Language == CommandLocale.Korean ?
+            "아직 이 명령의 권한이 열리지 않았습니다." : "This command is not unlocked yet.";
+
+        private string TutorialHelp()
+        {
+            var goals = TutorialGoals();
+            if (goals == null) return null;
+            string help = CommandVocabulary.KeywordName("help", Language);
+            IEnumerable<string> commands = goals.Select(goal => ExpectedCommand(goal, Conversation, Language))
+                .Where(command => !string.IsNullOrEmpty(command)).Prepend(help);
+            if (TerminalAwaitingAnswer) commands = commands.Append(TerminalAnswerPrompt);
+            return (Language == CommandLocale.Korean ? "사용 가능한 명령\n" : "Available commands\n") + string.Join("\n", commands.Distinct());
+        }
+
+        private void RequireTutorialStatementPermission(Statement statement)
+        {
+            var goals = TutorialGoals();
+            if (goals == null) return;
+            Expression value = statement.Value;
+            if (statement.AssignPath != null || !string.IsNullOrEmpty(statement.DeclaredType) || value.Path == null)
+                throw new CommandException(TutorialPermissionMessage);
+            if (!value.IsCall && value.Path.Length == 1 && !protocols.ContainsKey(value.Path[0]) &&
+                (HasTutorialPermission(goals, TerminalGoalKind.BindReference) ||
+                statement.Assign == null && HasTutorialPermission(goals, TerminalGoalKind.Allocate) && data.ContainsKey(value.Path[0]))) return;
+            if (!value.IsCall || statement.Assign != null || value.Path.Length != 2 || !HasTutorialPermission(goals, TerminalGoalKind.Invoke) ||
+                value.Arguments.Any(argument => argument.IsCall || argument.Elements != null || argument.Path?.Length > 1))
+                throw new CommandException(TutorialPermissionMessage);
+            Entity target = ResolveEntity(new[] { value.Path[0] }, null);
+            Datum[] arguments = value.Arguments.Select(argument => Evaluate(argument, null, null)).ToArray();
+            Operation operation = ResolveOperation(target, value.Path[1], arguments, null);
+            if (!TutorialAllowsOperation(goals, target, operation, arguments.Length)) throw new CommandException(TutorialPermissionMessage);
+        }
 
         private TerminalAnswer FindWaitingAnswer(string key) =>
             WaitingAnswers.FirstOrDefault(answer => string.Equals(answer.key, key, StringComparison.OrdinalIgnoreCase));

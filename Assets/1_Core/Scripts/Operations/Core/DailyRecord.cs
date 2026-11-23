@@ -4,7 +4,13 @@ using System.Linq;
 
 namespace Codetective.Operations
 {
-    [Serializable] public sealed class DayPresentationState { public int day; public bool introduced, mailDeferred; }
+    [Serializable] public sealed class DayPresentationState
+    {
+        public int day;
+        public bool introduced, mailDeferred;
+        public double mailDelayRemaining;
+        public DayPresentationState Copy() => (DayPresentationState)MemberwiseClone();
+    }
     [Serializable] public sealed class DailyLedger
     {
         public int day;
@@ -32,10 +38,22 @@ namespace Codetective.Operations
         private DayPresentationState dayPresentation = new DayPresentationState { day = 1 };
         private readonly Dictionary<int, DailyRecord> dailyRecords = new Dictionary<int, DailyRecord>();
         public bool DayIntroSeen => dayPresentation.day == Day && dayPresentation.introduced;
-        public void MarkDayIntroSeen()
+        public void MarkDayIntroSeen(double mailDelaySeconds = 0)
         {
-            if (DayIntroSeen && !DayMailDeferred) return;
-            dayPresentation = new DayPresentationState { day = Day, introduced = true }; Revision++; NarrativeUpdated();
+            if (DayIntroSeen) return;
+            bool delayMail = DayMailDeferred && mailDelaySeconds > 0 && !double.IsInfinity(mailDelaySeconds);
+            dayPresentation = new DayPresentationState { day = Day, introduced = true, mailDeferred = delayMail,
+                mailDelayRemaining = delayMail ? mailDelaySeconds : 0 };
+            Revision++; NarrativeUpdated();
+        }
+        public void AdvanceDayMailDelay(double seconds)
+        {
+            if (!DayIntroSeen || !DayMailDeferred || !(seconds > 0) || double.IsInfinity(seconds)) return;
+            dayPresentation.mailDelayRemaining = Math.Max(0, dayPresentation.mailDelayRemaining - seconds);
+            if (dayPresentation.mailDelayRemaining > 0.000001) return;
+            dayPresentation.mailDelayRemaining = 0;
+            dayPresentation.mailDeferred = false;
+            Revision++; NarrativeUpdated();
         }
         public void InitializeDailyRecord()
         {
@@ -62,8 +80,9 @@ namespace Codetective.Operations
         private void RestoreDailyRecord(KernelSnapshot snapshot)
         {
             dayLedger = CopyLedger(snapshot.dayLedger); InitializeDailyRecord();
-            dayPresentation = snapshot.dayPresentation != null ? new DayPresentationState { day = snapshot.dayPresentation.day, introduced = snapshot.dayPresentation.introduced, mailDeferred = snapshot.dayPresentation.mailDeferred } :
-                new DayPresentationState { day = Day, introduced = true }; // Existing saves have already started their day.
+            dayPresentation = snapshot.dayPresentation?.Copy() ?? new DayPresentationState { day = Day, introduced = true };
+            if (dayPresentation.introduced && (!(dayPresentation.mailDelayRemaining > 0) || double.IsInfinity(dayPresentation.mailDelayRemaining)))
+            { dayPresentation.mailDeferred = false; dayPresentation.mailDelayRemaining = 0; }
             dailyRecords.Clear(); foreach (DailyRecord record in snapshot.dailyRecords ?? Array.Empty<DailyRecord>()) dailyRecords.Add(record.day, record.Copy());
         }
     }

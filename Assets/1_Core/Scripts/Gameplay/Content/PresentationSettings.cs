@@ -21,6 +21,8 @@ namespace Codetective.Gameplay
         [Min(0)] public float daySubtitleDelay = 0.25f;
         [Min(0)] public float daySubtitleFadeSeconds = 0.4f;
         [Min(0)] public float dayTextFadeSeconds = 0.9f;
+        [Tooltip("Seconds after the first day's title starts fading before the first mail arrives.")]
+        [Min(0)] public float firstDayMailDelaySeconds = 5f;
         public AudioClip mailArrivalSound;
         [Range(0, 1)] public float mailArrivalVolume = 0.45f;
         [Min(0.15f)] public float mailBlinkSeconds = 0.55f;

@@ -145,6 +145,53 @@ namespace Codetective.Terminal.Tests
         }
 
         [Test]
+        public void TutorialPermissionsUnlockInOrderForHelpCompletionAndExecution()
+        {
+            KernelRuntime runtime = ClinicScenario.Create();
+            runtime.Language = CommandLocale.English;
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition
+            {
+                id = "practice", unlockCommandsByStep = true,
+                steps = new[]
+                {
+                    new TerminalConversationStep { id = "help", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
+                    new TerminalConversationStep { id = "allocate", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate } },
+                    new TerminalConversationStep { id = "bind", goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } },
+                    new TerminalConversationStep { id = "invoke", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Invoke, targetId = "hq", operation = "checkComms", argumentCount = 0 } },
+                    new TerminalConversationStep { id = "free", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Free } }
+                }
+            });
+            var session = new TerminalSession(runtime);
+            Assert.That(session.Complete("").Select(c => c.DisplayText), Is.EqualTo(new[] { "help" }));
+            Assert.That(session.Execute("var early").Success, Is.False);
+            Assert.That(session.Execute("code early = hq").Success, Is.False);
+            Assert.That(session.Count, Is.Zero);
+
+            runtime.EnterTerminalPage("kernel");
+            Assert.That(session.Execute("help").Message, Does.Not.Contain("code").And.Not.Contain("free"));
+            Assert.That(session.Complete("co").Single().ReplacementText, Is.EqualTo("code "));
+            Assert.That(session.Complete("practice = h").Count, Is.Zero);
+            Assert.That(session.Execute("practice = hq").Success, Is.False);
+            Assert.That(session.Execute("code practice").Success, Is.True);
+
+            Assert.That(session.Complete("practice = h").Single().ReplacementText, Is.EqualTo("practice = hq"));
+            Assert.That(session.Complete("answer = h").Single().ReplacementText, Is.EqualTo("answer = hq"));
+            Assert.That(session.Complete("hq.").Count, Is.Zero);
+            Assert.That(session.Execute("hq.checkComms()").Success, Is.False);
+            Assert.That(session.Execute("practice = hq").Success, Is.True);
+
+            Assert.That(session.Complete("practice.").Select(c => c.ReplacementText), Is.EqualTo(new[] { "practice.checkComms()" }));
+            Assert.That(session.Execute("hq.requestCoffee()").Success, Is.False);
+            Assert.That(session.Execute("free practice").Success, Is.False);
+            Assert.That(session.Execute("practice.checkComms()").Success, Is.True);
+
+            Assert.That(session.Complete("free ").Single().ReplacementText, Is.EqualTo("free practice"));
+            Assert.That(session.Execute("free practice").Success, Is.True);
+            Assert.That(runtime.TerminalConversationActive, Is.False);
+            Assert.That(session.Complete("hq.").Select(c => c.ReplacementText), Does.Contain("hq.requestCoffee()"));
+        }
+
+        [Test]
         public void NamesAreCaseSensitiveAndSessionsAreIndependent()
         {
             var session = new TerminalSession();

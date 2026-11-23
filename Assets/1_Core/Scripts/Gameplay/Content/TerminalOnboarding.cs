@@ -82,7 +82,8 @@ namespace Codetective.Gameplay
             var asset = ScriptableObject.CreateInstance<TerminalConversationAsset>(); asset.name = "KernelOnboarding";
             asset.conversation = new TerminalConversationDefinition { id = "kernel-onboarding", requiredMailRead = "government-intro", firstDay = 1, lastDay = 1,
                 koreanVariableBase = "연습",
-                speaker = "현장지원과", speakerKey = "onboarding.speaker", pauseWorld = true, replacesStartupGuide = true, skipIfMailAlreadyReadOnExistingSave = true, angryAfter = 3, steps = steps,
+                speaker = "현장지원과", speakerKey = "onboarding.speaker", pauseWorld = true, replacesStartupGuide = true, unlockCommandsByStep = true,
+                skipIfMailAlreadyReadOnExistingSave = true, angryAfter = 3, steps = steps,
                 condition = new StoryCondition { triggersOff = new[] { "terminal.onboarding.complete" } },
                 forgivingReplies = new[] {
                     Line("detour1", "그 명령도 유효합니다만, 지금은 다음 명령을 확인하는 중입니다:\n{command}\n계속해 볼까요?", "That command is valid, but we're checking {command} right now. Shall we continue?"),

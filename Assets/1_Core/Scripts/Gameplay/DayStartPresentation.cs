@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace Codetective.Gameplay
 {
-    /// <summary>A transparent title card over the office. Mail arrives when the completed text begins to disappear.</summary>
+    /// <summary>A transparent title card over the office with a cue when its text starts to fade out.</summary>
     public sealed class DayStartPresentation : MonoBehaviour
     {
         private GameObject root;

@@ -74,7 +74,7 @@ namespace Codetective.Operations
         public int UnreadMailCount(Mailbox box) => Inbox(box).Count(m => !IsMailRead(m.id));
         public bool IsMailRead(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.read;
         public bool IsMailAccepted(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.accepted;
-        public bool DayMailDeferred => dayPresentation.day == Day && !dayPresentation.introduced && dayPresentation.mailDeferred;
+        public bool DayMailDeferred => dayPresentation.day == Day && dayPresentation.mailDeferred;
         public void DeferDayMailUntilIntro()
         {
             if (IsDayEnded || DayIntroSeen || DayMailDeferred) return;

@@ -349,8 +349,7 @@ namespace Codetective.Terminal.Tests.UI
                 button.transform.SetParent(panel.transform); buttons[i] = button.GetComponent<Button>();
                 buttons[i].targetGraphic = button.GetComponent<Image>(); labels[i] = Label(button.transform, "Text");
             }
-            Set(controller, "input", field); Set(controller, "memoryList", Label(host.transform, "Memory"));
-            Set(controller, "memoryHeading", Label(host.transform, "Heading"));
+            Set(controller, "input", field);
             Set(controller, "completionPanel", panel); Set(controller, "completionHeading", Label(panel.transform, "Heading"));
             Set(controller, "completionButtons", buttons); Set(controller, "completionLabels", labels);
             var scroll = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect)); scroll.transform.SetParent(host.transform);

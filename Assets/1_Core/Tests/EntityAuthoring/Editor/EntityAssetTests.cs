@@ -346,8 +346,9 @@ namespace Codetective.Tests.Operations
             KernelRuntime runtime = scenario.CreateRuntime();
             Assert.That(runtime.TodayNewspaper.articleIds, Does.Contain("research-funding"));
             Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.False);
-            runtime.ReadNewspaper(); Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.True);
+            runtime.ReadNewspaper(); Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.False);
             FinishTutorialAndAcceptFirstMission(runtime);
+            Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.True);
             Assert.That(runtime.GetQuest("nsf.introduction").stage, Is.EqualTo(10));
             runtime.Entity("client").SetFunctionAccess("askAboutFoundation", PlayerAccess.Internal);
             var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));

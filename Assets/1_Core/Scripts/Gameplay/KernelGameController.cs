@@ -190,7 +190,9 @@ namespace Codetective.Gameplay
 
         private void Update()
         {
-            if (!presentationInitialized || !IsSessionActive || changingScene || inspection.Mode == InspectionMode.Menu || ui.SummaryVisible || Transitions.IsBusy) return;
+            if (!presentationInitialized || !IsSessionActive || changingScene || inspection.Mode == InspectionMode.Menu || ui.SummaryVisible) return;
+            Runtime.AdvanceDayMailDelay(Time.unscaledDeltaTime);
+            if (Transitions.IsBusy) return;
             if (!IsDateTransitioning) Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
             if (!IsDateTransitioning && Runtime.IsClinicTransitioning && !IsVisitPresenting) StartCoroutine(PresentVisits());
             if (Runtime.IsDayEnded && !Runtime.IsClinicTransitioning && !IsDateTransitioning && !IsVisitPresenting && summaryShownDay != Runtime.Day &&
@@ -347,7 +349,8 @@ namespace Codetective.Gameplay
             ui.HideContext(); ui.HideDay(); inspection.SnapToOverview(); Runtime.DeferDayMailUntilIntro();
             yield return ui.PlayDayStart(Runtime.Day, Runtime.DaySubtitle, () =>
             {
-                Runtime.MarkDayIntroSeen();
+                float mailDelay = Runtime.Day == 1 ? Transitions.Settings?.firstDayMailDelaySeconds ?? 5f : 0f;
+                Runtime.MarkDayIntroSeen(mailDelay);
                 AutoSave();
             });
             ui.HideDay(); inspection.NavigationBlocked = false; IsDateTransitioning = false;

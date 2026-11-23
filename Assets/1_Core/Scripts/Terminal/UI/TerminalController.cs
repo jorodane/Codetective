@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -15,8 +14,6 @@ namespace Codetective.Terminal
         [SerializeField] private TerminalInputField input;
         [SerializeField] private Text transcript;
         [SerializeField] private ScrollRect transcriptScroll;
-        [SerializeField] private Text memoryList;
-        [SerializeField] private Text memoryHeading;
         [SerializeField] private GameObject completionPanel;
         [SerializeField] private Text completionHeading;
         [SerializeField] private Button[] completionButtons;
@@ -163,7 +160,6 @@ namespace Codetective.Terminal
                            "입력창 클릭 후 명령 입력 · Tab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정 · 다음 Enter 실행\n" +
                            "입력하지 않을 때 Tab 다음 페이지 / Shift+Tab 이전 페이지\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
             transcript.text = history.Text;
-            RefreshMemory();
             RefreshCommandPrompt();
             completionPanel.SetActive(false);
             SetInteractionEnabled(interactionEnabled);
@@ -191,9 +187,7 @@ namespace Codetective.Terminal
             RestoreCommandFocus();
             if (runtimeRevision != session.Runtime.Revision)
             {
-                KernelRuntime runtime = session.Runtime;
-                runtimeRevision = runtime.Revision;
-                RefreshMemory();
+                runtimeRevision = session.Runtime.Revision;
                 RefreshCommandPrompt();
                 RefreshCompletions();
             }
@@ -237,7 +231,6 @@ namespace Codetective.Terminal
             MergeCompletedConversation();
             CommandResult result = session.Execute(line);
             if (!conversation) AppendHistory("> " + line + "\n" + (result.Success ? "" : "오류 ") + result.Message);
-            RefreshMemory();
 
             input.SetTextWithoutNotify(string.Empty);
             ApplyInputInteraction();
@@ -275,21 +268,6 @@ namespace Codetective.Terminal
                 return 0f;
             var settings = transcript.GetGenerationSettings(new Vector2(transcript.rectTransform.rect.width, 0f));
             return transcript.cachedTextGeneratorForLayout.GetPreferredHeight(value, settings) / transcript.pixelsPerUnit;
-        }
-
-        private void RefreshMemory()
-        {
-            memoryHeading.text = (session.Runtime.Language == CommandLocale.Korean ? "치환 참조 / " : "REFERENCES / ") + session.Count;
-            if (session.Count == 0)
-            {
-                memoryList.text = session.Runtime.Language == CommandLocale.Korean ? "등록된 치환문 없음\n\n암호 이름 = 대상" : "No substitutions\n\ncode name = target";
-                return;
-            }
-
-            var text = new StringBuilder();
-            foreach (var slot in session.Memory)
-                text.Append(slot.Name).Append("\n").Append(session.Runtime.IsPlayerVisible(slot.Value) ? session.Runtime.TypeName(slot.Value) + " · " + session.Runtime.Format(slot.Value) : "[접근 제한]").Append("\n\n");
-            memoryList.text = text.ToString();
         }
 
         private void InputChanged(string value)
