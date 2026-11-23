@@ -2,8 +2,9 @@ Shader "Hidden/Codetective/InspectionHighlight"
 {
     Properties
     {
-        _Tint("Tint", Color) = (1, 0.82, 0.35, 0.16)
+        _OutlineColor("Outline color", Color) = (1, 0.81, 0.31, 0.78)
         _Outline("Outline", Float) = 0
+        _ColorMask("Color write mask", Float) = 0
         _Cull("Cull", Float) = 2
         _StencilComp("Stencil comparison", Float) = 8
         _StencilWrite("Stencil write mask", Float) = 4
@@ -15,6 +16,7 @@ Shader "Hidden/Codetective/InspectionHighlight"
         {
             Tags { "LightMode"="SRPDefaultUnlit" }
             Blend SrcAlpha OneMinusSrcAlpha
+            ColorMask [_ColorMask]
             Cull [_Cull]
             ZWrite Off ZTest LEqual
             Offset -1, -1
@@ -24,7 +26,7 @@ Shader "Hidden/Codetective/InspectionHighlight"
             #pragma fragment Frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             CBUFFER_START(UnityPerMaterial)
-                half4 _Tint;
+                half4 _OutlineColor;
                 float _Outline;
             CBUFFER_END
             struct Attributes { float3 positionOS : POSITION; float3 normalOS : NORMAL; };
@@ -33,19 +35,21 @@ Shader "Hidden/Codetective/InspectionHighlight"
             {
                 Varyings output;
                 output.positionCS = TransformObjectToHClip(input.positionOS);
-                float2 normal = TransformWorldToViewDir(TransformObjectToWorldNormal(input.normalOS)).xy;
-                output.direction = normal / max(0.0001, length(normal));
-                output.positionCS.xy += output.direction * (4.0 / _ScaledScreenParams.xy) * output.positionCS.w * _Outline;
+                output.direction = 0;
+                if (_Outline > 0.5)
+                {
+                    float2 normal = TransformWorldToViewDir(TransformObjectToWorldNormal(input.normalOS)).xy;
+                    output.direction = normal / max(0.0001, length(normal));
+                    output.positionCS.xy += output.direction * (4.0 / _ScaledScreenParams.xy) * output.positionCS.w;
+                }
                 return output;
             }
             half4 Frag(Varyings input) : SV_Target
             {
-                if (_Outline > 0.5)
-                {
-                    float alongEdge = abs(input.direction.x) > abs(input.direction.y) ? input.positionCS.y : input.positionCS.x;
-                    clip(frac(alongEdge / 9.0) - 0.4);
-                }
-                return _Tint;
+                if (_Outline < 0.5) return 0;
+                float alongEdge = abs(input.direction.x) > abs(input.direction.y) ? input.positionCS.y : input.positionCS.x;
+                clip(frac(alongEdge / 9.0) - 0.4);
+                return _OutlineColor;
             }
             ENDHLSL
         }

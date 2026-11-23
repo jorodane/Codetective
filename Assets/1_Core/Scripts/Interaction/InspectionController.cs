@@ -343,7 +343,7 @@ namespace Codetective.Interaction
             if (target is DrawerFrontTarget front) target = front.Drawer;
             if (target is InspectionTarget angle) hover.Draw(views.ControlledCamera, angle.VisualRoot, angle.DisplayName, collider);
             else if (target is SlidingDrawer drawer) hover.Draw(views.ControlledCamera, drawer.transform, drawer.DisplayName, collider);
-            else if (target is HoldableItem item) hover.Draw(views.ControlledCamera, item.transform, item.DisplayName, collider);
+            else if (target is HoldableItem item) hover.Draw(views.ControlledCamera, item.transform, item.DisplayName, collider, showOutline: true);
             else hover.Hide();
         }
 

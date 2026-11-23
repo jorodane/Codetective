@@ -11,7 +11,7 @@ namespace Codetective.Interaction
     {
         private readonly RectTransform root, tag;
         private readonly Text label;
-        private readonly Material tint, outline;
+        private readonly Material silhouetteMask, outline;
         private readonly List<(MeshFilter filter, Renderer renderer)> parts = new List<(MeshFilter, Renderer)>();
         private Transform visualRoot;
 
@@ -39,18 +39,18 @@ namespace Codetective.Interaction
             Shader shader = Resources.Load<Shader>("InspectionHighlight");
             if (shader != null)
             {
-                tint = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
-                outline = new Material(shader) { hideFlags = HideFlags.HideAndDontSave, renderQueue = tint.renderQueue + 1 };
+                silhouetteMask = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+                outline = new Material(shader) { hideFlags = HideFlags.HideAndDontSave, renderQueue = silhouetteMask.renderQueue + 1 };
                 outline.SetFloat("_Outline", 1);
+                outline.SetInt("_ColorMask", (int)ColorWriteMask.All);
                 outline.SetInt("_Cull", (int)CullMode.Front);
                 outline.SetInt("_StencilComp", (int)CompareFunction.NotEqual);
                 outline.SetInt("_StencilWrite", 0);
-                outline.SetColor("_Tint", new Color(1f, 0.81f, 0.31f, 0.78f));
             }
             Hide();
         }
 
-        internal void Draw(Camera camera, Transform visual, string name, Collider hit)
+        internal void Draw(Camera camera, Transform visual, string name, Collider hit, bool showOutline = false)
         {
             if (visualRoot != visual)
             {
@@ -72,15 +72,16 @@ namespace Codetective.Interaction
                     (camera.cullingMask & (1 << part.renderer.gameObject.layer)) == 0) continue;
                 if (found) bounds.Encapsulate(part.renderer.bounds);
                 else { bounds = part.renderer.bounds; found = true; }
-                if (tint == null) continue;
+                // Static batches can share mesh data that includes other scene objects in batch space.
+                if (!showOutline || silhouetteMask == null || part.renderer.isPartOfStaticBatch) continue;
                 Mesh mesh = part.filter.sharedMesh;
                 if (mesh == null) continue;
-                var parameters = new RenderParams(tint)
+                var parameters = new RenderParams(silhouetteMask)
                 {
                     camera = camera, worldBounds = part.renderer.bounds, layer = part.renderer.gameObject.layer,
                     receiveShadows = false, shadowCastingMode = ShadowCastingMode.Off
                 };
-                Matrix4x4 matrix = part.filter.transform.localToWorldMatrix;
+                Matrix4x4 matrix = part.renderer.localToWorldMatrix;
                 for (int i = 0; i < mesh.subMeshCount; i++) Graphics.RenderMesh(parameters, mesh, i, matrix);
                 parameters.material = outline;
                 for (int i = 0; i < mesh.subMeshCount; i++) Graphics.RenderMesh(parameters, mesh, i, matrix);
@@ -109,7 +110,7 @@ namespace Codetective.Interaction
         public void Dispose()
         {
             if (root != null) Object.Destroy(root.gameObject);
-            if (tint != null) Object.Destroy(tint);
+            if (silhouetteMask != null) Object.Destroy(silhouetteMask);
             if (outline != null) Object.Destroy(outline);
         }
     }
