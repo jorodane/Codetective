@@ -30,8 +30,8 @@ namespace Codetective.Operations
         public event Action<string, string> SceneActionRequested;
         public event Action DayEnded;
 
-        public const string Help = "var <name> = <target> : register a substitution\n" +
-            "var <name> : register an empty substitution\nfree <name> : discard a substitution\nhelp : list commands\n\n" +
+        public const string Help = "code <name> = <target> : register a substitution\n" +
+            "code <name> : register an empty substitution\nfree <name> : discard a substitution\nhelp : list commands\n\n" +
             "Assign references to existing objects; new/malloc are unavailable.\n" +
             "object. lists currently available commands.\nname = object.command(input);\n" +
             "Examples: hq.requestCoffee();\ndoc = archive.inspect();\nthread01.run(recon, archive);\n" +
@@ -42,7 +42,7 @@ namespace Codetective.Operations
         {
             foreach (string alias in entity.AllNames.Concat(rootAliases))
             {
-                if (!CommandParser.IsIdentifier(alias) || CommandVocabulary.Keyword(alias) != null || CommandParser.IsAllocationKeyword(alias) ||
+                if (!CommandParser.IsIdentifier(alias) || CommandVocabulary.IsReservedKeyword(alias) || CommandParser.IsAllocationKeyword(alias) ||
                     data.ContainsKey(alias) || protocols.ContainsKey(alias)) throw new CommandException("객체 이름이 유효하지 않거나 예약된 이름입니다: " + alias);
                 if (roots.TryGetValue(alias, out Entity other) && other != entity) throw new CommandException("객체 별칭이 중복됩니다: " + alias);
             }
@@ -115,7 +115,7 @@ namespace Codetective.Operations
         private void CheckName(string name)
         {
             if (!CommandParser.IsIdentifier(name)) throw new CommandException("이름은 글자 또는 _로 시작하고 글자·숫자·_만 사용하세요.");
-            if (roots.ContainsKey(name) || protocols.ContainsKey(name) || CommandVocabulary.Keyword(name) != null || CommandParser.IsAllocationKeyword(name))
+            if (roots.ContainsKey(name) || protocols.ContainsKey(name) || CommandVocabulary.IsReservedKeyword(name) || CommandParser.IsAllocationKeyword(name))
                 throw new CommandException("객체·프로토콜·예약 명령과 다른 데이터 이름을 사용하세요.");
         }
 
@@ -153,7 +153,7 @@ namespace Codetective.Operations
                 string keyword = CommandVocabulary.Keyword(words[0]);
                 // A declaration with a right-hand side is parsed as an assignment.
                 // A bare declaration uses the same operation as the older save command.
-                if (keyword == "var" && words.Length == 2 && CommandParser.IsIdentifier(words[1]))
+                if (keyword == "code" && words.Length == 2 && CommandParser.IsIdentifier(words[1]))
                     keyword = "save";
                 if (terminalCommandTrace != null) { terminalCommandTrace.keyword = keyword; terminalCommandTrace.argument = words.Length == 2 ? words[1] : ""; }
                 if (keyword == "help") return words.Length == 1 ? ExecutionResult.Ok(HelpForLanguage) : ExecutionResult.Error("사용법: " + words[0]);
@@ -180,7 +180,7 @@ namespace Codetective.Operations
             {
                 Protocol protocol = new CommandParser(source).ReadProtocol(source);
                 ValidateProtocolTypes(protocol);
-                if (roots.ContainsKey(protocol.Name) || data.ContainsKey(protocol.Name) || CommandVocabulary.Keyword(protocol.Name) != null || CommandParser.IsAllocationKeyword(protocol.Name))
+                if (roots.ContainsKey(protocol.Name) || data.ContainsKey(protocol.Name) || CommandVocabulary.IsReservedKeyword(protocol.Name) || CommandParser.IsAllocationKeyword(protocol.Name))
                     throw new CommandException("다른 객체·데이터·기본 명령과 다른 프로토콜 이름을 사용하세요.");
                 protocols[protocol.Name] = protocol;
                 Revision++;

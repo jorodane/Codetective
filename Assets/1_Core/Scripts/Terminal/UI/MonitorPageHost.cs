@@ -18,6 +18,7 @@ namespace Codetective.Terminal
         private static readonly Color UnreadMailColor = Color.Lerp(MonitorWidgets.SelectedButtonColor, MonitorWidgets.Foreground, 0.30f);
         [SerializeField] private TerminalController terminal;
         [SerializeField] private Text heading;
+        [SerializeField] private Graphic headerRule;
         [SerializeField] private RectTransform navigationRoot;
         [SerializeField] private string initialPage = "home";
         [Tooltip("Portraits are keyed by world profile ID. Availability uses the same story triggers as permissions.")]
@@ -186,7 +187,15 @@ namespace Codetective.Terminal
         public void SetSystemMenuVisible(bool visible) => SetOverlayVisible(legacyOverlay, visible);
         public void SetOverlayVisible(object owner, bool visible)
         {
-            if (visible) overlays.Add(owner); else overlays.Remove(owner);
+            bool changed = visible ? overlays.Add(owner) : overlays.Remove(owner);
+            if (!changed) return;
+            if (owner is TerminalMailNotice)
+            {
+                bool showHeader = !overlays.Any(overlay => overlay is TerminalMailNotice);
+                if (heading != null) heading.enabled = showHeader;
+                if (headerRule != null) headerRule.enabled = showHeader;
+                if (navigationRoot != null) navigationRoot.gameObject.SetActive(showHeader);
+            }
             bool suspended = overlays.Count > 0;
             if (SystemMenuVisible == suspended) return;
             TextInputFocus.ReleaseAll();

@@ -48,7 +48,7 @@ namespace Codetective.Terminal
     /// <summary>One play session. Allocations and completion candidates share the same source of truth.</summary>
     public sealed class TerminalSession
     {
-        private static readonly string[] Commands = { "var", "free", "help" };
+        private static readonly string[] Commands = { "code", "free", "help" };
         public const string HelpText = KernelRuntime.Help;
         private readonly Dictionary<int, MemorySlot> wrappers = new Dictionary<int, MemorySlot>();
         public KernelRuntime Runtime { get; }

@@ -19,9 +19,12 @@ namespace Codetective.Terminal.Tests.UI
             navigation.GetComponent<RectTransform>().sizeDelta = new Vector2(1090, 44);
             var heading = new GameObject("Heading", typeof(RectTransform), typeof(Text));
             heading.transform.SetParent(root.transform, false);
+            var rule = new GameObject("HeaderRule", typeof(RectTransform), typeof(Image));
+            rule.transform.SetParent(root.transform, false);
             foreach (MonitorPage page in pages) page.transform.SetParent(root.transform, false);
             MonitorPageHost host = root.AddComponent<MonitorPageHost>(); Set(host, "navigationRoot", navigation.GetComponent<RectTransform>());
             Set(host, "heading", heading.GetComponent<Text>());
+            Set(host, "headerRule", rule.GetComponent<Image>());
             host.AttachRuntime(runtime); host.Initialize(); return host;
         }
         [Test]
@@ -40,9 +43,15 @@ namespace Codetective.Terminal.Tests.UI
                 Assert.That(notice.Show(1), Is.True); Assert.That(host.SystemMenuVisible, Is.True); Assert.That(kernel.activeSelf, Is.False);
                 Assert.That(panel.GetComponentsInChildren<Canvas>(true), Is.Empty, "The envelope must use the existing physical CRT canvas.");
                 Assert.That(panel.GetComponentsInChildren<Text>(true), Is.Empty, "The notice must be readable from the overview without text.");
-                MailEnvelopeGraphic envelope = panel.GetComponentInChildren<MailEnvelopeGraphic>(true);
-                Assert.That(envelope.GetComponent<CrtMeshEffect>(), Is.Not.Null);
-                Assert.That((envelope.rectTransform.anchorMin + envelope.rectTransform.anchorMax) / 2, Is.EqualTo(new Vector2(0.5f, 0.5f)));
+                Image display = panel.GetComponent<Image>();
+                Assert.That(display.sprite, Is.Not.Null, "The full screen notice must load its sprite from Resources.");
+                Assert.That(display.sprite.name, Is.EqualTo("MailNoticeScreen"));
+                Assert.That(display.mainTexture, Is.EqualTo(display.sprite.texture));
+                Assert.That(display.GetComponent<CrtMeshEffect>(), Is.Not.Null);
+                Assert.That(panel.GetComponentsInChildren<Graphic>(true), Is.EqualTo(new Graphic[] { display }));
+                Assert.That(root.transform.Find("Heading").GetComponent<Text>().enabled, Is.False);
+                Assert.That(root.transform.Find("HeaderRule").GetComponent<Image>().enabled, Is.False);
+                Assert.That(root.transform.Find("Navigation").gameObject.activeSelf, Is.False);
                 var cover = panel.GetComponent<RectTransform>();
                 Assert.That(cover.anchorMin, Is.EqualTo(Vector2.zero));
                 Assert.That(cover.anchorMax, Is.EqualTo(Vector2.one));
@@ -53,6 +62,9 @@ namespace Codetective.Terminal.Tests.UI
                 host.SetOverlayVisible(menu, false); Assert.That(notice.Show(1), Is.True);
                 panel.GetComponent<Button>().onClick.Invoke();
                 Assert.That(acknowledged, Is.EqualTo(1)); Assert.That(notice.IsVisible, Is.False); Assert.That(host.SystemMenuVisible, Is.False);
+                Assert.That(root.transform.Find("Heading").GetComponent<Text>().enabled, Is.True);
+                Assert.That(root.transform.Find("HeaderRule").GetComponent<Image>().enabled, Is.True);
+                Assert.That(root.transform.Find("Navigation").gameObject.activeSelf, Is.True);
                 Assert.That(kernel.activeSelf, Is.True); Assert.That(draft.GetComponent<InputField>().text, Is.EqualTo("save evidence"));
                 Assert.That(runtime.IsMailRead("new"), Is.False);
             }

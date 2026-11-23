@@ -2878,6 +2878,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   terminal: {fileID: 100112}
   heading: {fileID: 100008}
+  headerRule: {fileID: 100016}
   navigationRoot: {fileID: 134001}
   initialPage: home
   profilePortraits:

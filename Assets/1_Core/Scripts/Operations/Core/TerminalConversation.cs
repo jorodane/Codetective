@@ -177,10 +177,10 @@ namespace Codetective.Operations
         {
             string name = GoalDataName(goal, p);
             if (goal.kind == TerminalGoalKind.Help) return CommandVocabulary.KeywordName("help", locale);
-            if (goal.kind == TerminalGoalKind.Allocate) return CommandVocabulary.KeywordName("var", locale) + " " + name;
+            if (goal.kind == TerminalGoalKind.Allocate) return CommandVocabulary.KeywordName("code", locale) + " " + name;
             if (goal.kind == TerminalGoalKind.Free) return CommandVocabulary.KeywordName("free", locale) + " " + name;
             Entity target = Entity(goal.targetId); string receiver = target?.NameFor(locale) ?? goal.targetId;
-            if (goal.kind == TerminalGoalKind.BindReference) return CommandVocabulary.KeywordName("var", locale) + " " + name + " = " + receiver + ";";
+            if (goal.kind == TerminalGoalKind.BindReference) return CommandVocabulary.KeywordName("code", locale) + " " + name + " = " + receiver + ";";
             if (goal.kind == TerminalGoalKind.Invoke)
             {
                 if (goal.preferVariable && data.TryGetValue(name, out DataSlot slot) && slot.value.CanReferenceEntity && slot.value.id == goal.targetId) receiver = name;
@@ -194,9 +194,9 @@ namespace Codetective.Operations
             bool korean = Language == CommandLocale.Korean;
             string command = (korean ? entry.koreanCommand : entry.englishCommand) ?? "";
             // Older saves keep the generated lesson command alongside the dialogue.
-            string legacyDeclaration = korean ? "저장 " : "save ";
-            if (command.StartsWith(legacyDeclaration, StringComparison.Ordinal))
-                command = CommandVocabulary.KeywordName("var", Language) + " " + command.Substring(legacyDeclaration.Length);
+            if (command.StartsWith(korean ? "저장 " : "save ", StringComparison.Ordinal) ||
+                (!korean && command.StartsWith("var ", StringComparison.Ordinal)))
+                command = CommandVocabulary.KeywordName("code", Language) + command.Substring(command.IndexOf(' '));
             return Text(entry.textKey, entry.text).Replace("{slot}", p.slotName).Replace("{command}", command);
         }
         private int AddConversationLog(TerminalConversationLog entry)

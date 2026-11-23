@@ -21,7 +21,7 @@ namespace Codetective.Tests.Operations
             var session = new TerminalSession(Korean());
             Assert.That(session.Complete("").Take(3).Select(c => c.DisplayText), Is.EqualTo(new[] { "암호", "삭제", "도움말" }));
             Assert.That(session.Complete("ㅇ", true).Any(c => c.ReplacementText == "암호 "), Is.True);
-            Assert.That(session.Complete("va").Single().ReplacementText, Is.EqualTo("var "));
+            Assert.That(session.Complete("cod").Single().ReplacementText, Is.EqualTo("code "));
             session.Execute("암호 단서");
             Assert.That(session.Complete("삭제 다", true).Single().ReplacementText, Is.EqualTo("삭제 단서"));
             Assert.That(session.Complete("해제 ").Single().ReplacementText, Is.EqualTo("해제 단서"));
@@ -172,7 +172,20 @@ namespace Codetective.Tests.Operations
             Assert.That(r.SaveProtocol("프로토콜 도움말() { 반환 1; }").Success, Is.False);
             Assert.That(r.Execute("도움말").Message, Does.Contain("암호 이름 = 대상").And.Not.Contain("저장"));
             r.Language = CommandLocale.English;
-            Assert.That(r.Execute("도움말").Message, Does.Contain("var <name> = <target>"));
+            Assert.That(r.Execute("도움말").Message, Does.Contain("code <name> = <target>"));
+        }
+
+        [Test]
+        public void CodeIsADeclarationKeywordAndCanStillBeTheNameOfASavedReference()
+        {
+            KernelRuntime legacy = ClinicScenario.Create();
+            Assert.That(legacy.Execute("var code = hq;").Success, Is.True);
+
+            KernelRuntime restored = ClinicScenario.Create();
+            restored.Restore(legacy.Capture());
+            Assert.That(restored.Execute("code").Value.id, Is.EqualTo("hq"));
+            Assert.That(restored.Execute("code = 7").Success, Is.True);
+            Assert.That(restored.Execute("code other = code").Value.number, Is.EqualTo(7));
         }
     }
 }

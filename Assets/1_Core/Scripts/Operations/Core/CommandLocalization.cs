@@ -23,13 +23,15 @@ namespace Codetective.Operations
         private static readonly Dictionary<string, string[]> Keywords = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             { "save", new[] { "저장" } }, { "free", new[] { "삭제", "해제" } }, { "help", new[] { "도움말" } },
-            { "protocol", new[] { "프로토콜" } }, { "return", new[] { "반환" } }, { "var", new[] { "암호", "변수" } },
+            { "protocol", new[] { "프로토콜" } }, { "return", new[] { "반환" } }, { "code", new[] { "암호", "var", "변수" } },
             { "true", new[] { "참" } }, { "false", new[] { "거짓" } }
         };
         private static readonly string[] KoreanKinds =
         { "비어있음", "데이터", "숫자", "문자열", "인물", "물건", "증언", "사진", "문서", "기록", "장소", "시간", "분석", "규칙", "관계", "단서", "프로토콜", "스레드", "작업", "개체", "논리", "배열", "사전", "키워드", "사건", "조직" };
 
         public static string Keyword(string input) => Keywords.FirstOrDefault(p => p.Key == input || p.Value.Contains(input)).Key;
+        // Only reserve the new spelling in a declaration. Existing data or protocols may be named code.
+        internal static bool IsReservedKeyword(string word) => word != "code" && Keyword(word) != null;
         public static string KeywordName(string canonical, CommandLocale language) =>
             language == CommandLocale.Korean && Keywords.TryGetValue(canonical, out string[] names) ? names[0] : canonical;
         public static IEnumerable<string> KeywordNames(string canonical) => new[] { canonical }.Concat(Keywords[canonical]);

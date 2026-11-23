@@ -85,8 +85,8 @@ namespace Codetective.Terminal.Tests
         public void CommandCompletionAddsSpaceForTheArgument()
         {
             var session = new TerminalSession();
-            Assert.That(session.Complete("").Select(item => item.DisplayText), Is.EqualTo(new[] { "var", "free", "help" }));
-            Assert.That(session.Complete("va").Single().ReplacementText, Is.EqualTo("var "));
+            Assert.That(session.Complete("").Select(item => item.DisplayText), Is.EqualTo(new[] { "code", "free", "help" }));
+            Assert.That(session.Complete("co").Single().ReplacementText, Is.EqualTo("code "));
             Assert.That(session.Complete("fr").Single().ReplacementText, Is.EqualTo("free "));
             Assert.That(session.Complete("he").Single().ReplacementText, Is.EqualTo("help"));
             Assert.That(session.Complete("없는명령"), Is.Empty);
@@ -147,7 +147,7 @@ namespace Codetective.Terminal.Tests
             var original = session.Memory.Single();
             CommandResult result = session.Execute("help");
             Assert.That(result.Success, Is.True);
-            Assert.That(result.Message, Does.Contain("var <name> = <target>"));
+            Assert.That(result.Message, Does.Contain("code <name> = <target>"));
             Assert.That(result.Message, Does.Contain("free <name>"));
             Assert.That(result.Message, Does.Contain("help"));
             Assert.That(session.Memory.Single(), Is.SameAs(original));
@@ -159,6 +159,7 @@ namespace Codetective.Terminal.Tests
         [TestCase("save", "해제")]
         [TestCase("암호", "삭제")]
         [TestCase("var", "free")]
+        [TestCase("code", "free")]
         public void LocalizedCommandsUseTheSameMemoryAsEnglish(string save, string free)
         {
             var session = new TerminalSession();

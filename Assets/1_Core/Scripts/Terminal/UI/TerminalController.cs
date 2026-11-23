@@ -179,7 +179,7 @@ namespace Codetective.Terminal
                 if (input.placeholder is Text placeholder)
                     placeholder.text = session.Runtime.TerminalInputLocked ? session.Runtime.Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.") :
                         session.Runtime.TerminalConversationActive ? session.Runtime.Text("terminal.dialogue.command", "안내 명령") + " · " + session.Runtime.TerminalExpectedCommand :
-                        session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 암호 이름 = 대상" : "Command · help / var name = target";
+                        session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 암호 이름 = 대상" : "Command · help / code name = target";
                 RefreshCompletions();
             }
             TerminalCompletionInput current = input.CompletionInput;
@@ -267,7 +267,7 @@ namespace Codetective.Terminal
             memoryHeading.text = (session.Runtime.Language == CommandLocale.Korean ? "치환 참조 / " : "REFERENCES / ") + session.Count;
             if (session.Count == 0)
             {
-                memoryList.text = session.Runtime.Language == CommandLocale.Korean ? "등록된 치환문 없음\n\n확보한 자료를 선택해\n참조를 등록하거나\n암호 이름 = 대상\n형식으로 작성하세요." : "No substitutions\n\nSelect acquired evidence\nor enter var name = target.";
+                memoryList.text = session.Runtime.Language == CommandLocale.Korean ? "등록된 치환문 없음\n\n확보한 자료를 선택해\n참조를 등록하거나\n암호 이름 = 대상\n형식으로 작성하세요." : "No substitutions\n\nSelect acquired evidence\nor enter code name = target.";
                 return;
             }
 

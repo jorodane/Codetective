@@ -5,8 +5,8 @@ namespace Codetective.Terminal.Tests
 {
     public sealed class TerminalCompletionInputTests
     {
-        [TestCase("v", "var")]
-        [TestCase("va", "var")]
+        [TestCase("c", "code")]
+        [TestCase("co", "code")]
         [TestCase("f", "free")]
         [TestCase("fr", "free")]
         [TestCase("h", "help")]

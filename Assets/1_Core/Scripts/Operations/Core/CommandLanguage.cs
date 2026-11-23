@@ -206,7 +206,8 @@ namespace Codetective.Operations
                 statement.Value = Peek == ";" ? new Expression { Literal = Datum.Empty } : ReadExpression(0);
                 return statement;
             }
-            MatchKeyword("var");
+            if (index + 1 < tokens.Count && IsIdentifier(tokens[index + 1]))
+                MatchKeyword("code");
             if (IsIdentifier(Peek) && index + 1 < tokens.Count && (IsIdentifier(tokens[index + 1]) || tokens[index + 1] == "[" || tokens[index + 1] == "<"))
                 statement.DeclaredType = TypeName();
             int start = index;

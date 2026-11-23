@@ -20,7 +20,7 @@ namespace Codetective.Operations
             int skip = fragment.Length - fragment.TrimStart().Length;
             start += skip;
             fragment = fragment.TrimStart();
-            foreach (string keyword in CommandVocabulary.KeywordNames("var").Concat(CommandVocabulary.KeywordNames("return")).Select(k => k + " "))
+            foreach (string keyword in CommandVocabulary.KeywordNames("code").Concat(CommandVocabulary.KeywordNames("return")).Select(k => k + " "))
                 if (fragment.StartsWith(keyword, StringComparison.Ordinal)) { start += keyword.Length; fragment = fragment.Substring(keyword.Length); break; }
 
             var locals = new Dictionary<string, Datum>(StringComparer.Ordinal);

@@ -25,7 +25,7 @@ namespace Codetective.Tests.Operations
             KernelRuntime r = World(commands, display); int sent = 0; int entities = r.World.Objects.Count;
             string[] expected = commands == CommandLocale.Korean
                 ? new[] { "도움말", "암호 연습", "암호 연습 = 지휘소;", "연습.통신확인();", "삭제 연습" }
-                : new[] { "help", "var practice", "var practice = hq;", "practice.checkComms();", "free practice" };
+                : new[] { "help", "code practice", "code practice = hq;", "practice.checkComms();", "free practice" };
             while (r.TerminalConversationActive && sent < 10)
             {
                 r.AdvanceTerminalConversation(1000);
@@ -42,6 +42,26 @@ namespace Codetective.Tests.Operations
             Assert.That(r.GetTrigger("terminal.onboarding.complete"), Is.True); Assert.That(r.Data.ContainsKey(r.ConversationProgress("kernel-onboarding").slotName), Is.False);
             Assert.That(r.World.Objects.Count, Is.EqualTo(entities)); Assert.That(r.Minute, Is.EqualTo(540));
             Assert.That(r.TerminalConversationTranscript(), display == "en" ? Does.Contain("You found Kernel.") : Does.Contain("Kernel을 찾으셨군요."));
+        }
+
+        [Test]
+        public void RestoredEnglishInstructionsRenderOlderDeclarationsWithTheNewKeyword()
+        {
+            KernelRuntime r = World(CommandLocale.English, "en");
+            r.AdvanceTerminalConversation(1000);
+            Assert.That(r.Execute("help").Success, Is.True);
+            r.AdvanceTerminalConversation(1000);
+            Assert.That(r.Execute("var practice").Success, Is.True);
+            KernelSnapshot snapshot = r.Capture();
+            foreach (TerminalConversationLog entry in snapshot.terminalConversations[0].log)
+                if (entry.englishCommand.StartsWith("code ", System.StringComparison.Ordinal))
+                    entry.englishCommand = "var " + entry.englishCommand.Substring(5);
+
+            KernelRuntime restored = World(CommandLocale.English, "en");
+            restored.Restore(snapshot);
+            restored.AdvanceTerminalConversation(1000);
+            Assert.That(restored.TerminalExpectedCommand, Is.EqualTo("code practice = hq;"));
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Enter code practice = hq;"));
         }
         [Test] public void ThirdSuccessfulDetourUsesTheAuthoredAngryReplyAndRecoversToTheSameLesson()
         {
