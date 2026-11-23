@@ -14,6 +14,7 @@ namespace Codetective.Interaction
             BoxCollider collider = GetComponent<BoxCollider>();
             if (collider == null) collider = gameObject.AddComponent<BoxCollider>();
             collider.center = front.center; collider.size = front.size; collider.isTrigger = true;
+            if (drawer != null) drawer.FrontFace = collider;
         }
         public override bool CanInteract(string angleId) => drawer != null && drawer.CanInteract(angleId);
         public override void Interact() { if (drawer != null) drawer.Interact(); }

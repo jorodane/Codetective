@@ -13,11 +13,14 @@ namespace Codetective.Interaction
         [Tooltip("Optional root containing a terminal UI. Leave empty for ordinary objects.")]
         [SerializeField] private Transform terminalRoot;
         [SerializeField] private string displayName;
+        [Tooltip("Show the name and outline when the pointer selects this target.")]
+        [SerializeField] private bool showHoverFeedback = true;
         [Tooltip("The meshes belonging to this target, when the hotspot is a separate object.")]
         [SerializeField] private Transform visualRoot;
 
         public CameraAnglePreset Angle => closeUpAngle;
         public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? (closeUpAngle != null ? closeUpAngle.name : name) : displayName;
+        public bool ShowHoverFeedback => showHoverFeedback;
         public Transform VisualRoot => visualRoot != null ? visualRoot : transform;
         public TerminalController Terminal => terminalRoot != null ?
             terminalRoot.GetComponentInChildren<TerminalController>(true) : null;

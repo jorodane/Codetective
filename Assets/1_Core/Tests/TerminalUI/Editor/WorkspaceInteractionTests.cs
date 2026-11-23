@@ -356,7 +356,10 @@ namespace Codetective.Terminal.Tests.UI
                 SlidingDrawer top = upper.AddComponent<SlidingDrawer>(); top.Initialize(runtime, "upper"); top.SetInteractionEnabled(true);
                 SlidingDrawer bottom = lower.AddComponent<SlidingDrawer>(); bottom.Initialize(runtime, "lower"); bottom.SetInteractionEnabled(true);
                 upper.AddComponent<ItemPlacementSurface>().Initialize("upper", top, new Bounds(Vector3.zero, Vector3.one * 0.4f));
-                lower.AddComponent<DrawerFrontTarget>().Initialize(bottom, new Bounds(Vector3.zero, Vector3.one * 0.4f));
+                var front = new GameObject("Drawer front");
+                front.transform.SetParent(lower.transform, false);
+                front.AddComponent<DrawerFrontTarget>().Initialize(bottom, new Bounds(Vector3.zero, Vector3.one * 0.4f));
+                Assert.That(bottom.FrontFace, Is.SameAs(front.GetComponent<BoxCollider>()));
                 desktop.transform.position = origin + new Vector3(0, -0.65f, 3);
                 var surface = desktop.AddComponent<ItemPlacementSurface>(); surface.Initialize("desk.top", null, new Bounds(Vector3.zero, Vector3.one * 0.4f));
                 inspection.GetType().GetProperty("Desktop").SetValue(inspection, surface);
@@ -375,6 +378,59 @@ namespace Codetective.Terminal.Tests.UI
             finally
             {
                 foreach (Object value in new Object[] { navigation, upper, lower, desktop, prop, overview, drawer, set }) Object.DestroyImmediate(value);
+            }
+        }
+
+        [Test]
+        public void TheTopOfTheDeskReturnsToOverviewAndCanStillReceiveADroppedItem()
+        {
+            var navigation = new GameObject("Drawer view", typeof(Camera), typeof(CameraAngleController)); navigation.SetActive(false);
+            var desk = new GameObject("Desk", typeof(BoxCollider));
+            var desktop = new GameObject("Desktop"); desktop.transform.SetParent(desk.transform, false);
+            var carryRoot = new GameObject("Carry"); var itemRoot = new GameObject("Paper");
+            var set = ScriptableObject.CreateInstance<CameraAngleSet>();
+            var overview = ScriptableObject.CreateInstance<CameraAnglePreset>(); var drawer = ScriptableObject.CreateInstance<CameraAnglePreset>();
+            try
+            {
+                var origin = new Vector3(81, 81, 81);
+                Set(overview, "angleId", "overview"); Set(overview, "position", origin);
+                Set(drawer, "angleId", "drawer"); Set(drawer, "position", origin);
+                Set(drawer, "eulerAngles", new Vector3(27.5f, 0, 0));
+                Set(set, "angles", new List<CameraAnglePreset> { overview, drawer });
+                var views = navigation.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
+                Camera camera = navigation.GetComponent<Camera>(); camera.pixelRect = new Rect(0, 0, 640, 480);
+                Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                Set(inspection, "overviewAngle", overview); Call(inspection, "Awake"); Call(inspection, "InspectAngle", drawer);
+
+                desk.transform.SetPositionAndRotation(origin + new Vector3(0, -0.65f, 2), Quaternion.Euler(0, 180, 0));
+                BoxCollider deskBody = desk.GetComponent<BoxCollider>();
+                deskBody.center = new Vector3(0, -0.15f, 0); deskBody.size = new Vector3(2, 0.3f, 1.4f);
+                var surface = desktop.AddComponent<ItemPlacementSurface>();
+                surface.Initialize("desk.top", null, new Bounds(new Vector3(0, 0.125f, 0), new Vector3(2, 0.25f, 1.4f)));
+                inspection.GetType().GetProperty("Desktop").SetValue(inspection, surface);
+                Physics.SyncTransforms();
+
+                Vector2 front = camera.WorldToScreenPoint(desk.transform.TransformPoint(new Vector3(0, -0.15f, 0.7f)));
+                Assert.That(Call(inspection, "InteractAtScreenPoint", front), Is.False);
+                Assert.That(views.ActiveAngle, Is.SameAs(drawer));
+
+                Vector2 tabletop = camera.WorldToScreenPoint(desk.transform.position);
+                Assert.That(Call(inspection, "InteractAtScreenPoint", tabletop), Is.True);
+                Assert.That(views.ActiveAngle, Is.SameAs(overview));
+
+                Call(inspection, "InspectAngle", drawer);
+                ItemCarryController carry = carryRoot.AddComponent<ItemCarryController>(); carry.Initialize(navigation.transform);
+                inspection.GetType().GetProperty("Carry").SetValue(inspection, carry);
+                HoldableItem item = itemRoot.AddComponent<HoldableItem>();
+                Assert.That(carry.TryPickup(item), Is.True);
+                Assert.That(carry.BeginPlacement(), Is.True);
+                Assert.That(Call(inspection, "InteractAtScreenPoint", tabletop), Is.True);
+                Assert.That(item.Storage, Is.SameAs(surface));
+                Assert.That(views.ActiveAngle, Is.SameAs(drawer));
+            }
+            finally
+            {
+                foreach (Object value in new Object[] { carryRoot, itemRoot, navigation, desk, overview, drawer, set }) Object.DestroyImmediate(value);
             }
         }
 

@@ -216,11 +216,10 @@ namespace Codetective.Interaction
             { Carry.CancelPlacement(); hover?.Hide(); return; }
             Vector2 point = mouse.position.ReadValue();
             bool blocked = PointerBlocked?.Invoke(point) ?? false;
-            Collider collider = null;
-            Component target = blocked ? null : ResolvePointerTarget(point, out collider, out _);
+            Component target = blocked ? null : ResolvePointerTarget(point, out _);
             if (Carry != null && Carry.IsPlacing)
                 Carry.UpdatePlacement(point, blocked || target is InspectionTarget || target is InspectionActionTarget, target as ItemPlacementSurface);
-            DrawPointerFeedback(target, collider);
+            DrawPointerFeedback(target);
 #endif
         }
 
@@ -236,7 +235,7 @@ namespace Codetective.Interaction
                 PresentingOnTerminal || (PointerBlocked?.Invoke(point) ?? false)) return false;
             if (Carry != null && Carry.IsExamining) return true;
             if (TextInputFocused) TextInputFocus.ReleaseAll();
-            Component target = ResolvePointerTarget(point, out _, out RaycastHit? obstruction);
+            Component target = ResolvePointerTarget(point, out RaycastHit? obstruction);
             if (target is InspectionActionTarget action)
             { action.Interact(); return true; }
             if (target is InspectionTarget angle)
@@ -245,14 +244,14 @@ namespace Codetective.Interaction
             }
             if (target is ItemPlacementSurface tray)
             { Carry.TryPlaceAtScreenPoint(point, tray); return true; }
-            if (CanReturnAboveDesk(point, obstruction))
+            if (CanReturnFromDesk(point, obstruction))
             { ReturnToOverview(); return true; }
             if (Carry != null && Carry.IsPlacing)
             { Carry.TryPlaceAtScreenPoint(point); return true; }
             return false;
         }
 
-        private Component ResolvePointerTarget(Vector2 point, out Collider collider, out RaycastHit? obstruction)
+        private Component ResolvePointerTarget(Vector2 point, out RaycastHit? obstruction)
         {
             Ray ray = views.ControlledCamera.ScreenPointToRay(point);
             int count = Physics.RaycastNonAlloc(ray, pointerHits, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
@@ -262,11 +261,10 @@ namespace Codetective.Interaction
                 count = Physics.RaycastNonAlloc(ray, pointerHits, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
             }
             Array.Sort(pointerHits, 0, count, NearestFirst);
-            collider = null; obstruction = null;
+            obstruction = null;
             bool placing = Carry != null && Carry.IsPlacing;
             string angleId = views.ActiveAngle?.Id;
             ItemPlacementSurface tray = null;
-            Collider trayCollider = null, angleCollider = null;
             InspectionTarget angleTarget = null;
             for (int i = 0; i < count; i++)
             {
@@ -278,7 +276,7 @@ namespace Codetective.Interaction
                 {
                     // The tray owns this hit. An exposed item in that tray can still be picked up.
                     if (action is HoldableItem stored && stored.Storage == tray && stored.CanInteract(angleId))
-                    { collider = part; return stored; }
+                        return stored;
                     if (part.isTrigger && surface == null && !(action is DrawerFrontTarget)) continue;
                     break;
                 }
@@ -286,13 +284,12 @@ namespace Codetective.Interaction
                 {
                     if (surface.Drawer != null && surface.Drawer.IsOpen && surface.Drawer.CanInteract(angleId))
                     {
-                        if (placing) { collider = part; return surface; }
-                        tray = surface; trayCollider = part;
+                        if (placing) return surface;
+                        tray = surface;
                     }
                     continue;
                 }
-                if (action != null && action.CanInteract(angleId))
-                { collider = part; return action; }
+                if (action != null && action.CanInteract(angleId)) return action;
                 InspectionTarget candidate = part.GetComponentInParent<InspectionTarget>();
                 if (candidate == null && (CanInspectByPointer || placing))
                 {
@@ -304,46 +301,50 @@ namespace Codetective.Interaction
                 }
                 if (IsSelectableAngle(candidate, placing))
                 {
-                    if (!part.isTrigger) { collider = part; return candidate; }
-                    if (angleTarget == null) { angleTarget = candidate; angleCollider = part; }
+                    if (!part.isTrigger) return candidate;
+                    if (angleTarget == null) angleTarget = candidate;
                 }
                 if (!part.isTrigger) { obstruction = hit; break; }
             }
-            if (tray != null) { collider = trayCollider; return tray.Drawer; }
-            collider = angleCollider;
-            return angleTarget;
+            return tray != null ? (Component)tray.Drawer : angleTarget;
         }
 
         private bool IsSelectableAngle(InspectionTarget target, bool placing) =>
             target != null && target.isActiveAndEnabled && target.Angle != null && target.Angle != views.ActiveAngle &&
             (CanInspectByPointer || (placing && target.Angle.Id == "drawer"));
 
-        private bool CanReturnAboveDesk(Vector2 point, RaycastHit? obstruction)
+        private bool CanReturnFromDesk(Vector2 point, RaycastHit? obstruction)
         {
             if (Desktop == null || views.ActiveAngle?.Id != "drawer" || flow.Mode != InspectionMode.Inspecting) return false;
             Camera camera = views.ControlledCamera;
             Bounds bounds = Desktop.LocalBounds;
-            float edge = float.NegativeInfinity, depth = 0;
-            for (int x = -1; x <= 1; x += 2) for (int z = -1; z <= 1; z += 2)
-            {
-                Vector3 corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, -1, z));
-                Vector3 screen = camera.WorldToScreenPoint(Desktop.transform.TransformPoint(corner));
-                if (screen.z <= camera.nearClipPlane) continue;
-                edge = Mathf.Max(edge, screen.y);
-                depth = Mathf.Max(depth, screen.z);
-            }
-            // Room walls and distant scenery are the backdrop. Props before the far desk edge still take the click.
-            return depth > 0 && point.y > edge &&
-                (!obstruction.HasValue || camera.WorldToScreenPoint(obstruction.Value.point).z > depth);
+            Vector3 min = bounds.min, max = bounds.max;
+            Vector3 Project(float x, float z) => camera.WorldToScreenPoint(Desktop.transform.TransformPoint(new Vector3(x, min.y, z)));
+            // The tabletop and the drawer fronts face local +Z.
+            Vector3 frontLeft = Project(min.x, max.z), frontRight = Project(max.x, max.z);
+            Vector3 backLeft = Project(min.x, min.z), backRight = Project(max.x, min.z);
+            if (Mathf.Min(frontLeft.z, frontRight.z, backLeft.z, backRight.z) <= camera.nearClipPlane) return false;
+
+            bool placing = Carry != null && Carry.IsPlacing;
+            float edge = placing ? Mathf.Max(frontLeft.y, frontRight.y, backLeft.y, backRight.y) :
+                Mathf.Lerp(frontLeft.y, frontRight.y, Mathf.InverseLerp(frontLeft.x, frontRight.x, point.x));
+            if (point.y < edge) return false;
+            if (!obstruction.HasValue) return true;
+
+            RaycastHit hit = obstruction.Value;
+            // The placement volume sits on the desk body. Its own tabletop can take a return click.
+            if (!placing && hit.collider.transform == Desktop.transform.parent) return true;
+            float farDepth = Mathf.Max(frontLeft.z, frontRight.z, backLeft.z, backRight.z);
+            return camera.WorldToScreenPoint(hit.point).z > farDepth;
         }
 
-        private void DrawPointerFeedback(Component target, Collider collider)
+        private void DrawPointerFeedback(Component target)
         {
             if (hover == null) return;
             if (target is DrawerFrontTarget front) target = front.Drawer;
-            if (target is InspectionTarget angle) hover.Draw(views.ControlledCamera, angle.VisualRoot, angle.DisplayName, collider);
-            else if (target is SlidingDrawer drawer) hover.Draw(views.ControlledCamera, drawer.transform, drawer.DisplayName, collider);
-            else if (target is HoldableItem item) hover.Draw(views.ControlledCamera, item.transform, item.DisplayName, collider, showOutline: true);
+            if (target is InspectionTarget angle && angle.ShowHoverFeedback) hover.Draw(views.ControlledCamera, angle.VisualRoot, angle.DisplayName);
+            else if (target is SlidingDrawer drawer) hover.Draw(views.ControlledCamera, drawer.transform, drawer.DisplayName, drawer.FrontFace);
+            else if (target is HoldableItem item) hover.Draw(views.ControlledCamera, item.transform, item.DisplayName);
             else hover.Hide();
         }
 

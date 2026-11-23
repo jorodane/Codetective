@@ -1457,6 +1457,7 @@ MonoBehaviour:
   closeUpAngle: {fileID: 11400000, guid: ed7ab7338718fb54b94e3d081fcfc035, type: 2}
   terminalRoot: {fileID: 0}
   displayName: 상담 자리
+  showHoverFeedback: 0
   visualRoot: {fileID: 2000000301}
 --- !u!65 &387702992
 BoxCollider:
@@ -2891,6 +2892,7 @@ MonoBehaviour:
   closeUpAngle: {fileID: 11400000, guid: 8f92d3c640bb63749b773fa126e57e59, type: 2}
   terminalRoot: {fileID: 0}
   displayName: 책상 서랍
+  showHoverFeedback: 0
   visualRoot: {fileID: 84028777}
 --- !u!65 &922546358
 BoxCollider:
@@ -4512,6 +4514,30 @@ PrefabInstance:
     - target: {fileID: 1030976987, guid: abc00000000015847332656139811962, type: 3}
       propertyPath: m_Name
       value: Gramophone
+      objectReference: {fileID: 0}
+    - target: {fileID: 1030976987, guid: abc00000000015847332656139811962, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483643
+      objectReference: {fileID: 0}
+    - target: {fileID: 1030976989, guid: abc00000000015847332656139811962, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1030976991, guid: abc00000000015847332656139811962, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483643
+      objectReference: {fileID: 0}
+    - target: {fileID: 1030976995, guid: abc00000000015847332656139811962, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1030976999, guid: abc00000000015847332656139811962, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1030977003, guid: abc00000000015847332656139811962, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1030976988, guid: abc00000000015847332656139811962, type: 3}
       propertyPath: m_LocalScale.x
