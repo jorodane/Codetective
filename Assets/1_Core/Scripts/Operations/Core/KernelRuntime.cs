@@ -32,7 +32,7 @@ namespace Codetective.Operations
 
         public const string Help = "code <name> = <target> : register a substitution\n" +
             "code <name> : register an empty substitution\nfree <name> : discard a substitution\n" +
-            "answer <choice> : respond to a question in the current conversation\nhelp : list commands\n\n" +
+            "answer <choice> : respond to the current question (or enter just the choice)\nhelp : list commands\n\n" +
             "Assign references to existing objects; new/malloc are unavailable.\n" +
             "object. lists currently available commands.\nname = object.command(input);\n" +
             "Examples: hq.requestCoffee();\ndoc = archive.inspect();\nthread01.run(recon, archive);\n" +
@@ -150,6 +150,8 @@ namespace Codetective.Operations
             {
                 source = Normalize(source.Trim()).TrimEnd(';').TrimEnd();
                 if (source.Length == 0) return ExecutionResult.Error("실행할 명령을 입력하세요.");
+                TerminalAnswer shortAnswer = FindWaitingAnswer(source);
+                if (shortAnswer != null) return AcceptTerminalAnswer(shortAnswer);
                 string[] words = source.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
                 string keyword = CommandVocabulary.Keyword(words[0]);
                 // A declaration with a right-hand side is parsed as an assignment.

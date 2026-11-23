@@ -173,14 +173,11 @@ namespace Codetective.Operations
             ConversationStep.answers : Array.Empty<TerminalAnswer>();
         public bool TerminalAwaitingAnswer => WaitingAnswers.Length > 0;
         public IEnumerable<string> TerminalAnswerKeys => WaitingAnswers.Select(answer => answer.key);
-        public string TerminalAnswerUsage
-        {
-            get
-            {
-                string command = CommandVocabulary.KeywordName("answer", Language);
-                return string.Join(" / ", TerminalAnswerKeys.Select(key => command + " " + key));
-            }
-        }
+        public string TerminalAnswerUsage => string.Join(" / ", TerminalAnswerKeys);
+        public bool IsTerminalAnswerKey(string key) => FindWaitingAnswer(key) != null;
+
+        private TerminalAnswer FindWaitingAnswer(string key) =>
+            WaitingAnswers.FirstOrDefault(answer => string.Equals(answer.key, key, StringComparison.OrdinalIgnoreCase));
         public double TerminalDisturbance
         {
             get
@@ -347,14 +344,16 @@ namespace Codetective.Operations
         }
         private ExecutionResult PrepareTerminalAnswer(string[] words)
         {
-            TerminalAnswer[] answers = WaitingAnswers;
-            if (answers.Length == 0)
+            if (!TerminalAwaitingAnswer)
                 return ExecutionResult.Error(Text("terminal.dialogue.answer.none", "지금 답할 질문이 없습니다."));
-            TerminalAnswer selected = words.Length == 2
-                ? answers.FirstOrDefault(answer => string.Equals(answer.key, words[1], StringComparison.OrdinalIgnoreCase))
-                : null;
+            TerminalAnswer selected = words.Length == 2 ? FindWaitingAnswer(words[1]) : null;
             if (selected == null)
                 return ExecutionResult.Error(Text("terminal.dialogue.answer.invalid", "표시된 선택지 중 하나를 입력하세요.") + " " + TerminalAnswerUsage);
+            return AcceptTerminalAnswer(selected);
+        }
+
+        private ExecutionResult AcceptTerminalAnswer(TerminalAnswer selected)
+        {
             terminalCommandTrace.answer = selected;
             return ExecutionResult.Ok(Text("terminal.dialogue.answer.sent", "응답을 전송했습니다."));
         }

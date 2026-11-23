@@ -214,8 +214,8 @@ namespace Codetective.Terminal.Tests.UI
             runtime.AdvanceTerminalConversation(1000);
             TerminalController controller = Controller(runtime, out GameObject completionPanel);
             Invoke(typeof(TerminalController), controller, "LateUpdate");
-            Assert.That(placeholder.text, Is.EqualTo("대답 y / 대답 n"));
-            field.SetTextWithoutNotify("대답 n");
+            Assert.That(placeholder.text, Is.EqualTo("y / n"));
+            field.SetTextWithoutNotify("n");
             field.FocusAtEnd();
             PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
             Assert.That(runtime.GetTrigger("declined"), Is.True);

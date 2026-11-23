@@ -50,6 +50,7 @@ namespace Codetective.Tests.Operations
             var terminal = new TerminalSession(r);
             Assert.That(terminal.Complete("ans"), Is.Empty);
             Assert.That(r.Execute("answer y").Success, Is.False);
+            Assert.That(r.Execute("y").Success, Is.False);
             Listen(r);
 
             Assert.That(r.TerminalConversationTranscript(), Does.Contain("[Secretariat] Will you take the oath?").And.Contain("대답> [y][n]"));
@@ -58,14 +59,23 @@ namespace Codetective.Tests.Operations
             Assert.That(terminal.Complete("대답 Y"), Is.Empty);
             Assert.That(r.Execute("answer").Success, Is.False);
             Assert.That(r.Execute("answer maybe").Success, Is.False);
-            Assert.That(r.Execute("y").Success, Is.False);
+            Assert.That(r.Execute("maybe").Success, Is.False);
             Assert.That(r.Execute("code answer = 7;").Success, Is.True);
             Assert.That(r.Execute("answer = 9;").Success, Is.True);
             Assert.That(r.Data["answer"].value.number, Is.EqualTo(9));
             Assert.That(r.TerminalAwaitingAnswer, Is.True);
             Assert.That(r.ConversationProgress("tutorial").deviations, Is.Zero);
+
+            Assert.That(r.Execute("n = hq;").Success, Is.True);
+            Assert.That(terminal.Complete("n"), Is.Empty, "A reference must not autocomplete over a complete answer.");
+            Assert.That(r.Execute("n").Success, Is.True);
+            Listen(r);
+            Assert.That(r.GetTrigger("oath.no"), Is.True);
+            Assert.That(r.Execute("n").Value.id, Is.EqualTo("hq"));
         }
 
+        [TestCase(" Y ", true, "Accepted.")]
+        [TestCase("n", false, "Declined.")]
         [TestCase("대답 Y", true, "Accepted.")]
         [TestCase("answer n", false, "Declined.")]
         public void PendingQuestionsAndTheirChosenRepliesResumeFromSaves(string command, bool accepted, string reply)

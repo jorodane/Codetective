@@ -33,9 +33,8 @@ namespace Codetective.Tests.Operations
                 if (r.TerminalAwaitingAnswer)
                 {
                     Assert.That(r.TerminalConversationTranscript(), Does.Contain(display == "en" ? "Answer> [y][n]" : "대답> [y][n]"));
-                    string prefix = commands == CommandLocale.Korean ? "대답 " : "answer ";
-                    Assert.That(r.TerminalAnswerUsage, Is.EqualTo(prefix + "y / " + prefix + "n"));
-                    Assert.That(r.Execute(prefix + answer).Success, Is.True);
+                    Assert.That(r.TerminalAnswerUsage, Is.EqualTo("y / n"));
+                    Assert.That(r.Execute(answer).Success, Is.True);
                     continue;
                 }
                 string command = r.TerminalExpectedCommand;

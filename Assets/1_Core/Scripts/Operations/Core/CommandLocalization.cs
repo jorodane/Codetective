@@ -85,7 +85,7 @@ namespace Codetective.Operations
             "프로토콜 정찰(장소 대상)\n{\n    반환 대상.조사();\n}" :
             "protocol recon(Place target)\n{\n    return target.inspect();\n}";
         public string HelpForLanguage => Language == CommandLocale.Korean ?
-            "암호 이름 = 대상 : 치환 참조 등록\n암호 이름 : 빈 치환문 등록\n삭제 이름 : 치환 규칙 폐기\n대답 선택지 : 대화 중 질문에 응답\n도움말 : 명령어 목록\n\n" +
+            "암호 이름 = 대상 : 치환 참조 등록\n암호 이름 : 빈 치환문 등록\n삭제 이름 : 치환 규칙 폐기\n대답 선택지 : 질문에 응답 (선택지만 입력해도 됩니다.)\n도움말 : 명령어 목록\n\n" +
             "기존 개체를 참조해 사용합니다. new/malloc은 지원하지 않습니다.\n" +
             "대상. → 현재 권한 목록\n이름 = 대상;\n이름.변수 = 값;\n이름 = 대상.명령(입력);\n" +
             "예: 지휘소.커피요청();\n문서 = 자료실.조사();\n스레드01.프로토콜실행(정찰, 자료실);\n\n" + ExampleProtocol : Help;

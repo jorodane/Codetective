@@ -75,6 +75,10 @@ namespace Codetective.Terminal
             if (line.IndexOfAny(new[] { '\r', '\n' }) >= 0)
                 return Array.Empty<TerminalCompletion>();
 
+            // A complete answer should submit with Enter even if a reference has the same name.
+            if (Runtime.IsTerminalAnswerKey(line.TrimEnd().TrimEnd(';').TrimEnd()))
+                return Array.Empty<TerminalCompletion>();
+
             int separator = -1;
             for (int i = 0; i < line.Length; i++)
             {
@@ -101,7 +105,7 @@ namespace Codetective.Terminal
             if (canonicalCommand == "answer" && !prefix.StartsWith("=", StringComparison.Ordinal))
             {
                 // The question lists all options. An empty argument must not select one by default.
-                if (prefix.Length == 0 || Runtime.TerminalAnswerKeys.Contains(prefix, StringComparer.OrdinalIgnoreCase))
+                if (prefix.Length == 0 || Runtime.IsTerminalAnswerKey(prefix))
                     return Array.Empty<TerminalCompletion>();
                 return Runtime.TerminalAnswerKeys.Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     .Select(key => new TerminalCompletion("[" + key + "]", enteredCommand + " " + key)).ToArray();
