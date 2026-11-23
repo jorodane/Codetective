@@ -265,8 +265,10 @@ MonoBehaviour:
         pauseAfter: 0.7
         effectSeconds: 0.55
         emotion: 0
-      - text: 기본 연결 확인을 마쳤습니다. 남은 임무 안내와 수락 여부는 메일에서 확인하십시오. 이제 귀하의 명령을 기다리겠습니다.
+      - text: 곧 아홉 시 예약 손님이 들어옵니다. 말풍선을 눌러 적당히 맞장구만 치시면 됩니다. 상담을 마치고 잠시 쉬시면 첫 임무를 메일로 보내겠습니다.
         textKey: onboarding.finish
+        speaker: 사무국
+        speakerKey: onboarding.office
         charactersPerSecond: 32
         pauseAfter: 0.7
         effectSeconds: 0.55

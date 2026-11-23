@@ -23,34 +23,28 @@ MonoBehaviour:
     id: government-intro
     mailbox: 1
     sender: 국가기록보안국 / 현장지원과
-    subject: Kernel 임명 및 첫 임무
+    subject: Kernel 임명 및 접속 안내
     body: 'Kernel 귀하.
 
 
       귀하를 비공개 현장 작전의 커맨더로 임명합니다. 공식 신분은 개인 심리상담소 상담가입니다.
 
 
-      상담소 건너편의 손님은 실제로 귀하에게 말합니다. 말풍선을 누르면 “음”, “아아” 같은 추임새로 응답할 수 있습니다. 붉은 단서는 직접
-      눌러 프로필에 남기고, 상담 기록은 모니터에서 직접 작성하십시오. 적절한 추임새만 넣어도 상담은 생각보다 오래 이어집니다.
+      이 메일을 확인하셨으면 커널 페이지로 돌아오십시오. 현장지원과에서 작전망 사용법을 안내하겠습니다.
 
 
-      첫 임무: 상담 손님이 언급하는 회사 지하실의 야간 소음을 조사하십시오. 진술에서 단서를 확보하면 자료실 조사 권한이 열립니다. Thread에게
-      정찰을 맡기고 상담을 계속할 수 있습니다.
+      오전 아홉 시에 일상 스트레스 상담을 예약한 손님이 있습니다. 예약은 이미 확정되어 있습니다. 상담 후 필요하면 상담소 페이지에 일지를 남기십시오.
 
 
-      상담소 메일은 위장 업무에, Kernel 메일은 임무 연락에 사용합니다. 후속 지시는 이 메일함으로 전달됩니다.'
+      상담을 마치고 잠시 쉬시면 이 메일함으로 첫 임무를 보내겠습니다.'
     day: 1
     requiredFacts: []
     readFacts:
     - kernel_contact_received
     isReservationInquiry: 0
-    requiresAcceptance: 1
-    acceptLabel: 임무 수락
-    acceptFacts:
-    - kernel_assignment_accepted
-    - mission01_started
-    grantAuthorities:
-    - clinic.basic
+    requiresAcceptance: 0
+    acceptFacts: []
+    grantAuthorities: []
     condition:
       triggersOn: []
       triggersOff: []
@@ -59,10 +53,5 @@ MonoBehaviour:
       triggers: []
       quests: []
     onAccept:
-      triggers:
-      - id: intro.complete
-        value: 1
-      quests:
-      - id: nsf.introduction
-        stage: 10
-        status: 1
+      triggers: []
+      quests: []

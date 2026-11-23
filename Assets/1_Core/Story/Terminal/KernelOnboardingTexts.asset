@@ -33,6 +33,12 @@ MonoBehaviour:
   - key: onboarding.office
     language: en
     text: Secretariat
+  - key: profile.regularVisitor.name
+    language: ko
+    text: 한정우
+  - key: profile.regularVisitor.name
+    language: en
+    text: Han Jeong-woo
   - key: terminal.dialogue.receiving
     language: ko
     text: 수신 중 · 안내가 끝나면 입력할 수 있습니다.
@@ -179,10 +185,10 @@ MonoBehaviour:
     text: You can also find a coffee request in headquarters' permissions. Commands lead to real actions beyond the screen.
   - key: onboarding.finish
     language: ko
-    text: 기본 연결 확인을 마쳤습니다. 남은 임무 안내와 수락 여부는 메일에서 확인하십시오. 이제 귀하의 명령을 기다리겠습니다.
+    text: 곧 아홉 시 예약 손님이 들어옵니다. 말풍선을 눌러 적당히 맞장구만 치시면 됩니다. 상담을 마치고 잠시 쉬시면 첫 임무를 메일로 보내겠습니다.
   - key: onboarding.finish
     language: en
-    text: Basic checks are complete. Review the assignment and its acceptance in Mail. We will now await your commands.
+    text: Your nine o'clock client is about to arrive. Click the speech bubble to chime in now and then. Take a short break after the session and we will send your first assignment by mail.
   - key: onboarding.detour1
     language: ko
     text: '그 명령도 유효합니다만, 지금은 다음 명령을 확인하는 중입니다:

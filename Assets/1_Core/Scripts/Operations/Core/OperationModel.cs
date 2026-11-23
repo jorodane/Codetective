@@ -182,7 +182,14 @@ namespace Codetective.Operations
         public string fact;
         public string dataName;
         public DataKind kind = DataKind.Clue;
-        public ConsultationLine Copy() => (ConsultationLine)MemberwiseClone();
+        public string[] responses = Array.Empty<string>();
+        public int ResponseCount => responses?.Length ?? 0;
+        public ConsultationLine Copy()
+        {
+            var copy = (ConsultationLine)MemberwiseClone();
+            copy.responses = responses?.ToArray() ?? Array.Empty<string>();
+            return copy;
+        }
     }
 
     [Serializable]
@@ -226,6 +233,7 @@ namespace Codetective.Operations
         public QuestProgress[] quests;
         public NewspaperEdition[] newspapers;
         public ClinicDayState clinicDay;
+        public int consultationSeed;
         public int[] heardConsultationLines;
         public DayPresentationState dayPresentation;
         public DailyLedger dayLedger;

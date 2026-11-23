@@ -204,6 +204,7 @@ namespace Codetective.Operations
             }
             foreach (var root in roots) copy.roots.Add(root.Key, copy.entities[root.Value.Id]);
             foreach (var plan in clinicPlans) copy.clinicPlans.Add(plan.Key, plan.Value.Copy());
+            foreach (var pool in consultationPools) copy.RegisterConsultationPool(pool.Key, pool.Value);
             foreach (var definition in appointmentDefinitions) copy.appointmentDefinitions.Add(definition.Key, definition.Value.Copy());
             foreach (var offset in appointmentLines) copy.appointmentLines.Add(offset.Key, offset.Value);
             copy.legacyDialogueCount = legacyDialogueCount;

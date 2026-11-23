@@ -40,8 +40,8 @@ namespace Codetective.Gameplay
             if (runtime.TerminalInputLocked) state = "작전망 안내 수신 중";
             else if (runtime.TerminalAwaitingAnswer) state = "작전망 응답 대기";
             else if (runtime.TerminalConversationActive) state = "작전망 명령 연습";
-            else state = runtime.AwaitingAssignment ? "임무 안내 대기" : runtime.IsDayEnded ? "업무 종료" : visit == null ? "상담 대기" :
-                visit.patientName + (visit.phase == VisitPhase.Arriving ? " 입실 중" : visit.phase == VisitPhase.Talking ? " 상담 중" : " 상담 마무리");
+            else if (visit != null) state = visit.patientName + (visit.phase == VisitPhase.Arriving ? " 입실 중" : visit.phase == VisitPhase.Talking ? " 상담 중" : " 상담 마무리");
+            else state = runtime.AwaitingAssignment ? "임무 안내 대기" : runtime.IsDayEnded ? "업무 종료" : "상담 대기";
             int tasks = runtime.Threads.Count(t => t.State != AgentState.Ready);
             return runtime.DaySubtitle + " · " + state + (tasks > 0 ? " · Thread 작전 " + tasks + "건" : "");
         }

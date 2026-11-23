@@ -15,7 +15,7 @@ namespace Codetective.Gameplay
         private DialoguePresentationDefinition presentation;
         private RectTransform bubble;
         private Text speaker, sentence, feedback;
-        private Button main, clue, hmm, ah;
+        private Button main, clue, firstResponse, secondResponse;
         private AudioSource audioSource;
         private string positionedView;
         private int nextAcknowledgement;
@@ -32,8 +32,15 @@ namespace Codetective.Gameplay
             sentence = OverlayWidgets.Label(bubble, font, new Vector2(16, -46), new Vector2(640, 96), "", 24);
             clue = OverlayWidgets.Button(bubble, font, Vector2.zero, new Vector2(640, 32), "", CollectClue);
             clue.GetComponentInChildren<Text>().color = new Color(1, 0.38f, 0.32f);
-            hmm = OverlayWidgets.Button(bubble, font, Vector2.zero, new Vector2(310, 36), "음.", () => Acknowledge(0));
-            ah = OverlayWidgets.Button(bubble, font, Vector2.zero, new Vector2(310, 36), "아아.", () => Acknowledge(1));
+            firstResponse = OverlayWidgets.Button(bubble, font, Vector2.zero, new Vector2(310, 36), "음.", () => Respond(0));
+            secondResponse = OverlayWidgets.Button(bubble, font, Vector2.zero, new Vector2(310, 36), "아아.", () => Respond(1));
+            foreach (Button response in new[] { firstResponse, secondResponse })
+            {
+                Text label = response.GetComponentInChildren<Text>();
+                label.resizeTextForBestFit = true;
+                label.resizeTextMinSize = 14;
+                label.resizeTextMaxSize = 20;
+            }
             feedback = OverlayWidgets.Label(bubble, font, Vector2.zero, new Vector2(640, 24), "말풍선을 눌러 응답", 17);
             audioSource = gameObject.AddComponent<AudioSource>(); audioSource.playOnAwake = false; audioSource.spatialBlend = 0;
             Position(); Refresh();
@@ -55,8 +62,8 @@ namespace Codetective.Gameplay
             speaker.rectTransform.sizeDelta = new Vector2(width, 28);
             sentence.rectTransform.sizeDelta = new Vector2(width, height - 150);
             Place(clue, new Vector2(16, -height + 96), new Vector2(width, 32));
-            Place(hmm, new Vector2(16, -height + 58), new Vector2((width - 10) / 2, 34));
-            Place(ah, new Vector2(26 + (width - 10) / 2, -height + 58), new Vector2((width - 10) / 2, 34));
+            Place(firstResponse, new Vector2(16, -height + 58), new Vector2((width - 10) / 2, 34));
+            Place(secondResponse, new Vector2(26 + (width - 10) / 2, -height + 58), new Vector2((width - 10) / 2, 34));
             feedback.rectTransform.anchoredPosition = new Vector2(16, -height + 23); feedback.rectTransform.sizeDelta = new Vector2(width, 22);
         }
         private static void Place(Button button, Vector2 position, Vector2 size)
@@ -72,8 +79,16 @@ namespace Codetective.Gameplay
             bool visible = (line != null || sequence) && !game.IsDateTransitioning && !inspection.PresentingOnTerminal && inspection.Mode != InspectionMode.Menu &&
                 !inspection.ModalInputBlocked && (game.Carry == null || game.Carry.HeldItem == null);
             bubble.gameObject.SetActive(visible); if (!visible) return;
-            clue.gameObject.SetActive(!sequence && !string.IsNullOrWhiteSpace(line?.keyword));
-            hmm.gameObject.SetActive(!sequence); ah.gameObject.SetActive(!sequence);
+            bool hasClue = !sequence && !string.IsNullOrWhiteSpace(line.keyword);
+            int choices = sequence ? 0 : line.ResponseCount;
+            bool routine = !string.IsNullOrEmpty(visit?.episodeId);
+            bool acknowledgements = !sequence && !routine && choices == 0;
+            clue.gameObject.SetActive(hasClue);
+            firstResponse.gameObject.SetActive(acknowledgements || choices >= 1);
+            secondResponse.gameObject.SetActive(acknowledgements || choices >= 2);
+            var textSize = sentence.rectTransform.sizeDelta;
+            textSize.y = bubble.sizeDelta.y - (hasClue ? 150 : acknowledgements || choices > 0 ? 112 : 78);
+            sentence.rectTransform.sizeDelta = textSize;
             if (sequence)
             {
                 showingSequence = true;
@@ -83,14 +98,31 @@ namespace Codetective.Gameplay
                 return;
             }
             if (showingSequence) { showingSequence = false; feedback.text = "말풍선을 눌러 응답"; }
-            speaker.text = line.speaker; sentence.text = line.sentence;
-            clue.GetComponentInChildren<Text>().text = "● " + line.keyword + (game.Runtime.RecordedClues.Contains(line.fact) ? "  [기록됨]" : "");
-            bool ready = Time.unscaledTime >= readyAt && !game.IsViewTransitioning && !inspection.ModalInputBlocked;
-            main.interactable = hmm.interactable = ah.interactable = clue.interactable = ready;
+            speaker.text = visit?.patientName ?? line.speaker; sentence.text = line.sentence;
+            if (hasClue) clue.GetComponentInChildren<Text>().text = "● " + line.keyword + (game.Runtime.RecordedClues.Contains(line.fact) ? "  [기록됨]" : "");
+            if (firstResponse.gameObject.activeSelf) firstResponse.GetComponentInChildren<Text>().text = choices >= 1 ? line.responses[0] : "음.";
+            if (secondResponse.gameObject.activeSelf) secondResponse.GetComponentInChildren<Text>().text = choices >= 2 ? line.responses[1] : "아아.";
+            bool ready = CanReply;
+            main.interactable = ready && choices == 0;
+            firstResponse.interactable = secondResponse.interactable = clue.interactable = ready;
+            if (choices > 0) feedback.text = "응답을 고르세요.";
+            else if (routine && ready) feedback.text = "말풍선을 눌러 응답";
+        }
+        private bool CanReply => Time.unscaledTime >= readyAt && !game.IsViewTransitioning && !inspection.ModalInputBlocked &&
+            inspection.Mode != InspectionMode.Menu && !game.Runtime.IsDayEnded;
+        private void Respond(int index)
+        {
+            ConsultationLine line = game.Runtime.CurrentConsultation;
+            if (!CanReply || line == null) return;
+            if (line.ResponseCount == 0) { Acknowledge(index); return; }
+            if (index >= line.ResponseCount) return;
+            readyAt = Time.unscaledTime + 0.25f;
+            feedback.text = line.responses[index];
+            game.Runtime.ReplyToConsultationChoice(index); Refresh();
         }
         private void Acknowledge(int index)
         {
-            if (Time.unscaledTime < readyAt || game.IsViewTransitioning || inspection.ModalInputBlocked || inspection.Mode == InspectionMode.Menu || game.Runtime.IsDayEnded || game.Runtime.CurrentConsultation == null) return;
+            if (!CanReply || game.Runtime.CurrentConsultation?.ResponseCount != 0) return;
             AudioClip clip = presentation != null && index < presentation.acknowledgements.Length ? presentation.acknowledgements[index] : null;
             if (clip != null) audioSource.PlayOneShot(clip);
             readyAt = Time.unscaledTime + Mathf.Max(0.25f, clip != null ? clip.length : 0);

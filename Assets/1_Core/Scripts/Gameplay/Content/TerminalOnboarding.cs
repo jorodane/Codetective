@@ -24,6 +24,7 @@ namespace Codetective.Gameplay
             }
             Text("onboarding.speaker", "현장지원과", "Field Support");
             Text("onboarding.office", "사무국", "Secretariat");
+            Text("profile.regularVisitor.name", "한정우", "Han Jeong-woo");
             Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.", "Receiving · wait until the message finishes.");
             Text("terminal.dialogue.command", "안내 명령", "Requested command");
             Text("terminal.dialogue.standby", "작전망 연결 대기", "Operations network standby");
@@ -78,7 +79,7 @@ namespace Codetective.Gameplay
                 new TerminalConversationStep { id = "finish", lines = new[] {
                     Line("world", "치환문을 폐기해도 실제 지휘소는 사라지지 않습니다. 대상을 부르는 규칙만 정리한 것입니다.", "Discarding a substitution does not remove headquarters. You have only removed a rule for referring to it."),
                     Line("coffee", "지휘소의 권한 목록에서 커피 요청도 찾아보십시오. 명령은 화면 밖의 실제 행동으로 이어집니다.", "You can also find a coffee request in headquarters' permissions. Commands lead to real actions beyond the screen."),
-                    Line("finish", "기본 연결 확인을 마쳤습니다. 남은 임무 안내와 수락 여부는 메일에서 확인하십시오. 이제 귀하의 명령을 기다리겠습니다.", "Basic checks are complete. Review the assignment and its acceptance in Mail. We will now await your commands.") } }
+                    OfficeLine("finish", "곧 아홉 시 예약 손님이 들어옵니다. 말풍선을 눌러 적당히 맞장구만 치시면 됩니다. 상담을 마치고 잠시 쉬시면 첫 임무를 메일로 보내겠습니다.", "Your nine o'clock client is about to arrive. Click the speech bubble to chime in now and then. Take a short break after the session and we will send your first assignment by mail.") } }
             };
             var asset = ScriptableObject.CreateInstance<TerminalConversationAsset>(); asset.name = "KernelOnboarding";
             asset.conversation = new TerminalConversationDefinition { id = "kernel-onboarding", requiredMailRead = "government-intro", firstDay = 1, lastDay = 1,

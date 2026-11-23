@@ -26,7 +26,7 @@ MonoBehaviour:
     - id: morning
       profileId: client
       patientName: 오전 상담 손님
-      startMinute: 540
+      startMinute: 580
       endMinute: 0
       greeting: 안녕하세요. 예약하고 왔습니다.
       farewell: 오늘 말씀해 주셔서 감사합니다. 다음 상담에서 이어가겠습니다.
@@ -140,3 +140,15 @@ MonoBehaviour:
         - id: clinic.time_limit.care
           value: 1
         quests: []
+    - id: regular
+      profileId: regularVisitor
+      patientName: 한정우
+      title: 일상 스트레스 상담
+      startMinute: 540
+      endMinute: 560
+      beforeAssignment: 1
+      afterConversation: kernel-onboarding
+      episodePoolId: regularTalk
+      greeting: 안녕하세요. 아홉 시에 예약한 한정우입니다.
+      farewell: 오늘은 여기까지 하시죠. 다음에 또 뵙겠습니다.
+      dialogue: []

@@ -22,7 +22,8 @@ namespace Codetective.Operations
             RequireVisibleProfile(profileId);
             Entity person = Entity(profileId);
             string knownName = person != null ? KnownName(person.Id) : "";
-            string displayName = !string.IsNullOrWhiteSpace(knownName) ? knownName : Consultation.FirstOrDefault(l => ProfileOf(l) == profileId)?.speaker ?? profileId;
+            string displayName = !string.IsNullOrWhiteSpace(knownName) ? knownName : Consultation.FirstOrDefault(l => ProfileOf(l) == profileId)?.speaker ??
+                appointmentDefinitions.Values.FirstOrDefault(a => a.profileId == profileId)?.patientName ?? profileId;
             return new PersonProfile { Id = profileId, DisplayName = displayName,
                 Name = ProfileField(person, profileFields[0], displayName), Gender = ProfileField(person, profileFields[1]),
                 Age = ProfileField(person, profileFields[2]), Birthday = ProfileField(person, profileFields[3]),
@@ -69,9 +70,12 @@ namespace Codetective.Operations
             RequireVisibleProfile(profileId);
             ConsultationNote[] entries = NotesFor(profileId).ToArray();
             ConsultationNote note = pageIndex >= 0 && pageIndex < entries.Length ? entries[pageIndex] : null;
-            string session = note == null ? "상담일: 미기록\n상담 시간: 미기록\n\n상담 내용\n작성된 상담 일지가 없습니다." :
+            string session = note == null ? "상담 내용\n작성된 상담 일지가 없습니다." :
                 "상담일: DAY " + note.sessionDay + "\n상담 시간: " + TimeOfDay(note.startMinute) + " ~ " + TimeOfDay(note.endMinute) + "\n\n상담 내용\n" + note.text;
-            return session + "\n\n기록한 단서 / 추가 정보\n" + ProfileFindings(profileId);
+            var history = CompletedConsultationsFor(profileId).Select(entry => $"DAY {entry.day}  {TimeOfDay(entry.visit.SessionStart)} ~ {TimeOfDay(entry.visit.SessionEnd)}" +
+                (string.IsNullOrWhiteSpace(entry.visit.title) ? "" : "  " + entry.visit.title));
+            string visits = string.Join("\n", history);
+            return session + (visits.Length == 0 ? "" : "\n\n상담 내역\n" + visits) + "\n\n기록한 단서 / 추가 정보\n" + ProfileFindings(profileId);
         }
         public static int ParseConsultationTime(string text)
         {

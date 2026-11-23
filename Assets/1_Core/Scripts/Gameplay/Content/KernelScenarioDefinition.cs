@@ -22,6 +22,7 @@ namespace Codetective.Gameplay
         public StoryMailAsset[] mail = Array.Empty<StoryMailAsset>();
         public NewspaperArticleAsset[] newspaper = Array.Empty<NewspaperArticleAsset>();
         public StoryEffects initialStoryState = new StoryEffects();
+        public ConsultationPoolAsset[] consultationPools = Array.Empty<ConsultationPoolAsset>();
         public ClinicDayPlanAsset[] clinicDays = Array.Empty<ClinicDayPlanAsset>();
         public string storyStartFact = "";
         public PresentationSettings presentation;
@@ -50,9 +51,11 @@ namespace Codetective.Gameplay
             worldData?.ApplyInformation(runtime);
             foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);
             runtime.DeliverNewspaper();
+            foreach (ConsultationPoolAsset pool in consultationPools ?? Array.Empty<ConsultationPoolAsset>())
+                if (pool != null) runtime.RegisterConsultationPool(pool.poolId, pool.episodes);
+            foreach (TerminalConversationAsset item in terminalConversations) if (item != null) runtime.RegisterTerminalConversation(item.conversation);
             foreach (ClinicDayPlanAsset item in clinicDays) if (item != null) runtime.RegisterClinicDay(item.plan);
             foreach (StoryMailAsset item in mail) if (item != null) runtime.RegisterMail(item.message);
-            foreach (TerminalConversationAsset item in terminalConversations) if (item != null) runtime.RegisterTerminalConversation(item.conversation);
             runtime.InitializeClinicDay(); runtime.InitializeDailyRecord();
             foreach (string id in initialDiscoveries ?? Array.Empty<string>()) runtime.Discover(id, "초기 작전 자료");
             foreach (ObservationDefinition report in initialObservations ?? Array.Empty<ObservationDefinition>()) runtime.Observe(report);

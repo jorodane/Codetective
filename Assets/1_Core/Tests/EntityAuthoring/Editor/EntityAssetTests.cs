@@ -303,13 +303,40 @@ namespace Codetective.Tests.Operations
             KernelRuntime runtime = scenario.CreateRuntime();
             Assert.That(runtime.AwaitingAssignment, Is.True);
             Assert.That(runtime.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
-            runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro");
+            Assert.That(runtime.VisibleProfileIds, Does.Not.Contain("regularVisitor"));
+            FinishTutorialAndAcceptFirstMission(runtime);
             runtime.AddConsultationNote("client", "직접 작성한 내용"); runtime.SetDrawerOpen("desk.Drawer_1", true);
             KernelRuntime restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
             Assert.That(restored.AwaitingAssignment, Is.False);
             Assert.That(restored.NotesFor("client").Single().text, Is.EqualTo("직접 작성한 내용"));
+            Assert.That(restored.ProfileCard("regularVisitor").DisplayName, Is.EqualTo("한정우"));
+            Assert.That(restored.CompletedConsultationsFor("regularVisitor").Single().visit.title, Is.EqualTo("일상 스트레스 상담"));
             Assert.That(restored.IsDrawerOpen("desk.Drawer_1"), Is.True);
             Assert.That(restored.Inbox(Mailbox.Clinic).Count(), Is.EqualTo(2));
+        }
+
+        private static void FinishTutorialAndAcceptFirstMission(KernelRuntime runtime)
+        {
+            runtime.ReadMail("government-intro"); runtime.EnterTerminalPage("kernel");
+            for (int i = 0; i < 16 && runtime.TerminalConversationActive; i++)
+            {
+                runtime.AdvanceTerminalConversation(1000);
+                if (runtime.TerminalConversationActive)
+                    Assert.That(runtime.Execute(runtime.TerminalAwaitingAnswer ? "y" : runtime.TerminalExpectedCommand).Success, Is.True);
+            }
+            Assert.That(runtime.ConversationProgress("kernel-onboarding").phase, Is.EqualTo(TerminalConversationPhase.Completed));
+            runtime.Tick(1);
+            AppointmentProgress visit = runtime.CurrentAppointment;
+            Assert.That(visit.id, Is.EqualTo("1:regular"));
+            Assert.That(visit.episodeId, Is.Not.Empty);
+            runtime.AdvanceVisitPresentation(visit.id, visit.phase);
+            runtime.Reply(); runtime.ReplyToConsultationChoice(0); runtime.Reply();
+            runtime.AdvanceVisitPresentation(visit.id, VisitPhase.Closing);
+            runtime.AdvanceVisitPresentation(visit.id, VisitPhase.Departing);
+            runtime.Tick(4);
+            Assert.That(runtime.Inbox(Mailbox.Kernel).Any(m => m.id == "government-first-mission"), Is.False);
+            runtime.Tick(1);
+            runtime.ReadMail("government-first-mission"); runtime.AcceptMail("government-first-mission");
         }
 
         [Test]
@@ -320,7 +347,7 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.TodayNewspaper.articleIds, Does.Contain("research-funding"));
             Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.False);
             runtime.ReadNewspaper(); Assert.That(runtime.Execute("상담손님.재단에대하여()").Success, Is.True);
-            runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro");
+            FinishTutorialAndAcceptFirstMission(runtime);
             Assert.That(runtime.GetQuest("nsf.introduction").stage, Is.EqualTo(10));
             runtime.Entity("client").SetFunctionAccess("askAboutFoundation", PlayerAccess.Internal);
             var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
@@ -348,9 +375,9 @@ namespace Codetective.Tests.Operations
             var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
             KernelRuntime runtime = scenario.CreateRuntime();
             Assert.That(runtime.DaySubtitle, Is.EqualTo("Kernel 프로젝트의 시작"));
-            Assert.That(runtime.DailyAppointments.Select(a => a.startMinute), Is.EqualTo(new[] { 540, 660, 840 }));
-            runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro"); runtime.MarkDayIntroSeen();
-            runtime.Tick(1); AppointmentProgress visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase);
+            Assert.That(runtime.DailyAppointments.Select(a => a.startMinute), Is.EqualTo(new[] { 540, 580, 660, 840 }));
+            FinishTutorialAndAcceptFirstMission(runtime); runtime.MarkDayIntroSeen();
+            runtime.WaitForNextAppointment(); AppointmentProgress visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase);
             runtime.RecordClue(runtime.ConsultationIndex); runtime.Tick(120);
             Assert.That(runtime.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing));
             var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
@@ -365,13 +392,13 @@ namespace Codetective.Tests.Operations
         public void ShippedInquiryReplyAndCalendarRoundTripThroughUnityJson()
         {
             var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
-            KernelRuntime runtime = scenario.CreateRuntime(); runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro");
-            Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(2)); runtime.ReadMail("clinic-reservation-followup"); runtime.ChooseMail("clinic-reservation-followup", "approve");
+            KernelRuntime runtime = scenario.CreateRuntime(); FinishTutorialAndAcceptFirstMission(runtime);
+            Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(3)); runtime.ReadMail("clinic-reservation-followup"); runtime.ChooseMail("clinic-reservation-followup", "approve");
             var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
             Assert.That(restored.SelectedMailChoice("clinic-reservation-followup"), Is.EqualTo("approve"));
-            Assert.That(restored.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 570, 660, 780 }));
+            Assert.That(restored.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 550, 570, 660, 780 }));
             Assert.That(restored.GetTrigger("clinic.request.care_followup.approved"), Is.True);
-            restored.ChooseMail("clinic-reservation-followup", "approve"); Assert.That(restored.ScheduleForDay(2).Count, Is.EqualTo(3));
+            restored.ChooseMail("clinic-reservation-followup", "approve"); Assert.That(restored.ScheduleForDay(2).Count, Is.EqualTo(4));
         }
         [Test]
         public void UnityLoadedOrdinaryMailAssetsAreNotReservationInquiries()

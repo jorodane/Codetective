@@ -6,6 +6,7 @@ namespace Codetective.Operations
 {
     public sealed partial class KernelRuntime
     {
+        private const double MinuteEpsilon = 0.0000001;
         public int Day { get; private set; } = 1;
         public double Minute { get; private set; } = 540;
         public bool IsDayEnded { get; private set; }
@@ -20,17 +21,21 @@ namespace Codetective.Operations
 
         public void Tick(double minutes)
         {
-            if (AwaitingAssignment || TerminalConversationPausesWorld || IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
+            if (TerminalConversationPausesWorld || IsDayEnded || minutes <= 0 || double.IsNaN(minutes) || double.IsInfinity(minutes)) return;
+            InitializeClinicDay();
+            double? assignmentDelivery = AwaitingAssignment && ActiveVisit == null && NextVisit == null ? NextAssignmentMailMinute : (double?)null;
+            if (assignmentDelivery <= Minute) return;
             InitializeDailyRecord(); SyncClinicClock();
             ApplyWorldSchedule();
             if (IsClinicTransitioning) return;
-            double used = Math.Min(minutes, Math.Min(1080 - Minute, NextClinicBoundary - Minute));
+            double boundary = assignmentDelivery ?? NextClinicBoundary;
+            double used = Math.Min(minutes, Math.Min(1080 - Minute, boundary - Minute));
             if (used <= 0) return;
             budget = 1024; depth = 0;
             double previousMinute = Math.Floor(Minute);
             foreach (ThreadAgent agent in Threads.ToArray()) TickAgent(agent, 0);
             double remaining = used;
-            while (remaining > 0.0000001)
+            while (remaining > MinuteEpsilon)
             {
                 double step = Threads.Where(a => a.State == AgentState.Executing && a.Delay > 0).Select(a => a.Delay).DefaultIfEmpty(remaining).Min();
                 if (NextWorldBoundary > Minute) step = Math.Min(step, NextWorldBoundary - Minute);
@@ -38,16 +43,22 @@ namespace Codetective.Operations
                 ApplyWorldSchedule();
                 foreach (ThreadAgent agent in Threads.ToArray()) TickAgent(agent, step);
             }
-            if (CurrentConsultation != null)
+            bool routineVisit = !string.IsNullOrEmpty(ActiveVisit?.episodeId);
+            if (!routineVisit && CurrentConsultation != null)
             {
                 double previous = Math.Floor(ResponseMinutes / 5);
                 ResponseMinutes += used;
                 Suspicion += Math.Floor(ResponseMinutes / 5) - previous;
             }
-            Exposure = Math.Min(1, Exposure + used * (1 + Suspicion * 0.1) / 5400);
-            if (Exposure >= 1 && Facts.Add("enemy_at_clinic")) Report("상담소 위치가 노출되었습니다. 지휘소 방어 권한을 확인하세요.");
+            if (!AwaitingAssignment && !routineVisit)
+            {
+                Exposure = Math.Min(1, Exposure + used * (1 + Suspicion * 0.1) / 5400);
+                if (Exposure >= 1 && Facts.Add("enemy_at_clinic")) Report("상담소 위치가 노출되었습니다. 지휘소 방어 권한을 확인하세요.");
+            }
             SyncClinicClock();
-            if (Math.Floor(Minute) != previousMinute) Revision++;
+            bool assignmentArrived = assignmentDelivery <= Minute + MinuteEpsilon;
+            if (Math.Floor(Minute) != previousMinute || assignmentArrived) Revision++;
+            if (assignmentArrived) NarrativeUpdated();
             if (Minute >= 1080)
             {
                 IsDayEnded = true;
@@ -87,6 +98,7 @@ namespace Codetective.Operations
             if (index < 0 || index >= Consultation.Count) throw new CommandException("상담 기록을 찾을 수 없습니다.");
             ConsultationLine line = Consultation[index];
             if (HasClinicSchedule ? !heardConsultationLines.Contains(index) : index > ConsultationIndex) throw new CommandException("아직 듣지 않은 진술입니다.");
+            if (string.IsNullOrWhiteSpace(line.fact) || string.IsNullOrWhiteSpace(line.keyword)) throw new CommandException("기록할 상담 단서가 없습니다.");
             Datum value = Datum.Ref(line.kind, line.fact, line.keyword, line.sentence);
             if (!RecordedClues.Contains(line.fact))
             {
@@ -104,8 +116,21 @@ namespace Codetective.Operations
         public void Reply()
         {
             if (IsDayEnded) throw new CommandException("오늘의 상담 시간이 끝났습니다.");
+            if (CurrentConsultation?.ResponseCount != 0) return;
+            AdvanceConsultation();
+        }
+
+        public void ReplyToConsultationChoice(int index)
+        {
+            if (IsDayEnded) throw new CommandException("오늘의 상담 시간이 끝났습니다.");
+            ConsultationLine line = CurrentConsultation;
+            if (line == null || index < 0 || index >= line.ResponseCount) throw new CommandException("현재 상담의 응답을 선택하세요.");
+            AdvanceConsultation();
+        }
+
+        private void AdvanceConsultation()
+        {
             if (HasClinicSchedule) { ReplyToAppointment(); return; }
-            if (CurrentConsultation == null) return;
             ResponseMinutes = 0;
             ConsultationIndex++;
             Report(CurrentConsultation == null ? "상담이 끝났습니다. 프로필에서 진술을 다시 확인할 수 있습니다." : "상담 응답: 음, 계속 말씀해 주세요.");
@@ -119,7 +144,7 @@ namespace Codetective.Operations
                 contentTextVersion = 1,
                 activeTerminalConversation = activeTerminalConversation, terminalConversations = terminalConversationProgress.Values.Select(p => p.Copy()).ToArray(),
                 day = Day, minute = Minute, calendarStart = GameDateTime.From(calendarStart), knowledgeOnlyIds = knowledgeOnly.ToArray(), occurredEventIds = occurredEvents.ToArray(), suspicion = Suspicion, exposure = Exposure,
-                responseMinutes = ResponseMinutes, consultationIndex = ConsultationIndex,
+                responseMinutes = ResponseMinutes, consultationIndex = ConsultationIndex, consultationSeed = consultationSeed,
                 dayEnded = IsDayEnded, coffeeReceived = CoffeeReceived,
                 facts = Facts.ToArray(), authorities = Authorities.ToArray(), recordedClues = RecordedClues.ToArray(),
                 consultationNotes = notes.Select(n => n.Copy()).ToArray(),
@@ -194,7 +219,8 @@ namespace Codetective.Operations
             RestoreStoryState(snapshot);
             RestoreEntities(snapshot.entities, snapshot.discoveries == null, snapshot.contentTextVersion < 1);
             Suspicion = snapshot.suspicion; Exposure = snapshot.exposure; ResponseMinutes = snapshot.responseMinutes;
-            ConsultationIndex = Math.Max(0, Math.Min(snapshot.consultationIndex, Consultation.Count));
+            if (snapshot.consultationSeed != 0) consultationSeed = snapshot.consultationSeed;
+            ConsultationIndex = Math.Max(HasClinicSchedule ? -1 : 0, Math.Min(snapshot.consultationIndex, Consultation.Count));
             CoffeeReceived = snapshot.coffeeReceived;
             Facts.Clear(); Facts.UnionWith(snapshot.facts ?? Array.Empty<string>());
             Authorities.Clear(); Authorities.UnionWith(snapshot.authorities ?? Array.Empty<string>());

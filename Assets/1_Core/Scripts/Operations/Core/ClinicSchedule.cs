@@ -12,8 +12,12 @@ namespace Codetective.Operations
         public string id;
         public string profileId = "client";
         public string patientName = "상담 손님";
+        public string title;
         public int startMinute = 540;
         public int endMinute; // 0: next reservation, or 18:00 for the last patient.
+        public bool beforeAssignment;
+        public string afterConversation;
+        public string episodePoolId;
         public string greeting = "안녕하세요. 예약하고 왔습니다.";
         public string farewell = "오늘 말씀해 주셔서 감사합니다. 다음 상담에서 이어가겠습니다.";
         public ConsultationLine[] dialogue = Array.Empty<ConsultationLine>();
@@ -21,7 +25,8 @@ namespace Codetective.Operations
         public StoryEffects onArrival = new StoryEffects();
         public StoryEffects onCompleted = new StoryEffects();
         public StoryEffects onTimeLimit = new StoryEffects();
-        public PatientAppointment Copy() => new PatientAppointment { id = id, profileId = profileId, patientName = patientName, startMinute = startMinute,
+        public PatientAppointment Copy() => new PatientAppointment { id = id, profileId = profileId, patientName = patientName, title = title, startMinute = startMinute,
+            beforeAssignment = beforeAssignment, afterConversation = afterConversation, episodePoolId = episodePoolId,
             endMinute = endMinute, greeting = greeting, farewell = farewell, dialogue = dialogue.Select(l => l.Copy()).ToArray(),
             condition = condition?.Copy() ?? new StoryCondition(), onArrival = onArrival?.Copy() ?? new StoryEffects(),
             onCompleted = onCompleted?.Copy() ?? new StoryEffects(), onTimeLimit = onTimeLimit?.Copy() ?? new StoryEffects() };
@@ -35,8 +40,11 @@ namespace Codetective.Operations
     }
     [Serializable] public sealed class AppointmentProgress
     {
-        public string id, profileId, patientName;
+        public string id, profileId, patientName, title, episodeId;
         public int startMinute, endMinute, lineStart, lineCount, cursor;
+        public double startedMinute, finishedMinute;
+        public double SessionStart => startedMinute > 0 ? startedMinute : startMinute;
+        public double SessionEnd => finishedMinute > 0 ? finishedMinute : SessionStart;
         public VisitPhase phase;
         public VisitOutcome outcome;
         public AppointmentProgress Copy() => (AppointmentProgress)MemberwiseClone();
@@ -63,10 +71,11 @@ namespace Codetective.Operations
         public IEnumerable<AppointmentProgress> DailyAppointments => (clinicDay?.appointments ?? Array.Empty<AppointmentProgress>()).Select(a => a.Copy());
         private AppointmentProgress ActiveVisit => clinicDay?.appointments.FirstOrDefault(a => a.phase != VisitPhase.Waiting && a.phase != VisitPhase.Finished);
         public AppointmentProgress CurrentAppointment => ActiveVisit?.Copy();
-        public AppointmentProgress NextAppointment => clinicDay?.appointments.FirstOrDefault(a => a.phase == VisitPhase.Waiting)?.Copy();
-        public bool IsClinicTransitioning => !AwaitingAssignment && ActiveVisit != null && ActiveVisit.phase != VisitPhase.Talking;
-        public bool CanWaitForNextAppointment => HasClinicSchedule && !AwaitingAssignment && !TerminalConversationPausesWorld && !IsDayEnded && ActiveVisit == null && NextAppointment != null;
-        public bool CanWaitUntilClosing => HasClinicSchedule && !AwaitingAssignment && !TerminalConversationPausesWorld && !IsDayEnded && ActiveVisit == null && NextAppointment == null;
+        private AppointmentProgress NextVisit => clinicDay?.appointments.FirstOrDefault(a => a.phase == VisitPhase.Waiting && CanStartVisit(appointmentDefinitions[a.id]));
+        public AppointmentProgress NextAppointment => NextVisit?.Copy();
+        public bool IsClinicTransitioning => ActiveVisit is AppointmentProgress active && active.phase != VisitPhase.Talking;
+        public bool CanWaitForNextAppointment => HasClinicSchedule && !TerminalConversationPausesWorld && !IsDayEnded && ActiveVisit == null && NextVisit != null;
+        public bool CanWaitUntilClosing => HasClinicSchedule && !AwaitingAssignment && !TerminalConversationPausesWorld && !IsDayEnded && ActiveVisit == null && NextVisit == null;
         public string VisitPresentationText
         {
             get
@@ -82,6 +91,20 @@ namespace Codetective.Operations
         }
         public static string TimeOfDay(double minute) => $"{(int)minute / 60:00}:{(int)minute % 60:00}";
 
+        private bool CanStartVisit(PatientAppointment appointment) => (!AwaitingAssignment || appointment.beforeAssignment) &&
+            (string.IsNullOrEmpty(appointment.afterConversation) ||
+                terminalConversationProgress.TryGetValue(appointment.afterConversation, out TerminalConversationProgress progress) && progress.phase == TerminalConversationPhase.Completed);
+
+        public IEnumerable<(int day, AppointmentProgress visit)> CompletedConsultationsFor(string profileId)
+        {
+            var days = dailyRecords.Values.Where(record => record.day < Day)
+                .Select(record => (day: record.day, visits: record.visits));
+            if (clinicDay != null) days = days.Append((Day, clinicDay.appointments));
+            return days.OrderByDescending(day => day.day).SelectMany(day => day.visits
+                .Where(visit => visit.profileId == profileId && visit.phase == VisitPhase.Finished && visit.outcome != VisitOutcome.Missed)
+                .OrderByDescending(visit => visit.SessionStart).Select(visit => (day.day, visit.Copy())));
+        }
+
         public void RegisterClinicDay(ClinicDayPlan plan)
         {
             if (plan == null || plan.day < 0 || clinicPlans.ContainsKey(plan.day)) throw new CommandException("상담 일정의 날짜가 유효하지 않거나 중복됩니다.");
@@ -93,11 +116,15 @@ namespace Codetective.Operations
             foreach (PatientAppointment a in copy.appointments)
                 RegisterAppointment(copy.day + ":" + a.id, a);
         }
-        private static void ValidateAppointment(PatientAppointment a)
+        private void ValidateAppointment(PatientAppointment a)
         {
             if (a == null || !CommandParser.IsIdentifier(a.id) || string.IsNullOrWhiteSpace(a.profileId) || a.startMinute < 540 || a.startMinute >= 1080 ||
-                (a.endMinute != 0 && (a.endMinute <= a.startMinute || a.endMinute > 1080)) || a.dialogue == null || a.dialogue.Any(l => l == null))
+                (a.endMinute != 0 && (a.endMinute <= a.startMinute || a.endMinute > 1080)) || a.dialogue == null || a.dialogue.Any(l => l == null || !HasValidConsultationResponses(l)))
                 throw new CommandException("상담 예약의 ID/시간/대사를 확인하세요.");
+            if (!string.IsNullOrEmpty(a.episodePoolId) && (a.dialogue.Length != 0 || !consultationPools.ContainsKey(a.episodePoolId)))
+                throw new CommandException("일상 상담 예약에는 등록된 에피소드 모음 하나를 지정하세요.");
+            if (!string.IsNullOrEmpty(a.afterConversation) && !terminalConversations.ContainsKey(a.afterConversation))
+                throw new CommandException("상담 예약의 선행 터미널 대화가 없습니다: " + a.afterConversation);
             a.onArrival?.Validate(); a.onCompleted?.Validate(); a.onTimeLimit?.Validate();
         }
         private void RegisterAppointment(string id, PatientAppointment appointment)
@@ -115,31 +142,28 @@ namespace Codetective.Operations
             clinicDay = BuildClinicDay(Day);
             Revision++;
         }
-        private ConsultationLine ScheduledConsultation => !AwaitingAssignment && !IsDayEnded && ActiveVisit?.phase == VisitPhase.Talking && ActiveVisit.cursor < ActiveVisit.lineCount ?
-            Consultation[ActiveVisit.lineStart + ActiveVisit.cursor] : null;
-        private double NextClinicBoundary
-        {
-            get
-            {
-                if (!HasClinicSchedule) return 1080;
-                return ActiveVisit != null ? ActiveVisit.endMinute : NextAppointment?.startMinute ?? 1080;
-            }
-        }
+        private ConsultationLine ScheduledConsultation => !IsDayEnded && ActiveVisit is AppointmentProgress active &&
+            active.phase == VisitPhase.Talking && active.cursor < active.lineCount ?
+            activeEpisodeLines?[active.cursor] ?? Consultation[active.lineStart + active.cursor] : null;
+        private double NextClinicBoundary => ActiveVisit?.endMinute ?? NextVisit?.startMinute ?? 1080;
         private void SyncClinicClock()
         {
-            if (!HasClinicSchedule || AwaitingAssignment) return;
+            if (!HasClinicSchedule) return;
             InitializeClinicDay();
             AppointmentProgress active = ActiveVisit;
             if (active != null)
             {
                 if (active.phase == VisitPhase.Talking && Minute >= active.endMinute)
-                    CloseVisit(active.endMinute >= 1080 ? VisitOutcome.ClosingTime : NextAppointment?.startMinute <= Minute ? VisitOutcome.NextReservation : VisitOutcome.ReservationEnd);
+                    CloseVisit(active.endMinute >= 1080 ? VisitOutcome.ClosingTime : NextVisit?.startMinute <= Minute ? VisitOutcome.NextReservation : VisitOutcome.ReservationEnd);
                 return;
             }
-            AppointmentProgress next = clinicDay.appointments.FirstOrDefault(a => a.phase == VisitPhase.Waiting && a.startMinute <= Minute);
-            if (next == null || IsDayEnded || Minute >= 1080) return;
+            AppointmentProgress next = NextVisit;
+            if (next == null || next.startMinute > Minute || IsDayEnded || Minute >= 1080) return;
+            PatientAppointment definition = appointmentDefinitions[next.id];
+            SelectVisitEpisode(next, definition);
+            next.startedMinute = Minute;
             next.phase = VisitPhase.Arriving; ResponseMinutes = 0;
-            SetTrigger("clinic.met." + next.profileId, true); SetTrigger("clinic.present." + next.profileId, true); ApplyStoryEffects(appointmentDefinitions[next.id].onArrival);
+            SetTrigger("clinic.met." + next.profileId, true); SetTrigger("clinic.present." + next.profileId, true); ApplyStoryEffects(definition.onArrival);
             Report(TimeOfDay(Minute) + " / " + next.patientName + " 님 입실"); NarrativeUpdated();
         }
         public void AdvanceVisitPresentation(string appointmentId, VisitPhase expectedPhase)
@@ -148,13 +172,14 @@ namespace Codetective.Operations
             if (active == null || active.id != appointmentId || active.phase != expectedPhase) return; // Stale animation callback after a reload/transition.
             if (active.phase == VisitPhase.Arriving)
             {
-                active.phase = VisitPhase.Talking; ConsultationIndex = active.lineStart + active.cursor;
-                if (active.lineCount == 0) CloseVisit(VisitOutcome.Completed); else heardConsultationLines.Add(ConsultationIndex);
+                active.phase = VisitPhase.Talking;
+                if (active.lineCount == 0) CloseVisit(VisitOutcome.Completed); else HearVisitLine(active);
             }
             else if (active.phase == VisitPhase.Closing) active.phase = VisitPhase.Departing;
             else if (active.phase == VisitPhase.Departing)
             {
-                active.phase = VisitPhase.Finished;
+                active.phase = VisitPhase.Finished; active.finishedMinute = Minute;
+                activeEpisodeLines = null;
                 SetTrigger("clinic.present." + active.profileId, false);
                 ApplyStoryEffects(active.outcome == VisitOutcome.Completed ? appointmentDefinitions[active.id].onCompleted : appointmentDefinitions[active.id].onTimeLimit);
                 Report(active.patientName + " 님 상담 종료"); SyncClinicClock();
@@ -174,7 +199,7 @@ namespace Codetective.Operations
         public void WaitForNextAppointment()
         {
             if (!CanWaitForNextAppointment) throw new CommandException("진행 중인 상담을 마친 뒤 다음 예약을 기다릴 수 있습니다.");
-            double until = NextAppointment.startMinute - Minute;
+            double until = NextVisit.startMinute - Minute;
             if (until > 0) Tick(until); else SyncClinicClock();
             NarrativeUpdated();
         }
@@ -188,26 +213,54 @@ namespace Codetective.Operations
             AppointmentProgress active = ActiveVisit; if (active?.phase != VisitPhase.Talking) return;
             ResponseMinutes = 0; active.cursor++;
             if (active.cursor >= active.lineCount) CloseVisit(VisitOutcome.Completed);
-            else { ConsultationIndex = active.lineStart + active.cursor; heardConsultationLines.Add(ConsultationIndex); Revision++; NarrativeUpdated(); }
+            else { HearVisitLine(active); Revision++; NarrativeUpdated(); }
         }
+
+        private void HearVisitLine(AppointmentProgress visit)
+        {
+            if (!string.IsNullOrEmpty(visit.episodeId)) { ConsultationIndex = -1; return; }
+            ConsultationIndex = visit.lineStart + visit.cursor;
+            heardConsultationLines.Add(ConsultationIndex);
+        }
+
+        private bool IsSavedVisitValid(AppointmentProgress visit)
+        {
+            if (!appointmentDefinitions.TryGetValue(visit.id, out PatientAppointment definition) || visit.cursor < 0 || visit.cursor > visit.lineCount ||
+                visit.lineStart != appointmentLines[visit.id] || !Enum.IsDefined(typeof(VisitPhase), visit.phase)) return false;
+            ConsultationEpisode episode = EpisodeFor(visit);
+            if (!string.IsNullOrEmpty(visit.episodeId)) return episode != null && visit.lineCount == episode.lines.Length;
+            return visit.lineCount == definition.dialogue.Length && (string.IsNullOrEmpty(definition.episodePoolId) ||
+                visit.phase == VisitPhase.Waiting || visit.outcome == VisitOutcome.Missed);
+        }
+
         private void RestoreClinic(KernelSnapshot snapshot)
         {
             heardConsultationLines.Clear(); heardConsultationLines.UnionWith(snapshot.heardConsultationLines ?? Array.Empty<int>());
+            activeEpisodeLines = null;
             if (!HasClinicSchedule) return;
             if (snapshot.clinicDay != null)
             {
                 ClinicDayState restored = snapshot.clinicDay.Copy();
-                if (restored.day != Day || restored.appointments.Any(a => !appointmentDefinitions.ContainsKey(a.id) || a.cursor < 0 || a.cursor > a.lineCount ||
-                    a.lineStart != appointmentLines[a.id] || a.lineCount != appointmentDefinitions[a.id].dialogue.Length || !Enum.IsDefined(typeof(VisitPhase), a.phase)) ||
+                if (restored.day != Day || restored.appointments.Any(a => !IsSavedVisitValid(a)) ||
                     restored.appointments.Count(a => a.phase != VisitPhase.Waiting && a.phase != VisitPhase.Finished) > 1)
                     throw new CommandException("저장된 상담 일정이 현재 대사와 맞지 않습니다.");
-                clinicDay = restored; return;
+                // Older onboarding saves had a frozen clock and only the case appointments.
+                if (AwaitingAssignment && restored.appointments.All(a => a.phase == VisitPhase.Waiting && !appointmentDefinitions[a.id].beforeAssignment))
+                {
+                    ClinicDayState updated = BuildClinicDay(Day);
+                    if (updated.appointments.Any(a => appointmentDefinitions[a.id].beforeAssignment)) restored = updated;
+                }
+                clinicDay = restored;
+                if (ActiveVisit is AppointmentProgress active && EpisodeFor(active) is ConsultationEpisode episode) BindVisitEpisode(active, episode);
+                return;
             }
             clinicDay = null; InitializeClinicDay();
+            if (!AwaitingAssignment)
+                clinicDay.appointments = clinicDay.appointments.Where(a => !appointmentDefinitions[a.id].beforeAssignment).ToArray();
             // Old saves retain finished/ongoing legacy dialogue instead of replaying the first patient.
             foreach (AppointmentProgress visit in clinicDay.appointments.Where(a => a.endMinute <= Minute))
             { visit.phase = VisitPhase.Finished; visit.outcome = VisitOutcome.Missed; }
-            AppointmentProgress first = clinicDay.appointments.FirstOrDefault();
+            AppointmentProgress first = clinicDay.appointments.FirstOrDefault(a => string.IsNullOrEmpty(appointmentDefinitions[a.id].episodePoolId));
             if (Day == 1 && first != null && first.phase == VisitPhase.Waiting && first.startMinute <= Minute && snapshot.consultationIndex > 0)
             {
                 first.cursor = Math.Min(first.lineCount, snapshot.consultationIndex);

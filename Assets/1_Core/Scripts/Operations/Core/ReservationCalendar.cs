@@ -70,13 +70,13 @@ namespace Codetective.Operations
             }
         }
         private AppointmentProgress ReservationProgress(ConfirmedReservation r) => new AppointmentProgress { id = r.appointmentId, profileId = r.profileId,
-            patientName = r.patientName, startMinute = r.startMinute, endMinute = r.endMinute > 0 ? r.endMinute : 1080,
+            patientName = r.patientName, title = appointmentDefinitions[r.appointmentId].title, startMinute = r.startMinute, endMinute = r.endMinute > 0 ? r.endMinute : 1080,
             lineStart = appointmentLines[r.appointmentId], lineCount = appointmentDefinitions[r.appointmentId].dialogue.Length };
         private ClinicDayState BuildClinicDay(int day)
         {
             ClinicDayPlan plan = clinicPlans.TryGetValue(day, out ClinicDayPlan exact) ? exact : clinicPlans.TryGetValue(0, out ClinicDayPlan fallback) ? fallback : null;
             AppointmentProgress[] fixedVisits = plan?.appointments.Where(a => a.condition.Matches(this)).Select(a => new AppointmentProgress {
-                id = plan.day + ":" + a.id, profileId = a.profileId, patientName = a.patientName, startMinute = a.startMinute,
+                id = plan.day + ":" + a.id, profileId = a.profileId, patientName = a.patientName, title = a.title, startMinute = a.startMinute,
                 lineStart = appointmentLines[plan.day + ":" + a.id], lineCount = a.dialogue.Length }).ToArray() ?? Array.Empty<AppointmentProgress>();
             AppointmentProgress[] visits = fixedVisits.Concat(confirmedReservations.Values.Where(r => r.day == day).Select(ReservationProgress)).OrderBy(v => v.startMinute).ToArray();
             RecalculateClinicDeadlines(visits);

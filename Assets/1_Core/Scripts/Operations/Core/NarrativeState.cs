@@ -14,6 +14,8 @@ namespace Codetective.Operations
         public string subject;
         public string body;
         public int day = 1;
+        public string afterAppointmentId; // Clinic plan day plus appointment ID, e.g. "1:regular".
+        public int minutesAfterAppointment;
         public string[] requiredFacts = Array.Empty<string>();
         public string[] readFacts = Array.Empty<string>();
         public bool requiresAcceptance;
@@ -30,6 +32,7 @@ namespace Codetective.Operations
         // An approval choice also identifies pre-flag inquiry assets and programmatic definitions.
         public bool HasReservation => isReservationInquiry || (choices ?? Array.Empty<MailChoice>()).Any(c => c != null && c.approvesReservation);
         public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, subject = subject, body = body, day = day,
+            afterAppointmentId = afterAppointmentId, minutesAfterAppointment = minutesAfterAppointment,
             requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel,
             acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray(), condition = condition?.Copy() ?? new StoryCondition(),
             onRead = onRead?.Copy() ?? new StoryEffects(), onAccept = onAccept?.Copy() ?? new StoryEffects(),
@@ -80,12 +83,27 @@ namespace Codetective.Operations
         public IReadOnlyList<StoryMail> DeferredDayMail => DayMailDeferred ? mail.Values
             .Where(m => m.day == Day && !IsMailRead(m.id) && MailConditionsMet(m))
             .OrderByDescending(m => m.mailbox).ThenBy(m => m.id, StringComparer.Ordinal).Select(m => m.Copy()).ToArray() : Array.Empty<StoryMail>();
-        private bool MailConditionsMet(StoryMail message) => message.day <= Day && (IsMailRead(message.id) || (message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this)));
+        private bool MailPrerequisitesMet(StoryMail message) => message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this);
+        private bool MailConditionsMet(StoryMail message) => message.day <= Day && (IsMailRead(message.id) ||
+            MailPrerequisitesMet(message) && (string.IsNullOrEmpty(message.afterAppointmentId) || AppointmentMailMinute(message) <= Minute + MinuteEpsilon));
+        private double? AppointmentMailMinute(StoryMail message)
+        {
+            AppointmentProgress[] visits = message.day == Day ? clinicDay?.appointments :
+                dailyRecords.TryGetValue(message.day, out DailyRecord record) ? record.visits : null;
+            AppointmentProgress visit = visits?.FirstOrDefault(a => a.id == message.afterAppointmentId && a.phase == VisitPhase.Finished && a.outcome != VisitOutcome.Missed);
+            return visit == null ? (double?)null : (message.day - Day) * 1440d + visit.SessionEnd + message.minutesAfterAppointment;
+        }
+        private double NextAssignmentMailMinute => mail.Values.Where(m => m.day == Day && m.requiresAcceptance && m.acceptFacts.Contains(StoryStartFact) &&
+                !string.IsNullOrEmpty(m.afterAppointmentId) && MailPrerequisitesMet(m))
+            .Select(AppointmentMailMinute).Where(minute => minute > Minute + MinuteEpsilon).Select(minute => minute.Value).DefaultIfEmpty(Minute).Min();
         private bool MailAvailable(StoryMail message) => MailConditionsMet(message) && (!DayMailDeferred || message.day != Day || IsMailRead(message.id));
         public void RegisterMail(StoryMail message)
         {
             if (message == null || string.IsNullOrWhiteSpace(message.id) || message.day < 1 || mail.ContainsKey(message.id))
                 throw new CommandException("메일 ID/도착일이 유효하지 않거나 중복됩니다.");
+            if (message.minutesAfterAppointment < 0 ||
+                (string.IsNullOrEmpty(message.afterAppointmentId) ? message.minutesAfterAppointment != 0 : !appointmentDefinitions.ContainsKey(message.afterAppointmentId)))
+                throw new CommandException("메일이 도착할 상담 예약과 대기 시간을 확인하세요.");
             message.onRead?.Validate(); message.onAccept?.Validate();
             ValidateMailChoices(message);
             if (message.HasReservation) RegisterReservation(message.id, message.reservation);
@@ -118,15 +136,22 @@ namespace Codetective.Operations
         private bool ProfileAvailable(Entity entity) => entity.Schema.IsA(Schemas.Require("Person")) && !entity.Schema.IsA(Schemas.Require("Thread")) && IsPlayerVisible(entity);
         public IEnumerable<string> VisibleProfileIds => entities.Values.Where(ProfileAvailable)
             .Select(e => e.Id).Concat(Consultation.Select(ProfileOf).Concat(notes.Select(n => n.profileId))
+                .Concat(appointmentDefinitions.Values.Where(a => GetTrigger("clinic.met." + a.profileId)).Select(a => a.profileId))
                 .Where(id => Entity(id) == null || ProfileAvailable(Entity(id)))).Distinct(StringComparer.Ordinal);
         public IEnumerable<string> ConsultationProfiles => VisibleProfileIds;
         public IEnumerable<ConsultationNote> NotesFor(string profileId) => notes.Where(n => n.profileId == profileId).Select(n => n.Copy());
         public ConsultationNote AddConsultationNote(string profileId, string text)
         {
-            AppointmentProgress visit = CurrentAppointment;
-            int end = Math.Max(0, Math.Min(1440, (int)Minute));
-            int start = visit != null && visit.profileId == profileId ? Math.Min(end, visit.startMinute) : end;
-            return AddConsultationNote(profileId, text, Day, start, end);
+            var session = ConsultationNoteTime(profileId);
+            return AddConsultationNote(profileId, text, session.day, session.startMinute, session.endMinute);
+        }
+        public (int day, int startMinute, int endMinute) ConsultationNoteTime(string profileId)
+        {
+            int now = (int)Minute;
+            if (ActiveVisit is AppointmentProgress active && active.profileId == profileId)
+                return (Day, Math.Min(now, (int)active.SessionStart), now);
+            var latest = CompletedConsultationsFor(profileId).FirstOrDefault(entry => entry.day == Day);
+            return latest.visit != null ? (latest.day, (int)latest.visit.SessionStart, (int)latest.visit.SessionEnd) : (Day, now, now);
         }
         public ConsultationNote AddConsultationNote(string profileId, string text, int sessionDay, int startMinute, int endMinute)
         {

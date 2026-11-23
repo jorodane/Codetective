@@ -133,6 +133,102 @@ namespace Codetective.Tests.Operations
             var empty = new KernelRuntime(); empty.RegisterClinicDay(new ClinicDayPlan { appointments = Array.Empty<PatientAppointment>() }); empty.InitializeClinicDay();
             Assert.That(empty.CurrentConsultation, Is.Null); empty.WaitUntilClosing(); Assert.That(empty.IsDayEnded, Is.True);
         }
+
+        private static KernelRuntime TutorialClinic()
+        {
+            KernelRuntime r = ClinicScenario.Create();
+            r.StoryStartFact = "assigned";
+            r.RegisterMail(new StoryMail { id = "welcome", mailbox = Mailbox.Kernel });
+            r.RegisterTerminalConversation(new TerminalConversationDefinition { id = "briefing", requiredMailRead = "welcome",
+                steps = new[] { new TerminalConversationStep { id = "welcome", lines = new[] { new TerminalDialogueLine { text = "첫 손님이 곧 도착합니다." } } } } });
+            r.RegisterConsultationPool("routine", new[] { "시계", "양말", "베개" }.Select(topic => new ConsultationEpisode { id = topic,
+                lines = new[] { new ConsultationLine { sentence = topic }, new ConsultationLine { sentence = "어떻게 생각하세요?", responses = new[] { "음.", "글쎄요." } },
+                    new ConsultationLine { sentence = "그렇군요." } } }).ToArray());
+            var visit = new PatientAppointment { id = "regular", profileId = "regular", patientName = "한정우", title = "일상 스트레스 상담",
+                startMinute = 540, endMinute = 560, beforeAssignment = true, afterConversation = "briefing", episodePoolId = "routine" };
+            r.RegisterClinicDay(new ClinicDayPlan { appointments = new[] { visit, Visit("case", "client", 580) } });
+            PatientAppointment recurring = visit.Copy(); recurring.beforeAssignment = false; recurring.afterConversation = "";
+            r.RegisterClinicDay(new ClinicDayPlan { day = 0, appointments = new[] { recurring } });
+            r.RegisterMail(new StoryMail { id = "mission", mailbox = Mailbox.Kernel, afterAppointmentId = "1:regular",
+                minutesAfterAppointment = 5, requiresAcceptance = true, acceptFacts = new[] { "assigned" } });
+            r.InitializeClinicDay(); return r;
+        }
+
+        [Test]
+        public void APrebookedVisitStartsAfterTheBriefingAndAssignmentArrivesFiveMinutesAfterDeparture()
+        {
+            KernelRuntime r = TutorialClinic();
+            r.Tick(50); r.ReadMail("welcome"); r.Tick(50); r.EnterTerminalPage("kernel"); r.Tick(50);
+            Assert.That(r.CurrentAppointment, Is.Null);
+            Assert.That(r.Minute, Is.EqualTo(540));
+            Assert.That(r.Inbox(Mailbox.Kernel).Select(m => m.id), Is.EqualTo(new[] { "welcome" }));
+            r.AdvanceTerminalConversation(1000); r.Tick(1); Advance(r);
+            Assert.That(r.CurrentAppointment.id, Is.EqualTo("1:regular"));
+            r.Tick(25); Assert.That(r.CurrentAppointment.outcome, Is.EqualTo(VisitOutcome.ReservationEnd));
+            Advance(r); r.Tick(30);
+            Assert.That(r.Inbox(Mailbox.Kernel).Any(m => m.id == "mission"), Is.False);
+            Advance(r);
+            Assert.That(r.CompletedConsultationsFor("regular").Single().visit.SessionEnd, Is.EqualTo(560));
+            r.Tick(4.5);
+            KernelRuntime restored = TutorialClinic(); restored.Restore(r.Capture());
+            Assert.That(restored.Inbox(Mailbox.Kernel).Any(m => m.id == "mission"), Is.False);
+            restored.Tick(50);
+            Assert.That(restored.Minute, Is.EqualTo(565));
+            Assert.That(restored.CurrentAppointment, Is.Null);
+            restored.ReadMail("mission"); restored.AcceptMail("mission");
+            restored.WaitForNextAppointment();
+            Assert.That(restored.CurrentAppointment.id, Is.EqualTo("1:case"));
+        }
+
+        [Test]
+        public void RoutineTopicsVaryBySaveAndBothResponsesResumeAtTheSameLineWithoutClues()
+        {
+            var topics = new System.Collections.Generic.HashSet<string>();
+            for (int seed = 1; seed <= 15; seed++)
+            {
+                KernelRuntime r = TutorialClinic();
+                KernelSnapshot initial = r.Capture(); initial.consultationSeed = seed; r.Restore(initial);
+                r.ReadMail("welcome"); r.EnterTerminalPage("kernel"); r.AdvanceTerminalConversation(1000);
+                r.Tick(1); Advance(r); topics.Add(r.CurrentConsultation.sentence);
+                Assert.That(KernelRuntime.ProfileOf(r.CurrentConsultation), Is.EqualTo("regular"));
+                r.Tick(6); r.Reply();
+                Assert.That(r.CurrentConsultation.responses.Length, Is.EqualTo(2));
+                r.Reply(); Assert.That(r.CurrentConsultation.sentence, Is.EqualTo("어떻게 생각하세요?"));
+                Assert.That(() => r.RecordClue(r.ConsultationIndex), Throws.TypeOf<CommandException>());
+                KernelSnapshot saved = r.Capture();
+                KernelRuntime restored = TutorialClinic(); restored.Restore(saved);
+                Assert.That(restored.CurrentAppointment.episodeId, Is.EqualTo(r.CurrentAppointment.episodeId));
+                Assert.That(restored.CurrentConsultation.responses, Is.EqualTo(r.CurrentConsultation.responses));
+                r.ReplyToConsultationChoice(0); restored.ReplyToConsultationChoice(1);
+                Assert.That(restored.CurrentConsultation.sentence, Is.EqualTo(r.CurrentConsultation.sentence));
+                restored.Reply(); Leave(restored);
+                Assert.That(restored.ProfileJournalText("regular", 0), Does.Contain("09:00 ~ 09:06").And.Contain("일상 스트레스 상담"));
+                Assert.That(restored.NotesFor("regular"), Is.Empty);
+                Assert.That(restored.AddConsultationNote("regular", "직접 기록한 상담").startMinute, Is.EqualTo(540));
+                Assert.That(restored.RecordedClues, Is.Empty);
+                Assert.That(restored.Suspicion, Is.Zero);
+                Assert.That(restored.ScheduleForDay(2).Single().profileId, Is.EqualTo("regular"));
+            }
+            Assert.That(topics.Count, Is.GreaterThan(1));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void OlderCalendarsAddTheTutorialOnlyIfTheAssignmentHasNotAlreadyStarted(bool assigned)
+        {
+            KernelRuntime r = TutorialClinic();
+            if (assigned) r.Facts.Add("assigned");
+            KernelSnapshot old = r.Capture();
+            old.clinicDay.appointments = old.clinicDay.appointments.Where(visit => visit.id != "1:regular").ToArray();
+            KernelRuntime restored = TutorialClinic(); restored.Restore(old);
+            Assert.That(restored.DailyAppointments.Any(visit => visit.id == "1:regular"), Is.EqualTo(!assigned));
+            if (assigned)
+            {
+                restored.WaitForNextAppointment(); Advance(restored);
+                Assert.That(restored.RecordClue(restored.ConsultationIndex).id, Is.EqualTo("case_first"));
+            }
+        }
+
         [Test]
         public void DuplicateBookingTimesAreRejectedAndExistingSavesDoNotReplayFinishedLegacyDialogue()
         {

@@ -82,7 +82,8 @@ namespace Codetective.Terminal
                 {
                     AppointmentProgress visit = visits[i];
                     Button button = MonitorWidgets.Button(rows, font, new Vector2(0, -i * 104), new Vector2(650, 96),
-                        KernelRuntime.TimeOfDay(visit.startMinute) + " ~ " + KernelRuntime.TimeOfDay(visit.endMinute) + "   " + visit.patientName + "\n" + VisitStatus(visit),
+                        KernelRuntime.TimeOfDay(visit.startMinute) + " ~ " + KernelRuntime.TimeOfDay(visit.endMinute) + "   " + visit.patientName + "\n" +
+                        (string.IsNullOrWhiteSpace(visit.title) ? "" : visit.title + " · ") + VisitStatus(visit),
                         () => { selectedId = visit.id; signature = null; Refresh(); });
                     if (visit.id == selectedId) button.image.color = new Color(0.16f, 0.32f, 0.23f);
                 }
@@ -92,7 +93,7 @@ namespace Codetective.Terminal
             string mailId = runtime.ReservationMailFor(selectedId);
             source.interactable = mailId != null;
             detail.text = selected == null ? "확정된 상담 예약이 없습니다.\n\n문의 메일을 승인하면 여기에 표시됩니다." :
-                selected.patientName + "\n\nDAY " + selectedDay + "\n" + KernelRuntime.TimeOfDay(selected.startMinute) + " ~ " + KernelRuntime.TimeOfDay(selected.endMinute) +
+                selected.patientName + (string.IsNullOrWhiteSpace(selected.title) ? "" : "\n" + selected.title) + "\n\nDAY " + selectedDay + "\n" + KernelRuntime.TimeOfDay(selected.startMinute) + " ~ " + KernelRuntime.TimeOfDay(selected.endMinute) +
                 "\n\n" + VisitStatus(selected) + "\n\n" + (mailId != null ? "문의 메일 승인으로 등록된 예약입니다." : "기존에 확정된 예약입니다.");
             feedback.text = "확정 " + visits.Length + "건 · 승인 대기 " + runtime.PendingReservationCount + "건 / 예약 문의는 메일에서 승인하세요.";
             wait.GetComponentInChildren<Text>().text = runtime.NextAppointment != null ? "다음 예약까지 기다리기" : "마감까지 기다리기";

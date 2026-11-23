@@ -133,9 +133,8 @@ namespace Codetective.Terminal
         }
         private JournalDraft DefaultDraft()
         {
-            int end = Math.Min(1439, (int)runtime.Minute); AppointmentProgress visit = runtime.CurrentAppointment;
-            int start = visit != null && visit.profileId == profileId ? Math.Min(end, visit.startMinute) : end;
-            return new JournalDraft { text = "", day = runtime.Day.ToString(), start = KernelRuntime.TimeOfDay(start), end = KernelRuntime.TimeOfDay(end) };
+            var session = runtime.ConsultationNoteTime(profileId);
+            return new JournalDraft { text = "", day = session.day.ToString(), start = KernelRuntime.TimeOfDay(session.startMinute), end = KernelRuntime.TimeOfDay(session.endMinute) };
         }
         private void ApplyDraft(JournalDraft draft)
         {

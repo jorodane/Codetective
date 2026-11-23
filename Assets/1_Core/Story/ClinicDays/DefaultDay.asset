@@ -101,3 +101,13 @@ MonoBehaviour:
         - id: clinic.time_limit.career
           value: 1
         quests: []
+    - id: regular
+      profileId: regularVisitor
+      patientName: 한정우
+      title: 일상 스트레스 상담
+      startMinute: 550
+      endMinute: 565
+      episodePoolId: regularTalk
+      greeting: 안녕하세요. 지난번에 이어서 상담하러 왔습니다.
+      farewell: 오늘은 여기까지 하시죠. 다음에 또 뵙겠습니다.
+      dialogue: []
