@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Codetective.Operations;
+using Codetective.Terminal;
 using NUnit.Framework;
 
 namespace Codetective.Tests.Operations
@@ -22,6 +23,76 @@ namespace Codetective.Tests.Operations
             return r;
         }
         private static void Listen(KernelRuntime r) => r.AdvanceTerminalConversation(1000);
+
+        private static TerminalConversationDefinition QuestionDefinition()
+        {
+            TerminalConversationDefinition definition = Definition();
+            definition.steps[0] = new TerminalConversationStep
+            {
+                id = "question",
+                lines = new[] { Line("Will you take the oath?") },
+                answers = new[]
+                {
+                    new TerminalAnswer { key = "y", reply = new[] { Line("Accepted.", 4) },
+                        effects = new StoryEffects { triggers = new[] { new TriggerValue { id = "oath.yes", value = true } } } },
+                    new TerminalAnswer { key = "n", reply = new[] { Line("Declined.", 4) },
+                        effects = new StoryEffects { triggers = new[] { new TriggerValue { id = "oath.no", value = true } } } }
+                }
+            };
+            definition.steps[0].lines[0].speaker = "Secretariat";
+            return definition;
+        }
+
+        [Test]
+        public void QuestionsUseTheNormalCommandInputAndNeverChooseAnAnswerFromAnEmptyArgument()
+        {
+            KernelRuntime r = World(QuestionDefinition());
+            var terminal = new TerminalSession(r);
+            Assert.That(terminal.Complete("ans"), Is.Empty);
+            Assert.That(r.Execute("answer y").Success, Is.False);
+            Listen(r);
+
+            Assert.That(r.TerminalConversationTranscript(), Does.Contain("[Secretariat] Will you take the oath?").And.Contain("대답> [y][n]"));
+            Assert.That(terminal.Complete("ans").Single().ReplacementText, Is.EqualTo("answer "));
+            Assert.That(terminal.Complete("answer "), Is.Empty);
+            Assert.That(terminal.Complete("대답 Y"), Is.Empty);
+            Assert.That(r.Execute("answer").Success, Is.False);
+            Assert.That(r.Execute("answer maybe").Success, Is.False);
+            Assert.That(r.Execute("y").Success, Is.False);
+            Assert.That(r.Execute("code answer = 7;").Success, Is.True);
+            Assert.That(r.Execute("answer = 9;").Success, Is.True);
+            Assert.That(r.Data["answer"].value.number, Is.EqualTo(9));
+            Assert.That(r.TerminalAwaitingAnswer, Is.True);
+            Assert.That(r.ConversationProgress("tutorial").deviations, Is.Zero);
+        }
+
+        [TestCase("대답 Y", true, "Accepted.")]
+        [TestCase("answer n", false, "Declined.")]
+        public void PendingQuestionsAndTheirChosenRepliesResumeFromSaves(string command, bool accepted, string reply)
+        {
+            TerminalConversationDefinition definition = QuestionDefinition();
+            KernelRuntime r = World(definition);
+            Listen(r);
+            KernelRuntime waiting = World(definition, false);
+            waiting.Restore(r.Capture());
+            Assert.That(waiting.TerminalAwaitingAnswer, Is.True);
+            Assert.That(waiting.TerminalConversationTranscript(), Is.EqualTo(r.TerminalConversationTranscript()));
+            Assert.That(waiting.Execute(command).Success, Is.True);
+            Assert.That(waiting.TerminalAwaitingAnswer, Is.False);
+            Assert.That(waiting.TerminalInputLocked, Is.True);
+
+            waiting.AdvanceTerminalConversation(0.5);
+            KernelRuntime responding = World(definition, false);
+            responding.Restore(waiting.Capture());
+            Assert.That(responding.TerminalConversationTranscript(), Is.EqualTo(waiting.TerminalConversationTranscript()));
+            Assert.That(responding.Execute("answer n").Success, Is.False);
+            Listen(responding);
+            Assert.That(responding.TerminalConversationTranscript(), Does.Contain(reply));
+            Assert.That(responding.GetTrigger("oath.yes"), Is.EqualTo(accepted));
+            Assert.That(responding.GetTrigger("oath.no"), Is.EqualTo(!accepted));
+            Assert.That(responding.GetTrigger("tutorial.complete"), Is.True);
+            Assert.That(responding.Execute("answer y").Success, Is.False);
+        }
         [Test] public void ReadingMailAndReturningToKernelStartsTheConversationOnce()
         {
             KernelRuntime r = World(start: false); r.EnterTerminalPage("kernel"); Assert.That(r.TerminalConversationActive, Is.False);

@@ -17,10 +17,10 @@ namespace Codetective.Tests.Operations
             r.RegisterMail(new StoryMail { id = "government-intro", mailbox = Mailbox.Kernel }); r.RegisterTerminalConversation(asset.conversation);
             r.ReadMail("government-intro"); r.EnterTerminalPage("kernel"); return r;
         }
-        [TestCase(CommandLocale.Korean, "ko")]
-        [TestCase(CommandLocale.English, "en")]
-        [TestCase(CommandLocale.English, "ko")]
-        public void AuthoredTutorialTeachesFiveRealCommandsWithoutAdvancingTheWorkday(CommandLocale commands, string display)
+        [TestCase(CommandLocale.Korean, "ko", "y")]
+        [TestCase(CommandLocale.English, "en", "y")]
+        [TestCase(CommandLocale.English, "ko", "n")]
+        public void AuthoredTutorialTeachesCommandsAndRecordsTheOathWithoutAdvancingTheWorkday(CommandLocale commands, string display, string answer)
         {
             KernelRuntime r = World(commands, display); int sent = 0; int entities = r.World.Objects.Count;
             string[] expected = commands == CommandLocale.Korean
@@ -30,6 +30,14 @@ namespace Codetective.Tests.Operations
             {
                 r.AdvanceTerminalConversation(1000);
                 if (!r.TerminalConversationActive) break;
+                if (r.TerminalAwaitingAnswer)
+                {
+                    Assert.That(r.TerminalConversationTranscript(), Does.Contain(display == "en" ? "Answer> [y][n]" : "대답> [y][n]"));
+                    string prefix = commands == CommandLocale.Korean ? "대답 " : "answer ";
+                    Assert.That(r.TerminalAnswerUsage, Is.EqualTo(prefix + "y / " + prefix + "n"));
+                    Assert.That(r.Execute(prefix + answer).Success, Is.True);
+                    continue;
+                }
                 string command = r.TerminalExpectedCommand;
                 Assert.That(sent, Is.LessThan(expected.Length));
                 Assert.That(command, Is.EqualTo(expected[sent]));
@@ -40,6 +48,8 @@ namespace Codetective.Tests.Operations
             r.AdvanceTerminalConversation(1000);
             Assert.That(sent, Is.EqualTo(5)); Assert.That(r.TerminalConversationActive, Is.False);
             Assert.That(r.GetTrigger("terminal.onboarding.complete"), Is.True); Assert.That(r.Data.ContainsKey(r.ConversationProgress("kernel-onboarding").slotName), Is.False);
+            Assert.That(r.GetTrigger("kernel.oath.accepted"), Is.EqualTo(answer == "y"));
+            Assert.That(r.GetTrigger("kernel.oath.declined"), Is.EqualTo(answer == "n"));
             Assert.That(r.World.Objects.Count, Is.EqualTo(entities)); Assert.That(r.Minute, Is.EqualTo(540));
             Assert.That(r.TerminalConversationTranscript(), display == "en" ? Does.Contain("You found Kernel.") : Does.Contain("Kernel을 찾으셨군요."));
         }

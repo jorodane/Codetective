@@ -27,6 +27,12 @@ MonoBehaviour:
   - key: onboarding.speaker
     language: en
     text: Field Support
+  - key: onboarding.office
+    language: ko
+    text: 사무국
+  - key: onboarding.office
+    language: en
+    text: Secretariat
   - key: terminal.dialogue.receiving
     language: ko
     text: 수신 중 · 안내가 끝나면 입력할 수 있습니다.
@@ -45,6 +51,30 @@ MonoBehaviour:
   - key: terminal.dialogue.standby
     language: en
     text: Operations network standby
+  - key: terminal.dialogue.answer.options
+    language: ko
+    text: 대답>
+  - key: terminal.dialogue.answer.options
+    language: en
+    text: Answer>
+  - key: terminal.dialogue.answer.none
+    language: ko
+    text: 지금 답할 질문이 없습니다.
+  - key: terminal.dialogue.answer.none
+    language: en
+    text: There is no question to answer right now.
+  - key: terminal.dialogue.answer.invalid
+    language: ko
+    text: 표시된 선택지 중 하나를 입력하세요.
+  - key: terminal.dialogue.answer.invalid
+    language: en
+    text: Enter one of the displayed options.
+  - key: terminal.dialogue.answer.sent
+    language: ko
+    text: 응답을 전송했습니다.
+  - key: terminal.dialogue.answer.sent
+    language: en
+    text: Answer sent.
   - key: onboarding.welcome
     language: ko
     text: Kernel을 찾으셨군요.
@@ -117,6 +147,24 @@ MonoBehaviour:
   - key: onboarding.release
     language: en
     text: Connection confirmed. Finally, discard the exercise substitution by entering {command}.
+  - key: onboarding.oath
+    language: ko
+    text: 귀하는 Kernel로서 성실히 임무를 수행하고 심각한 정보 누출에 대한 차단 활동에 적극적으로 임할 것임을 맹세할 수 있습니까? 이 결정은 귀하의 Kernel 직무 수행에 있어 가장 중요한 동의이며, 실제 서류상 동의 행위와 동일한 법적 효력을 가집니다.
+  - key: onboarding.oath
+    language: en
+    text: Do you swear to carry out your duties faithfully as Kernel and to take an active role in containing serious information leaks? This is the most important consent you give as Kernel and has the same legal effect as signed written consent.
+  - key: onboarding.oath.accepted
+    language: ko
+    text: 맹세를 접수했습니다. 동의가 작전 기록에 남았습니다.
+  - key: onboarding.oath.accepted
+    language: en
+    text: Your oath has been received. Your consent is on record.
+  - key: onboarding.oath.declined
+    language: ko
+    text: 동의하지 않으신 것으로 기록했습니다. 안내를 계속하겠습니다.
+  - key: onboarding.oath.declined
+    language: en
+    text: Your refusal is on record. The briefing will continue.
   - key: onboarding.world
     language: ko
     text: 치환문을 폐기해도 실제 지휘소는 사라지지 않습니다. 대상을 부르는 규칙만 정리한 것입니다.

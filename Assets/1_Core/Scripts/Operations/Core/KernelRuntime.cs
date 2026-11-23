@@ -31,7 +31,8 @@ namespace Codetective.Operations
         public event Action DayEnded;
 
         public const string Help = "code <name> = <target> : register a substitution\n" +
-            "code <name> : register an empty substitution\nfree <name> : discard a substitution\nhelp : list commands\n\n" +
+            "code <name> : register an empty substitution\nfree <name> : discard a substitution\n" +
+            "answer <choice> : respond to a question in the current conversation\nhelp : list commands\n\n" +
             "Assign references to existing objects; new/malloc are unavailable.\n" +
             "object. lists currently available commands.\nname = object.command(input);\n" +
             "Examples: hq.requestCoffee();\ndoc = archive.inspect();\nthread01.run(recon, archive);\n" +
@@ -157,6 +158,9 @@ namespace Codetective.Operations
                     keyword = "save";
                 if (terminalCommandTrace != null) { terminalCommandTrace.keyword = keyword; terminalCommandTrace.argument = words.Length == 2 ? words[1] : ""; }
                 if (keyword == "help") return words.Length == 1 ? ExecutionResult.Ok(HelpForLanguage) : ExecutionResult.Error("사용법: " + words[0]);
+                if (keyword == "answer" && (words.Length == 1 ? TerminalAwaitingAnswer :
+                    char.IsLetterOrDigit(words[1][0]) || words[1][0] == '_'))
+                    return PrepareTerminalAnswer(words);
                 if (keyword == "save" || keyword == "free")
                 {
                     if (words.Length != 2) return ExecutionResult.Error($"사용법: {words[0]} 이름");

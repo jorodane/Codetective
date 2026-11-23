@@ -12,6 +12,7 @@ namespace Codetective.Operations
     [Serializable] public sealed class TerminalDialogueLine
     {
         public string text = "", textKey = "";
+        public string speaker = "", speakerKey = "";
         public double charactersPerSecond = 32, pauseAfter = 0.7, effectSeconds = 0.55;
         public TerminalEmotion emotion;
         public TerminalDialogueLine Copy() => (TerminalDialogueLine)MemberwiseClone();
@@ -31,8 +32,28 @@ namespace Codetective.Operations
         public string id;
         public TerminalDialogueLine[] lines = Array.Empty<TerminalDialogueLine>();
         public TerminalCommandGoal goal = new TerminalCommandGoal();
+        public TerminalAnswer[] answers = Array.Empty<TerminalAnswer>();
         public StoryEffects onComplete = new StoryEffects();
-        public TerminalConversationStep Copy() => new TerminalConversationStep { id = id, lines = lines.Select(l => l.Copy()).ToArray(), goal = goal.Copy(), onComplete = onComplete.Copy() };
+        public TerminalConversationStep Copy() => new TerminalConversationStep
+        {
+            id = id,
+            lines = lines.Select(line => line.Copy()).ToArray(),
+            goal = goal.Copy(),
+            answers = answers?.Select(answer => answer.Copy()).ToArray() ?? Array.Empty<TerminalAnswer>(),
+            onComplete = onComplete.Copy()
+        };
+    }
+    [Serializable] public sealed class TerminalAnswer
+    {
+        public string key;
+        public TerminalDialogueLine[] reply = Array.Empty<TerminalDialogueLine>();
+        public StoryEffects effects = new StoryEffects();
+        public TerminalAnswer Copy() => new TerminalAnswer
+        {
+            key = key,
+            reply = reply?.Select(line => line.Copy()).ToArray() ?? Array.Empty<TerminalDialogueLine>(),
+            effects = effects?.Copy() ?? new StoryEffects()
+        };
     }
     [Serializable] public sealed class TerminalConversationDefinition
     {
@@ -57,10 +78,9 @@ namespace Codetective.Operations
                 throw new CommandException("한국어 연습용 암호 이름이 유효하지 않습니다.");
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(pageId) || !CommandParser.IsIdentifier(variableBase) || firstDay < 1 || lastDay < firstDay || angryAfter < 1 ||
                 steps == null || steps.Length == 0 || steps.Length > 64 || steps.Any(s => s == null || string.IsNullOrWhiteSpace(s.id) || s.goal == null || s.lines == null) || steps.Select(s => s.id).Distinct().Count() != steps.Length ||
-                forgivingReplies == null || angryReplies == null || condition == null || onComplete == null || steps.Sum(s => s.lines.Length) + forgivingReplies.Length + angryReplies.Length > 1024) throw new CommandException("터미널 대화의 ID, 단계 또는 시작 조건이 유효하지 않습니다.");
-            foreach (TerminalDialogueLine line in steps.SelectMany(s => s.lines).Concat(forgivingReplies).Concat(angryReplies))
-                if (line == null || line.text == null || line.text.Length > 4096 || !Finite(line.charactersPerSecond) || line.charactersPerSecond <= 0 || !Finite(line.pauseAfter) || line.pauseAfter < 0 ||
-                    !Finite(line.effectSeconds) || line.effectSeconds < 0 || !Enum.IsDefined(typeof(TerminalEmotion), line.emotion)) throw new CommandException("터미널 대사의 문구/출력 속도가 유효하지 않습니다.");
+                forgivingReplies == null || angryReplies == null || condition == null || onComplete == null) throw new CommandException("터미널 대화의 ID, 단계 또는 시작 조건이 유효하지 않습니다.");
+            int lineCount = steps.Sum(step => step.lines.Length) + forgivingReplies.Length + angryReplies.Length;
+            ValidateLines(steps.SelectMany(step => step.lines).Concat(forgivingReplies).Concat(angryReplies));
             foreach (TerminalConversationStep step in steps)
             {
                 TerminalCommandGoal goal = step.goal;
@@ -70,14 +90,37 @@ namespace Codetective.Operations
                     (goal.kind == TerminalGoalKind.Allocate || goal.kind == TerminalGoalKind.Free || goal.kind == TerminalGoalKind.BindReference) && !CommandParser.IsIdentifier((goal.dataName ?? "").Replace("{slot}", variableBase)))
                     throw new CommandException("터미널 대화의 지시 명령이 유효하지 않습니다: " + step.id);
                 step.onComplete.Validate();
+                TerminalAnswer[] answers = step.answers ?? Array.Empty<TerminalAnswer>();
+                if (answers.Length == 0) continue;
+                if (goal.kind != TerminalGoalKind.None || step.lines.Length == 0 ||
+                    answers.Any(answer => answer == null || string.IsNullOrEmpty(answer.key) ||
+                        !answer.key.All(character => char.IsLetterOrDigit(character) || character == '_')) ||
+                    answers.Select(answer => answer.key).Distinct(StringComparer.OrdinalIgnoreCase).Count() != answers.Length)
+                    throw new CommandException("터미널 질문의 대사 또는 답변 키가 유효하지 않습니다: " + step.id);
+                foreach (TerminalAnswer answer in answers)
+                {
+                    answer.effects?.Validate();
+                    if (answer.reply == null) continue;
+                    ValidateLines(answer.reply);
+                    lineCount += answer.reply.Length;
+                }
             }
+            if (lineCount > 1024) throw new CommandException("터미널 대사가 너무 많습니다.");
             onComplete.Validate();
+        }
+        private static void ValidateLines(IEnumerable<TerminalDialogueLine> lines)
+        {
+            foreach (TerminalDialogueLine line in lines)
+                if (line == null || line.text == null || line.text.Length > 4096 || !Finite(line.charactersPerSecond) || line.charactersPerSecond <= 0 ||
+                    !Finite(line.pauseAfter) || line.pauseAfter < 0 || !Finite(line.effectSeconds) || line.effectSeconds < 0 || !Enum.IsDefined(typeof(TerminalEmotion), line.emotion))
+                    throw new CommandException("터미널 대사의 문구/출력 속도가 유효하지 않습니다.");
         }
         private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
     }
     [Serializable] public sealed class TerminalConversationLog
     {
         public string text = "", textKey = "", speaker = "", speakerKey = "", englishCommand = "", koreanCommand = "";
+        public string suffix = "";
         public int visibleElements;
         public bool complete;
         public TerminalConversationLog Copy() => (TerminalConversationLog)MemberwiseClone();
@@ -89,7 +132,7 @@ namespace Codetective.Operations
     }
     [Serializable] public sealed class TerminalConversationProgress
     {
-        public string id = "", stepId = "", slotName = "";
+        public string id = "", stepId = "", slotName = "", answerKey = "";
         public TerminalConversationPhase phase;
         public int deviations, pendingIndex, activeLog = -1;
         public bool reply;
@@ -97,12 +140,13 @@ namespace Codetective.Operations
         public List<TerminalDialogueLine> pending = new List<TerminalDialogueLine>();
         public List<TerminalConversationLog> log = new List<TerminalConversationLog>();
         public List<TerminalActionProof> performed = new List<TerminalActionProof>();
-        public TerminalConversationProgress Copy() => new TerminalConversationProgress { id = id, stepId = stepId, slotName = slotName, phase = phase, deviations = deviations,
+        public TerminalConversationProgress Copy() => new TerminalConversationProgress { id = id, stepId = stepId, slotName = slotName, answerKey = answerKey, phase = phase, deviations = deviations,
             pendingIndex = pendingIndex, activeLog = activeLog, reply = reply, elapsed = elapsed, pending = pending.Select(l => l.Copy()).ToList(), log = log.Select(l => l.Copy()).ToList(), performed = performed.Select(p => p.Copy()).ToList() };
     }
     internal sealed class TerminalCommandTrace
     {
         public string keyword, argument, assigned;
+        public TerminalAnswer answer;
         public readonly List<TerminalActionProof> actions = new List<TerminalActionProof>();
     }
 
@@ -125,6 +169,18 @@ namespace Codetective.Operations
             !string.IsNullOrEmpty(d.requiredMailRead) && IsMailRead(d.requiredMailRead) && d.condition.Matches(this));
         public bool TerminalUsesGuidedStartup => terminalConversations.Values.Any(d => d.replacesStartupGuide);
         public string TerminalExpectedCommand => ConversationStep == null ? "" : ExpectedCommand(ConversationStep.goal, Conversation, Language);
+        private TerminalAnswer[] WaitingAnswers => Conversation?.phase == TerminalConversationPhase.AwaitingCommand ?
+            ConversationStep.answers : Array.Empty<TerminalAnswer>();
+        public bool TerminalAwaitingAnswer => WaitingAnswers.Length > 0;
+        public IEnumerable<string> TerminalAnswerKeys => WaitingAnswers.Select(answer => answer.key);
+        public string TerminalAnswerUsage
+        {
+            get
+            {
+                string command = CommandVocabulary.KeywordName("answer", Language);
+                return string.Join(" / ", TerminalAnswerKeys.Select(key => command + " " + key));
+            }
+        }
         public double TerminalDisturbance
         {
             get
@@ -197,7 +253,7 @@ namespace Codetective.Operations
             if (command.StartsWith(korean ? "저장 " : "save ", StringComparison.Ordinal) ||
                 (!korean && command.StartsWith("var ", StringComparison.Ordinal)))
                 command = CommandVocabulary.KeywordName("code", Language) + command.Substring(command.IndexOf(' '));
-            return Text(entry.textKey, entry.text).Replace("{slot}", p.slotName).Replace("{command}", command);
+            return Text(entry.textKey, entry.text).Replace("{slot}", p.slotName).Replace("{command}", command) + entry.suffix;
         }
         private int AddConversationLog(TerminalConversationLog entry)
         {
@@ -221,7 +277,9 @@ namespace Codetective.Operations
         {
             var p = Conversation; TerminalDialogueLine line = p.pending[p.pendingIndex];
             p.elapsed = 0; p.activeLog = -1;
-            p.activeLog = AddConversationLog(new TerminalConversationLog { text = line.text, textKey = line.textKey, speaker = ConversationDefinition.speaker, speakerKey = ConversationDefinition.speakerKey,
+            bool hasSpeaker = !string.IsNullOrEmpty(line.speaker) || !string.IsNullOrEmpty(line.speakerKey);
+            p.activeLog = AddConversationLog(new TerminalConversationLog { text = line.text, textKey = line.textKey,
+                speaker = hasSpeaker ? line.speaker : ConversationDefinition.speaker, speakerKey = hasSpeaker ? line.speakerKey : ConversationDefinition.speakerKey,
                 englishCommand = ExpectedCommand(ConversationStep.goal, p, CommandLocale.English), koreanCommand = ExpectedCommand(ConversationStep.goal, p, CommandLocale.Korean) });
         }
         public void AdvanceTerminalConversation(double seconds, bool visible = true)
@@ -257,25 +315,66 @@ namespace Codetective.Operations
         {
             var p = Conversation; p.pending.Clear(); p.pendingIndex = 0; p.activeLog = -1; p.elapsed = 0;
             if (p.reply) { p.reply = false; p.phase = TerminalConversationPhase.AwaitingCommand; return; }
-            TerminalCommandGoal goal = ConversationStep.goal;
+            TerminalConversationStep step = ConversationStep;
+            if (step.answers.Length > 0 && string.IsNullOrEmpty(p.answerKey))
+            {
+                p.phase = TerminalConversationPhase.AwaitingCommand;
+                AddConversationLog(new TerminalConversationLog
+                {
+                    text = "대답>",
+                    textKey = "terminal.dialogue.answer.options",
+                    suffix = " " + string.Concat(step.answers.Select(answer => "[" + answer.key + "]")),
+                    complete = true
+                });
+                ConversationChanged(true);
+                return;
+            }
+            TerminalCommandGoal goal = step.goal;
             if (goal.kind == TerminalGoalKind.None || goal.acceptExisting && ConversationGoalSatisfied(goal)) CompleteConversationStep();
             else p.phase = TerminalConversationPhase.AwaitingCommand;
         }
         private void CompleteConversationStep()
         {
             var p = Conversation; var definition = ConversationDefinition; var step = ConversationStep;
+            if (!string.IsNullOrEmpty(p.answerKey))
+                ApplyStoryEffects(step.answers.FirstOrDefault(answer => answer.key == p.answerKey)?.effects);
+            p.answerKey = "";
             ApplyStoryEffects(step.onComplete);
             int next = Array.IndexOf(definition.steps, step) + 1;
             if (next >= definition.steps.Length) { p.phase = TerminalConversationPhase.Completed; p.activeLog = -1; definition.onComplete.Validate(); ApplyStoryEffects(definition.onComplete); }
             else { p.stepId = definition.steps[next].id; BeginConversationSpeech(definition.steps[next].lines, false); }
             ConversationChanged(true);
         }
+        private ExecutionResult PrepareTerminalAnswer(string[] words)
+        {
+            TerminalAnswer[] answers = WaitingAnswers;
+            if (answers.Length == 0)
+                return ExecutionResult.Error(Text("terminal.dialogue.answer.none", "지금 답할 질문이 없습니다."));
+            TerminalAnswer selected = words.Length == 2
+                ? answers.FirstOrDefault(answer => string.Equals(answer.key, words[1], StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (selected == null)
+                return ExecutionResult.Error(Text("terminal.dialogue.answer.invalid", "표시된 선택지 중 하나를 입력하세요.") + " " + TerminalAnswerUsage);
+            terminalCommandTrace.answer = selected;
+            return ExecutionResult.Ok(Text("terminal.dialogue.answer.sent", "응답을 전송했습니다."));
+        }
+
         private void ObserveTerminalCommand(TerminalCommandTrace trace, ExecutionResult result)
         {
             var p = Conversation; var goal = ConversationStep.goal; string name = GoalDataName(goal, p);
             if (!result.Success) return; // Typos and failed actions are not disobedience.
             foreach (TerminalActionProof proof in trace.actions)
                 if (!p.performed.Any(a => a.targetId == proof.targetId && a.operation == proof.operation && a.arguments == proof.arguments)) p.performed.Add(proof.Copy());
+            if (TerminalAwaitingAnswer)
+            {
+                if (trace.answer != null)
+                {
+                    p.answerKey = trace.answer.key;
+                    BeginConversationSpeech(trace.answer.reply, false);
+                    ConversationChanged(true);
+                }
+                return;
+            }
             bool matched = goal.kind == TerminalGoalKind.Help && trace.keyword == "help" || goal.kind == TerminalGoalKind.Allocate && trace.keyword == "save" && trace.argument == name ||
                 goal.kind == TerminalGoalKind.Free && trace.keyword == "free" && trace.argument == name || goal.kind == TerminalGoalKind.BindReference && trace.assigned == name && result.Value.CanReferenceEntity && result.Value.id == goal.targetId ||
                 goal.kind == TerminalGoalKind.Invoke && trace.actions.Any(a => a.targetId == goal.targetId && a.operation == goal.operation && (goal.argumentCount < 0 || a.arguments == goal.argumentCount)) ||

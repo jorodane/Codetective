@@ -48,7 +48,7 @@ namespace Codetective.Terminal
     /// <summary>One play session. Allocations and completion candidates share the same source of truth.</summary>
     public sealed class TerminalSession
     {
-        private static readonly string[] Commands = { "code", "free", "help" };
+        private static readonly string[] Commands = { "code", "free", "help", "answer" };
         public const string HelpText = KernelRuntime.Help;
         private readonly Dictionary<int, MemorySlot> wrappers = new Dictionary<int, MemorySlot>();
         public KernelRuntime Runtime { get; }
@@ -87,7 +87,8 @@ namespace Codetective.Terminal
 
             if (separator < 0)
             {
-                return Commands.Select(command => new { Code = command, Name = CommandVocabulary.Match(CommandVocabulary.KeywordName(command, Runtime.Language),
+                return Commands.Where(command => command != "answer" || Runtime.TerminalAwaitingAnswer)
+                    .Select(command => new { Code = command, Name = CommandVocabulary.Match(CommandVocabulary.KeywordName(command, Runtime.Language),
                         CommandVocabulary.KeywordNames(command), line, isComposing) }).Where(c => c.Name != null)
                     .Select(command => new TerminalCompletion(command.Name, command.Code == "help" ? command.Name : command.Name + " "))
                     .Concat(Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement))).ToArray();
@@ -96,10 +97,18 @@ namespace Codetective.Terminal
             string enteredCommand = line.Substring(0, separator);
             string canonicalCommand = CommandVocabulary.Keyword(enteredCommand);
             if (canonicalCommand == "save" || canonicalCommand == "help") return Array.Empty<TerminalCompletion>();
+            string prefix = line.Substring(separator).TrimStart();
+            if (canonicalCommand == "answer" && !prefix.StartsWith("=", StringComparison.Ordinal))
+            {
+                // The question lists all options. An empty argument must not select one by default.
+                if (prefix.Length == 0 || Runtime.TerminalAnswerKeys.Contains(prefix, StringComparer.OrdinalIgnoreCase))
+                    return Array.Empty<TerminalCompletion>();
+                return Runtime.TerminalAnswerKeys.Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    .Select(key => new TerminalCompletion("[" + key + "]", enteredCommand + " " + key)).ToArray();
+            }
             if (canonicalCommand != "free")
                 return Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement)).ToArray();
 
-            string prefix = line.Substring(separator).TrimStart();
             if (prefix.Any(char.IsWhiteSpace))
                 return Array.Empty<TerminalCompletion>();
 

@@ -174,12 +174,20 @@ namespace Codetective.Terminal
             RestoreCommandFocus();
             if (runtimeRevision != session.Runtime.Revision)
             {
-                runtimeRevision = session.Runtime.Revision;
+                KernelRuntime runtime = session.Runtime;
+                runtimeRevision = runtime.Revision;
                 RefreshMemory();
                 if (input.placeholder is Text placeholder)
-                    placeholder.text = session.Runtime.TerminalInputLocked ? session.Runtime.Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.") :
-                        session.Runtime.TerminalConversationActive ? session.Runtime.Text("terminal.dialogue.command", "안내 명령") + " · " + session.Runtime.TerminalExpectedCommand :
-                        session.Runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 암호 이름 = 대상" : "Command · help / code name = target";
+                {
+                    if (runtime.TerminalInputLocked)
+                        placeholder.text = runtime.Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.");
+                    else if (runtime.TerminalAwaitingAnswer)
+                        placeholder.text = runtime.TerminalAnswerUsage;
+                    else if (runtime.TerminalConversationActive)
+                        placeholder.text = runtime.Text("terminal.dialogue.command", "안내 명령") + " · " + runtime.TerminalExpectedCommand;
+                    else
+                        placeholder.text = runtime.Language == CommandLocale.Korean ? "명령 입력 · 도움말 / 암호 이름 = 대상" : "Command · help / code name = target";
+                }
                 RefreshCompletions();
             }
             TerminalCompletionInput current = input.CompletionInput;

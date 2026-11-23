@@ -15,10 +15,22 @@ namespace Codetective.Gameplay
             { rows.Add(new TextTranslation { key = key, language = "ko", text = ko }); rows.Add(new TextTranslation { key = key, language = "en", text = en }); }
             TerminalDialogueLine Line(string key, string ko, string en)
             { Text("onboarding." + key, ko, en); return new TerminalDialogueLine { textKey = "onboarding." + key, text = ko }; }
+            TerminalDialogueLine OfficeLine(string key, string ko, string en)
+            {
+                TerminalDialogueLine line = Line(key, ko, en);
+                line.speaker = "사무국";
+                line.speakerKey = "onboarding.office";
+                return line;
+            }
             Text("onboarding.speaker", "현장지원과", "Field Support");
+            Text("onboarding.office", "사무국", "Secretariat");
             Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.", "Receiving · wait until the message finishes.");
             Text("terminal.dialogue.command", "안내 명령", "Requested command");
             Text("terminal.dialogue.standby", "작전망 연결 대기", "Operations network standby");
+            Text("terminal.dialogue.answer.options", "대답>", "Answer>");
+            Text("terminal.dialogue.answer.none", "지금 답할 질문이 없습니다.", "There is no question to answer right now.");
+            Text("terminal.dialogue.answer.invalid", "표시된 선택지 중 하나를 입력하세요.", "Enter one of the displayed options.");
+            Text("terminal.dialogue.answer.sent", "응답을 전송했습니다.", "Answer sent.");
             var steps = new[] {
                 new TerminalConversationStep { id = "help", lines = new[] {
                     Line("welcome", "Kernel을 찾으셨군요.", "You found Kernel."),
@@ -40,6 +52,29 @@ namespace Codetective.Gameplay
                 new TerminalConversationStep { id = "release", lines = new[] {
                     Line("release", "통신 확인. 마지막으로 다음 명령으로 연습용 치환문을 폐기하겠습니다:\n{command}", "Connection confirmed. Finally, discard the exercise substitution by entering {command}.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Free } },
+                new TerminalConversationStep
+                {
+                    id = "oath",
+                    lines = new[] {
+                        OfficeLine("oath", "귀하는 Kernel로서 성실히 임무를 수행하고 심각한 정보 누출에 대한 차단 활동에 적극적으로 임할 것임을 맹세할 수 있습니까? 이 결정은 귀하의 Kernel 직무 수행에 있어 가장 중요한 동의이며, 실제 서류상 동의 행위와 동일한 법적 효력을 가집니다.",
+                            "Do you swear to carry out your duties faithfully as Kernel and to take an active role in containing serious information leaks? This is the most important consent you give as Kernel and has the same legal effect as signed written consent.")
+                    },
+                    answers = new[]
+                    {
+                        new TerminalAnswer
+                        {
+                            key = "y",
+                            reply = new[] { OfficeLine("oath.accepted", "맹세를 접수했습니다. 동의가 작전 기록에 남았습니다.", "Your oath has been received. Your consent is on record.") },
+                            effects = new StoryEffects { triggers = new[] { new TriggerValue { id = "kernel.oath.accepted", value = true } } }
+                        },
+                        new TerminalAnswer
+                        {
+                            key = "n",
+                            reply = new[] { OfficeLine("oath.declined", "동의하지 않으신 것으로 기록했습니다. 안내를 계속하겠습니다.", "Your refusal is on record. The briefing will continue.") },
+                            effects = new StoryEffects { triggers = new[] { new TriggerValue { id = "kernel.oath.declined", value = true } } }
+                        }
+                    }
+                },
                 new TerminalConversationStep { id = "finish", lines = new[] {
                     Line("world", "치환문을 폐기해도 실제 지휘소는 사라지지 않습니다. 대상을 부르는 규칙만 정리한 것입니다.", "Discarding a substitution does not remove headquarters. You have only removed a rule for referring to it."),
                     Line("coffee", "지휘소의 권한 목록에서 커피 요청도 찾아보십시오. 명령은 화면 밖의 실제 행동으로 이어집니다.", "You can also find a coffee request in headquarters' permissions. Commands lead to real actions beyond the screen."),

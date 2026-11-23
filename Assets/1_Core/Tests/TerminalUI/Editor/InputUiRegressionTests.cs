@@ -192,6 +192,39 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(field.isFocused, Is.True);
         }
 
+        [Test]
+        public void ADialogueAnswerIsSentWithEnterFromTheOrdinaryTerminalField()
+        {
+            var runtime = new KernelRuntime { Language = CommandLocale.Korean };
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition
+            {
+                id = "question",
+                steps = new[] { new TerminalConversationStep
+                {
+                    id = "oath",
+                    lines = new[] { new TerminalDialogueLine { text = "맹세할 수 있습니까?" } },
+                    answers = new[] {
+                        new TerminalAnswer { key = "y" },
+                        new TerminalAnswer { key = "n",
+                            effects = new StoryEffects { triggers = new[] { new TriggerValue { id = "declined", value = true } } } }
+                    }
+                } }
+            });
+            runtime.EnterTerminalPage("kernel");
+            runtime.AdvanceTerminalConversation(1000);
+            TerminalController controller = Controller(runtime, out GameObject completionPanel);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Assert.That(placeholder.text, Is.EqualTo("대답 y / 대답 n"));
+            field.SetTextWithoutNotify("대답 n");
+            field.FocusAtEnd();
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
+            Assert.That(runtime.GetTrigger("declined"), Is.True);
+            Assert.That(runtime.TerminalAwaitingAnswer, Is.False);
+            Assert.That(completionPanel.activeSelf, Is.False);
+            Assert.That(field.text, Is.Empty);
+            Assert.That(field.isFocused, Is.True);
+        }
+
         [TestCase("page")]
         [TestCase("interaction")]
         [TestCase("selection")]
