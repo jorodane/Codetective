@@ -78,7 +78,11 @@ namespace Codetective.Terminal
             return IsTitle;
         }
         public void ShowFeedback(string value) { if (message != null) message.text = value; }
-        public void RefreshSaveList() { savesRead = false; if (isActiveAndEnabled && section == "load") Render(); }
+        public void RefreshSaveList()
+        {
+            savesRead = false;
+            if (isActiveAndEnabled && (section == "load" || (IsTitle && section == "main"))) Render();
+        }
         private void Open(string value) { section = value; Render(); }
         private bool CanUse => isActiveAndEnabled && host.SystemMenuVisible && host.GetComponent<TerminalController>().InteractionEnabled;
         private void Run(Action action) { if (CanUse) action?.Invoke(); }
@@ -104,12 +108,14 @@ namespace Codetective.Terminal
                     if (IsTitle)
                     {
                         IReadOnlyList<SystemSaveInfo> saves = ReadSaves();
-                        Option(0, "이어하기", () => Open("load"), saves.Any(s => s.Available));
-                        Option(1, "처음부터", actions.NewGame);
-                        Option(2, "설정", () => Open("settings"));
-                        Option(3, "끝내기", () => Open("quit"));
-                        message.text = saves.Count == 0 ? "저장된 기록이 없습니다." : !saves.Any(s => s.Available) ? saves[0].Situation :
-                            "저장 기록 " + saves.Count + " / " + SaveHistory.Capacity + " · 이어하기에서 기록을 선택하세요.";
+                        SystemSaveInfo latest = saves.FirstOrDefault(s => s.Available);
+                        Option(0, "이어하기", () => actions.Load?.Invoke(latest.Id), latest != null && actions.Load != null);
+                        Option(1, "불러오기", () => Open("load"), saves.Count > 0);
+                        Option(2, "처음부터", actions.NewGame);
+                        Option(3, "설정", () => Open("settings"));
+                        Option(4, "끝내기", () => Open("quit"));
+                        message.text = saves.Count == 0 ? "저장된 기록이 없습니다." : latest == null ? saves[0].Situation :
+                            "저장 기록 " + saves.Count + " / " + SaveHistory.Capacity;
                     }
                     else
                     {

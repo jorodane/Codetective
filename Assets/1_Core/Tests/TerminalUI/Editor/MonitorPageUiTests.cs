@@ -111,10 +111,11 @@ namespace Codetective.Terminal.Tests.UI
             host.ShowPage("kernel"); input.SetTextWithoutNotify("save 작성중"); bool back = host.CanGoBack; int starts = 0;
             var menu = SystemMenu(new SystemMenuActions { NewGame = () => starts++, ReadSaves = () => Array.Empty<SystemSaveInfo>() });
             menu.Show(true);
-            Assert.That(menu.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text), Is.EqualTo(new[] { "이어하기", "처음부터", "설정", "끝내기" }));
+            Assert.That(menu.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text), Is.EqualTo(new[] { "이어하기", "불러오기", "처음부터", "설정", "끝내기" }));
             Assert.That(menu.GetComponentInParent<Canvas>(), Is.SameAs(canvas.GetComponent<Canvas>()));
             Assert.That(terminal.PageVisible, Is.False); Assert.That(host.TryNavigate("mail"), Is.False); Assert.That(host.TryCycleTab(1), Is.False);
             host.GoBack(); Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel")); Assert.That(host.CanGoBack, Is.EqualTo(back));
+            Assert.That(MenuButton(menu, "불러오기").interactable, Is.False);
             Assert.That(MenuButton(menu, "이어하기").interactable, Is.False); MenuButton(menu, "이어하기").onClick.Invoke(); Assert.That(MenuButton(menu, "처음부터"), Is.Not.Null);
             MenuButton(menu, "처음부터").onClick.Invoke(); Assert.That(starts, Is.EqualTo(1));
             MenuButton(menu, "설정").onClick.Invoke(); Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.HandleEscape(), Is.True);
@@ -140,13 +141,34 @@ namespace Codetective.Terminal.Tests.UI
             Button title = MenuButton(menu, "타이틀 화면"); menu.Hide(); title.onClick.Invoke(); Assert.That(titles, Is.Zero);
         }
         [Test]
-        public void ContinueOpensTenScrollableRecordsAndOnlyLoadsTheChosenAvailableId()
+        public void TitleContinueLoadsTheNewestAvailableSaveAndIgnoresTheSelectedSlot()
+        {
+            string loaded = null;
+            var slots = new[] { new SystemSaveInfo { Id = "unavailable" },
+                new SystemSaveInfo { Id = "latest", Available = true }, new SystemSaveInfo { Id = "earlier", Available = true } };
+            var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, ReadSaves = () => slots });
+            menu.Show(true);
+            MenuButton(menu, "불러오기").onClick.Invoke();
+            menu.SelectSave("earlier");
+            Assert.That(menu.HandleEscape(), Is.True);
+            Assert.That(loaded, Is.Null);
+            MenuButton(menu, "이어하기").onClick.Invoke();
+            Assert.That(loaded, Is.EqualTo("latest"));
+            Assert.That(menu.GetComponentInChildren<SystemSaveRow>(), Is.Null);
+
+            slots = new[] { new SystemSaveInfo { Id = "newest", Available = true } }.Concat(slots).ToArray();
+            menu.RefreshSaveList();
+            MenuButton(menu, "이어하기").onClick.Invoke();
+            Assert.That(loaded, Is.EqualTo("newest"));
+        }
+        [Test]
+        public void TitleLoadOpensTenScrollableRecordsAndOnlyLoadsTheChosenAvailableId()
         {
             string loaded = null;
             var slots = Enumerable.Range(0, 10).Select(i => new SystemSaveInfo { Id = "save" + i, Available = i != 2,
                 Day = 10 - i, GameTime = "09:00", Kind = i % 2 == 0 ? "Auto" : "수동 저장", Situation = "상담 중", SavedAt = "실제 시각 " + i }).ToArray();
             var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, ReadSaves = () => slots }); menu.Show(true);
-            MenuButton(menu, "이어하기").onClick.Invoke(); Assert.That(loaded, Is.Null);
+            MenuButton(menu, "불러오기").onClick.Invoke(); Assert.That(loaded, Is.Null);
             ScrollRect scroll = menu.GetComponentInChildren<CrtScrollRect>();
             Assert.That(scroll.vertical, Is.True); Assert.That(scroll.content.rect.height, Is.GreaterThan(scroll.viewport.rect.height));
             Assert.That(scroll.content.GetComponentsInChildren<Button>().Length, Is.EqualTo(10));
@@ -200,16 +222,16 @@ namespace Codetective.Terminal.Tests.UI
             }
         }
         [Test]
-        public void BrowsingContinueAndReturningToTitleDoesNotReadSavesAgain()
+        public void BrowsingLoadAndReturningToTitleDoesNotReadSavesAgain()
         {
             int reads = 0;
             var menu = SystemMenu(new SystemMenuActions { ReadSaves = () =>
             { reads++; return new[] { new SystemSaveInfo { Id = "latest", Available = true, Day = 1, GameTime = "09:00", Situation = "상담 중", SavedAt = "2026-11-20 10:00:00", Kind = "Auto" } }; } });
             menu.Show(true); Assert.That(reads, Is.EqualTo(1));
             for (int i = 0; i < 3; i++)
-            { MenuButton(menu, "이어하기").onClick.Invoke(); MenuButton(menu, "돌아가기").onClick.Invoke(); }
+            { MenuButton(menu, "불러오기").onClick.Invoke(); MenuButton(menu, "돌아가기").onClick.Invoke(); }
             Assert.That(reads, Is.EqualTo(1));
-            MenuButton(menu, "이어하기").onClick.Invoke(); menu.RefreshSaveList(); Assert.That(reads, Is.EqualTo(2));
+            MenuButton(menu, "불러오기").onClick.Invoke(); menu.RefreshSaveList(); Assert.That(reads, Is.EqualTo(2));
         }
         [Test]
         public void SaveRowsHaveSeparateDateSituationAndTimestampCellsAndSupportDoubleClickAndSubmit()
@@ -218,7 +240,7 @@ namespace Codetective.Terminal.Tests.UI
             var menu = SystemMenu(new SystemMenuActions { Load = id => loaded = id, ReadSaves = () => new[] {
                 new SystemSaveInfo { Id = "latest", Available = true, Day = 1, GameTime = "09:00", Kind = "Auto", Situation = "상담 대기", SavedAt = "2026-11-20 10:00:00" },
                 new SystemSaveInfo { Id = "older", Available = true, Day = 1, GameTime = "08:00", Kind = "수동 저장", Situation = "이전 상황", SavedAt = "2026-11-19 10:00:00" } } });
-            menu.Show(true); MenuButton(menu, "이어하기").onClick.Invoke();
+            menu.Show(true); MenuButton(menu, "불러오기").onClick.Invoke();
             SystemSaveRow[] rows = menu.GetComponentsInChildren<SystemSaveRow>(); SystemSaveRow row = rows[0];
             Assert.That(row.transform.Find("GameTime").GetComponentInChildren<Text>().text, Is.EqualTo("DAY 1\n09:00"));
             Assert.That(row.transform.Find("Situation").GetComponentInChildren<Text>().text, Is.EqualTo("상담 대기"));
@@ -236,11 +258,11 @@ namespace Codetective.Terminal.Tests.UI
             {
                 EventSystem.current = events.GetComponent<EventSystem>();
                 var slots = Enumerable.Range(0, 10).Select(i => new SystemSaveInfo { Id = "save" + i, Available = i != 1, Day = 10 - i, GameTime = "09:00" }).ToArray();
-                var menu = SystemMenu(new SystemMenuActions { ReadSaves = () => slots }); menu.Show(true);
+                var menu = SystemMenu(new SystemMenuActions { Load = _ => { }, ReadSaves = () => slots }); menu.Show(true);
                 Button start = MenuButton(menu, "이어하기"); Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(start.gameObject));
                 start.OnMove(new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Down });
-                Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(MenuButton(menu, "처음부터").gameObject));
-                MenuButton(menu, "이어하기").onClick.Invoke(); SystemSaveRow[] rows = menu.GetComponentsInChildren<SystemSaveRow>();
+                Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(MenuButton(menu, "불러오기").gameObject));
+                MenuButton(menu, "불러오기").onClick.Invoke(); SystemSaveRow[] rows = menu.GetComponentsInChildren<SystemSaveRow>();
                 Assert.That(rows[0].navigation.selectOnDown, Is.SameAs(rows[2]));
                 rows[9].Select(); Assert.That(menu.GetComponentInChildren<ScrollRect>().content.anchoredPosition.y, Is.GreaterThan(0));
                 Assert.That(rows[9].navigation.mode, Is.EqualTo(Navigation.Mode.Explicit));
