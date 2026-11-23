@@ -42,6 +42,7 @@ namespace Codetective.Interaction
         private CameraAnglePreset menuReturnAngle;
         private bool showingTitle;
         private bool started;
+        private bool focusKernelOnArrival;
         private bool returningToOverview;
         private CameraAnglePreset inspectedAngle;
         private CameraAnglePreset informationReturnAngle;
@@ -147,6 +148,9 @@ namespace Codetective.Interaction
             }
             if (ModalInputBlocked) return;
 
+            if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame) &&
+                !TextInputFocused && TryFocusKernel()) return;
+
             if (enableAngleShortcuts && keyboard != null && !TextInputFocused)
             {
                 Key[] digits = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5 };
@@ -190,6 +194,11 @@ namespace Codetective.Interaction
             }
             if (activeTerminal != null && activeTerminal.InteractionEnabled != ready)
                 activeTerminal.SetInteractionEnabled(ready);
+            if (focusKernelOnArrival && ready && activeTerminal != null)
+            {
+                focusKernelOnArrival = false;
+                activeTerminal.TryFocusCommandInput();
+            }
 #if ENABLE_INPUT_SYSTEM
             if (Carry == null) return;
             if (NavigationBlocked || flow.Mode == InspectionMode.Menu || views.IsTransitioning || ModalInputBlocked)
@@ -293,7 +302,23 @@ namespace Codetective.Interaction
             InspectAngle(views.AngleSet.Get(index)); return true;
         }
 
-        private void InspectAngle(CameraAnglePreset angle, TerminalController targetTerminal)
+        private bool TryFocusKernel()
+        {
+            if (terminal == null || PresentingOnTerminal || ViewBusy || (Carry != null && Carry.HeldItem != null)) return false;
+            if (activeTerminal != null)
+            {
+                if (activeTerminal.InteractionEnabled) return activeTerminal.TryFocusCommandInput();
+                focusKernelOnArrival = true;
+                return true;
+            }
+            int index = views.AngleSet != null ? views.AngleSet.FindId("monitor") : -1;
+            if (index < 0) return false;
+            CameraAnglePreset angle = views.AngleSet.Get(index);
+            InspectAngle(angle, FindTerminalFor(angle), true);
+            return true;
+        }
+
+        private void InspectAngle(CameraAnglePreset angle, TerminalController targetTerminal, bool focusKernel = false)
         {
             if (flow.Mode == InspectionMode.Menu || NavigationBlocked || angle == null || views.AngleSet == null)
                 return;
@@ -312,6 +337,7 @@ namespace Codetective.Interaction
             if (!ChangeAngle(angle, () =>
             {
                 DisableTerminal(); activeTerminal = targetTerminal;
+                focusKernelOnArrival = focusKernel;
                 activeTerminal?.SetInteractionEnabled(false);
                 flow.Inspect(); AngleEntered?.Invoke(angle);
             }))
@@ -472,6 +498,7 @@ namespace Codetective.Interaction
             if (terminal != null && terminal != activeTerminal)
                 terminal.SetInteractionEnabled(false);
             activeTerminal = null;
+            focusKernelOnArrival = false;
         }
 
         private void RestorePause()

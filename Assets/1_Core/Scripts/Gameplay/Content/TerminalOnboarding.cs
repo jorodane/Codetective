@@ -25,8 +25,6 @@ namespace Codetective.Gameplay
             Text("onboarding.speaker", "현장지원과", "Field Support");
             Text("onboarding.office", "사무국", "Secretariat");
             Text("profile.regularVisitor.name", "한정우", "Han Jeong-woo");
-            Text("terminal.dialogue.receiving", "수신 중 · 안내가 끝나면 입력할 수 있습니다.", "Receiving · wait until the message finishes.");
-            Text("terminal.dialogue.command", "안내 명령", "Requested command");
             Text("terminal.dialogue.standby", "작전망 연결 대기", "Operations network standby");
             Text("terminal.dialogue.answer.options", "대답>", "Answer>");
             Text("terminal.dialogue.answer.none", "지금 답할 질문이 없습니다.", "There is no question to answer right now.");
@@ -43,7 +41,7 @@ namespace Codetective.Gameplay
                     Line("allocate", "이번에는 빈 치환문을 등록하겠습니다.\n입력: {command}\n이번 연습에 사용할 이름은 {slot}입니다.", "Let's register an empty substitution. Enter {command}. We will use the name {slot} for this exercise.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate } },
                 new TerminalConversationStep { id = "reference", lines = new[] {
-                    Line("reference", "다음 명령으로 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.\n{command}", "Enter {command} to bind {slot} to headquarters. Write the target on the right of the equals sign.") },
+                    Line("reference", "이미 등록한 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.\n{command}", "Bind the substitution you registered to headquarters. Write the target on the right of the equals sign.\n{command}") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } },
                 new TerminalConversationStep { id = "invoke", lines = new[] {
                     Line("substitution", "이제 지휘소를 가리키는 이름은 {slot}입니다.", "Now you can use {slot} to refer to headquarters."),

@@ -12,8 +12,6 @@ namespace Codetective.Gameplay
     [Serializable] public sealed class DialoguePlacement
     {
         public string angleId;
-        public Vector2 anchor = new Vector2(0.5f, 0);
-        public Vector2 offset = new Vector2(0, 18);
-        public Vector2 size = new Vector2(680, 248);
+        public Vector2 size = new Vector2(560, 216);
     }
 }

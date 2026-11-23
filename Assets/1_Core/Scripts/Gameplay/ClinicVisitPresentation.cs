@@ -10,6 +10,8 @@ namespace Codetective.Gameplay
     {
         [SerializeField] private GameObject patientPrefab;
         [SerializeField] private Transform seatAnchor;
+        [Tooltip("The hidden, posed scene character used to seat each visitor.")]
+        [SerializeField] private Transform seatPoseReference;
         [SerializeField, Min(0.1f)] private float closingSeconds = 2.4f;
         private GameObject actor;
         private Material standInMaterial;
@@ -18,10 +20,11 @@ namespace Codetective.Gameplay
         private string shownProfile;
         public bool IsRunning { get; private set; }
         public string ShownProfileId => shownProfile;
-        private Vector3 Seat => seatAnchor != null ? seatAnchor.position : new Vector3(-0.35f, 0.1f, 0.13f);
+        private Vector3 Seat => seatPoseReference != null ? seatPoseReference.position : seatAnchor != null ? seatAnchor.position : new Vector3(-0.35f, 0.1f, 0.13f);
         public void Configure(ProfileCatalog catalog, SceneTransitionController presentation) { profiles = catalog; transitions = presentation; }
         public void Initialize(KernelRuntime runtime)
         {
+            if (seatPoseReference != null) seatPoseReference.gameObject.SetActive(false);
             AppointmentProgress visit = runtime.CurrentAppointment;
             if (visit != null && visit.phase != VisitPhase.Arriving && visit.phase != VisitPhase.Departing) Show(visit.profileId);
         }
@@ -40,9 +43,14 @@ namespace Codetective.Gameplay
                 Part("Head", PrimitiveType.Sphere, new Vector3(0, 1.17f, 0), new Vector3(0.24f, 0.28f, 0.24f));
             }
             shownProfile = id; actor.name = "Patient_" + id;
-            actor.transform.SetPositionAndRotation(Seat + (profile != null ? profile.seatOffset : Vector3.zero), Quaternion.Euler(profile != null ? profile.modelEuler : new Vector3(0, 180, 0)));
+            Vector3 offset = profile != null ? profile.seatOffset : Vector3.zero;
+            Vector3 seat = Seat + offset;
+            Quaternion rotation = seatPoseReference != null ? seatPoseReference.rotation : Quaternion.Euler(profile != null ? profile.modelEuler : new Vector3(0, 180, 0));
+            actor.transform.SetPositionAndRotation(seat, rotation);
             if (profile != null) actor.transform.localScale = Vector3.Scale(actor.transform.localScale, profile.modelScale);
-            ProfileModelUtility.Prepare(actor); ProfileModelUtility.Seat(actor, profile, Seat + (profile != null ? profile.seatOffset : Vector3.zero));
+            ProfileModelUtility.Prepare(actor);
+            if ((profile == null || profile.applySeatedPose) && !ProfileModelUtility.CopySeatPose(actor, seatPoseReference, offset))
+                ProfileModelUtility.Seat(actor, profile, seat);
             actor.SetActive(true);
         }
         private void Part(string name, PrimitiveType type, Vector3 position, Vector3 scale)

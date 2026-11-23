@@ -6132,6 +6132,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: npc_csl_00_character_02m_01
       objectReference: {fileID: 0}
+    - target: {fileID: 4978816779655408403, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5644030507746144681, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0.111639135
@@ -6337,6 +6341,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
+--- !u!4 &2000000191 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5644030507746144681, guid: ce2548dbc81851b488075bf19a61322a, type: 3}
+  m_PrefabInstance: {fileID: 1675409726}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1701700788 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1030972670, guid: abc00000000004525696611399962577, type: 3}
@@ -7469,6 +7478,7 @@ MonoBehaviour:
   patientPrefab: {fileID: 0}
   entryAnchor: {fileID: 2000000151}
   seatAnchor: {fileID: 2000000161}
+  seatPoseReference: {fileID: 2000000191}
   exitAnchor: {fileID: 2000000171}
   entrySeconds: 1.2
   closingSeconds: 2.4

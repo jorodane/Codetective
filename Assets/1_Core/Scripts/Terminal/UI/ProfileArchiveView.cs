@@ -16,6 +16,9 @@ namespace Codetective.Terminal
         private Func<bool> allowed;
         private ScrollRect scroll;
         private RectTransform rows;
+        private Vector2 archivePosition, archiveSize;
+        private float viewportHeight = 410f;
+        private int rowCount;
         private int revision = -1;
         private string listKey, lastSelected;
         private bool lastAllowed;
@@ -25,6 +28,8 @@ namespace Codetective.Terminal
         {
             runtime = world; font = typeface != null ? typeface : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             select = choose; current = selected; allowed = canChoose;
+            RectTransform archive = (RectTransform)transform;
+            archivePosition = archive.anchoredPosition; archiveSize = archive.sizeDelta;
             gameObject.AddComponent<Image>().color = new Color(0.80f, 0.77f, 0.67f, 0.97f);
             Label(transform, new Vector2(14, -12), new Vector2(222, 36), "인물 파일", 24);
             Label(transform, new Vector2(14, -50), new Vector2(222, 48), "인물을 선택하면\n서류를 가져옵니다.", 16);
@@ -37,6 +42,18 @@ namespace Codetective.Terminal
         }
         public void Show() { if (runtime != null) { gameObject.SetActive(true); revision = -1; Refresh(); } }
         public void Hide() => gameObject.SetActive(false);
+        public void SetTopInset(float inset)
+        {
+            float shift = Mathf.Clamp(inset + archivePosition.y, 0f, 310f);
+            float height = 410f - shift;
+            if (Mathf.Approximately(viewportHeight, height)) return;
+            viewportHeight = height;
+            RectTransform archive = (RectTransform)transform;
+            archive.anchoredPosition = archivePosition - Vector2.up * shift;
+            archive.sizeDelta = archiveSize - Vector2.up * shift;
+            scroll.viewport.sizeDelta = new Vector2(226, viewportHeight);
+            rows.sizeDelta = new Vector2(214, Mathf.Max(viewportHeight, rowCount * 54));
+        }
         public bool SelectProfile(string id)
         {
             if (!IsVisible || runtime == null || !(allowed?.Invoke() ?? false) || !runtime.VisibleProfileIds.Contains(id)) return false;
@@ -62,7 +79,8 @@ namespace Codetective.Terminal
                     button.navigation = new Navigation { mode = Navigation.Mode.None }; button.onClick.AddListener(() => SelectProfile(id));
                     Label(rect, new Vector2(8, -6), new Vector2(198, 34), ProfileLabel(id), 20).alignment = TextAnchor.MiddleLeft;
                 }
-                rows.sizeDelta = new Vector2(214, Mathf.Max(410, ids.Length * 54)); scroll.verticalNormalizedPosition = position; listKey = key;
+                rowCount = ids.Length;
+                rows.sizeDelta = new Vector2(214, Mathf.Max(viewportHeight, rowCount * 54)); scroll.verticalNormalizedPosition = position; listKey = key;
             }
             lastSelected = SelectedProfileId; lastAllowed = allowed?.Invoke() ?? false;
             foreach (Button button in rows.GetComponentsInChildren<Button>())

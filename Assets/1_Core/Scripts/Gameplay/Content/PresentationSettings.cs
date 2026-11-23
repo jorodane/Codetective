@@ -24,6 +24,5 @@ namespace Codetective.Gameplay
         public AudioClip mailArrivalSound;
         [Range(0, 1)] public float mailArrivalVolume = 0.45f;
         [Min(0.15f)] public float mailBlinkSeconds = 0.55f;
-        [Min(0.5f)] public float mailBannerSeconds = 1.2f;
     }
 }

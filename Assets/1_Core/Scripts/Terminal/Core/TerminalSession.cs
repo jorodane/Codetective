@@ -102,6 +102,16 @@ namespace Codetective.Terminal
             string canonicalCommand = CommandVocabulary.Keyword(enteredCommand);
             if (canonicalCommand == "save" || canonicalCommand == "help") return Array.Empty<TerminalCompletion>();
             string prefix = line.Substring(separator).TrimStart();
+            if (canonicalCommand == "code" && prefix.IndexOf('=') < 0)
+            {
+                string name = Runtime.TerminalDeclarationName;
+                if (!string.IsNullOrEmpty(name) && ComparisonForm(name, isComposing).StartsWith(ComparisonForm(prefix, isComposing), StringComparison.Ordinal))
+                {
+                    string replacement = line.Substring(0, line.Length - prefix.Length) + name;
+                    if (Runtime.TerminalExpectedGoal == TerminalGoalKind.BindReference) replacement += " = ";
+                    return new[] { new TerminalCompletion(name, replacement) };
+                }
+            }
             if (canonicalCommand == "answer" && !prefix.StartsWith("=", StringComparison.Ordinal))
             {
                 // The question lists all options. An empty argument must not select one by default.

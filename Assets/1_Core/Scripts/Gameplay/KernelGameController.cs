@@ -79,7 +79,7 @@ namespace Codetective.Gameplay
         private string pendingView;
         private bool delivering;
         private bool[] initialLights;
-        private const string CommandLanguagePreference = "Codetective.CommandLanguage";
+        private const string PlayLanguagePreference = "Codetective.PlayLanguage";
         private bool narrativeDirty;
         private float narrativeSaveAt;
         private bool initialized;
@@ -110,8 +110,9 @@ namespace Codetective.Gameplay
                 else { IsSessionActive = false; Feedback = error; }
             }
             ClinicScenario.EnsureKernelProfile(Runtime);
-            int preferredLanguage = PlayerPrefs.GetInt(CommandLanguagePreference, (int)(scenario != null ? scenario.commandLanguage : CommandLocale.Korean));
-            if (Enum.IsDefined(typeof(CommandLocale), preferredLanguage)) Runtime.Language = (CommandLocale)preferredLanguage;
+            CommandLocale defaultLanguage = Runtime.DisplayLanguage == "en" ? CommandLocale.English : CommandLocale.Korean;
+            int preferredLanguage = PlayerPrefs.GetInt(PlayLanguagePreference, (int)defaultLanguage);
+            ApplyPlayLanguage(Enum.IsDefined(typeof(CommandLocale), preferredLanguage) ? (CommandLocale)preferredLanguage : defaultLanguage);
             if (IsSessionActive) Runtime.DeferDayMailUntilIntro();
             Runtime.SceneActionRequested += SceneAction;
             Runtime.DayEnded += AutoSave;
@@ -148,7 +149,7 @@ namespace Codetective.Gameplay
                     inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && (Carry == null || Carry.HeldItem == null) && !ui.SummaryVisible;
             }
             // Bind and build the overlay before optional desk/paper presentation can fail or emit view events.
-            ui.Initialize(this, inspection, font);
+            ui.Initialize(this, inspection, font, views.ControlledCamera, terminalBody);
             gameObject.AddComponent<TitleBrandingView>().Initialize(inspection, views.ControlledCamera, terminalBody, font);
             if (Monitor != null) gameObject.AddComponent<MailNotificationPresenter>().Initialize(this, inspection, Monitor, Transitions.Settings);
             inspection.BackHandler = ui.Back;
@@ -420,10 +421,16 @@ namespace Codetective.Gameplay
 
         public void SetCommandLanguage(CommandLocale language)
         {
-            Runtime.Language = language;
-            PlayerPrefs.SetInt(CommandLanguagePreference, (int)language);
+            ApplyPlayLanguage(language);
+            PlayerPrefs.SetInt(PlayLanguagePreference, (int)language);
             PlayerPrefs.Save();
             if (ui != null) ui.RefreshCommandLanguage();
+        }
+
+        private void ApplyPlayLanguage(CommandLocale language)
+        {
+            Runtime.Language = language;
+            Runtime.DisplayLanguage = language == CommandLocale.Korean ? "ko" : "en";
         }
 
         private void SceneAction(string agent, string action)

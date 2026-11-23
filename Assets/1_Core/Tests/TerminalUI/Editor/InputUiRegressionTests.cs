@@ -151,6 +151,56 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(field.text, Is.EqualTo("  "));
         }
 
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void OrdinarySpaceIsTypedOnceWhetherTheBackendEmitsACharacterOrOnlyAKeyCode(bool hasText, bool textFirst)
+        {
+            field.SetTextWithoutNotify("암호"); field.FocusAtEnd();
+            var physical = new Event { type = EventType.KeyDown, keyCode = KeyCode.Space };
+            var text = new Event { type = EventType.KeyDown, character = ' ' };
+            if (hasText) PumpInput(textFirst ? text : physical, textFirst ? physical : text);
+            else PumpInput(physical);
+            Assert.That(field.text, Is.EqualTo("암호 "));
+        }
+
+        [Test]
+        public void SpaceCommitsHangulAndAddsOnlyOneSpaceWhenThereIsNoSuggestion()
+        {
+            Compose("호");
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
+                new Event { type = EventType.KeyDown, character = '호' }, new Event { type = EventType.KeyDown, character = ' ' });
+            Assert.That(field.text, Is.EqualTo("호 "));
+        }
+
+        [Test]
+        public void PressingEnterToFocusDoesNotSubmitTheExistingDraft()
+        {
+            var runtime = new KernelRuntime();
+            TerminalController controller = Controller(runtime, out _);
+            field.SetTextWithoutNotify("help");
+            events.SetSelectedGameObject(null);
+            Assert.That(controller.TryFocusCommandInput(), Is.True);
+            Invoke(typeof(CompletingInputField), field, "LateUpdate");
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
+            Assert.That(field.isFocused, Is.True);
+            Assert.That(field.text, Is.EqualTo("help"));
+        }
+
+        [Test]
+        public void ClickingBackIntoADraftPlacesACaretWithoutSelectingAllText()
+        {
+            field.SetTextWithoutNotify("연습 = 지휘소");
+            events.SetSelectedGameObject(null);
+            RectTransform text = field.textComponent.rectTransform;
+            Vector2 point = RectTransformUtility.WorldToScreenPoint(null, text.TransformPoint(new Vector3(text.rect.xMin + 40f, text.rect.center.y)));
+            field.OnPointerDown(new PointerEventData(events) { button = PointerEventData.InputButton.Left, position = point, pressPosition = point });
+            Invoke(typeof(CompletingInputField), field, "LateUpdate");
+            Assert.That(field.isFocused, Is.True);
+            Assert.That(field.selectionAnchorPosition, Is.EqualTo(field.selectionFocusPosition));
+            Assert.That(field.text, Is.EqualTo("연습 = 지휘소"));
+        }
+
         [Test]
         public void SubmittingAnOrdinaryCommandKeepsTheInputSelectedAndFocused()
         {
@@ -214,7 +264,18 @@ namespace Codetective.Terminal.Tests.UI
             runtime.AdvanceTerminalConversation(1000);
             TerminalController controller = Controller(runtime, out GameObject completionPanel);
             Invoke(typeof(TerminalController), controller, "LateUpdate");
-            Assert.That(placeholder.text, Is.EqualTo("y / n"));
+            Assert.That(placeholder.text, Is.EqualTo("입력 대기중.."));
+            Transform options = field.transform.Find("TerminalAnswerOptions");
+            Assert.That(options.GetComponentInChildren<Text>().text, Is.EqualTo("대답> [y][n]"));
+            Assert.That(runtime.Execute("도움말").Success, Is.True);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Assert.That(options.gameObject.activeSelf, Is.True);
+            GameObject tooltip = options.Find("TerminalQuestion").gameObject;
+            Assert.That(tooltip.activeSelf, Is.False);
+            ExecuteEvents.Execute(options.gameObject, new PointerEventData(events), ExecuteEvents.pointerEnterHandler);
+            Assert.That(tooltip.GetComponentInChildren<Text>().text, Is.EqualTo("맹세할 수 있습니까?"));
+            ExecuteEvents.Execute(options.gameObject, new PointerEventData(events), ExecuteEvents.pointerExitHandler);
+            Assert.That(tooltip.activeSelf, Is.False);
             field.SetTextWithoutNotify("n");
             field.FocusAtEnd();
             PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
@@ -280,7 +341,7 @@ namespace Codetective.Terminal.Tests.UI
         {
             var host = new GameObject("Controller"); host.transform.SetParent(root.transform); host.SetActive(false);
             var controller = host.AddComponent<TerminalController>();
-            panel = new GameObject("Candidates"); panel.transform.SetParent(root.transform);
+            panel = new GameObject("Candidates", typeof(RectTransform)); panel.transform.SetParent(root.transform);
             var buttons = new Button[3]; var labels = new Text[3];
             for (int i = 0; i < 3; i++)
             {

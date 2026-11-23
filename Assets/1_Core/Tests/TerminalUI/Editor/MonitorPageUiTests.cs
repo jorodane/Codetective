@@ -200,7 +200,7 @@ namespace Codetective.Terminal.Tests.UI
                 var menu = SystemMenu(new SystemMenuActions { GetLanguage = () => language, SetLanguage = value => language = value }); menu.Show(true);
                 MenuButton(menu, "설정").onClick.Invoke();
                 foreach (string tab in new[] { "게임플레이", "비디오", "오디오", "입력" }) Assert.That(MenuButton(menu, tab), Is.Not.Null);
-                SystemSettingChoice choice = menu.GetComponentsInChildren<SystemSettingChoice>().Single(c => c.name == "명령 언어");
+                SystemSettingChoice choice = menu.GetComponentsInChildren<SystemSettingChoice>().Single(c => c.name == "언어");
                 choice.OnMove(new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Right }); Assert.That(language, Is.EqualTo(CommandLocale.English));
                 MenuButton(menu, "오디오").onClick.Invoke(); CrtSlider slider = menu.GetComponentInChildren<CrtSlider>();
                 Assert.That(slider, Is.Not.Null); Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(slider.gameObject));

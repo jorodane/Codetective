@@ -1315,7 +1315,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "명령 입력 · 도움말 / 암호 이름 = 대상"
+  m_Text: "입력 대기중.."
 --- !u!1 &100064
 GameObject:
   m_ObjectHideFlags: 0

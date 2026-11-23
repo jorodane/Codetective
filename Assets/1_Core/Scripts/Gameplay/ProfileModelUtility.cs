@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -5,6 +6,11 @@ namespace Codetective.Gameplay
 {
     public static class ProfileModelUtility
     {
+        private static readonly HashSet<string> SeatedBones = new HashSet<string> {
+            "Hips", "Spine", "Spine1", "Spine2", "Chest", "UpperChest", "Neck", "Head", "LeftShoulder", "RightShoulder",
+            "LeftArm", "RightArm", "LeftForeArm", "RightForeArm", "LeftHand", "RightHand", "LeftUpLeg", "RightUpLeg",
+            "LeftLeg", "RightLeg", "LeftFoot", "RightFoot", "LeftToeBase", "RightToeBase" };
+
         public static void Prepare(GameObject model)
         {
             foreach (Collider collider in model.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
@@ -24,10 +30,25 @@ namespace Codetective.Gameplay
         {
             Transform named = model.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == fallback);
             if (named != null) return named;
-            Animator animator = model.GetComponentInChildren<Animator>();
+            Animator animator = model.GetComponentInChildren<Animator>(true);
             return animator != null && animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman ? animator.GetBoneTransform(bone) : null;
         }
         public static void Dispose(Object value) { if (value != null) { if (Application.isPlaying) Object.Destroy(value); else Object.DestroyImmediate(value); } }
+        public static bool CopySeatPose(GameObject model, Transform reference, Vector3 offset)
+        {
+            if (reference == null) return false;
+            Transform referenceHips = Bone(reference.gameObject, HumanBodyBones.Hips, "Hips");
+            Transform hips = Bone(model, HumanBodyBones.Hips, "Hips");
+            if (referenceHips == null || hips == null) return false;
+
+            var pose = reference.GetComponentsInChildren<Transform>(true).Where(bone => SeatedBones.Contains(bone.name))
+                .GroupBy(bone => bone.name).ToDictionary(group => group.Key, group => group.First().rotation);
+            foreach (Transform bone in model.GetComponentsInChildren<Transform>(true))
+                if (pose.TryGetValue(bone.name, out Quaternion rotation)) bone.rotation = rotation;
+            model.transform.position += referenceHips.position + offset - hips.position;
+            AlignRigCopies(model);
+            return true;
+        }
         public static void Seat(GameObject model, CharacterProfileAsset profile, Vector3 seat)
         {
             if (profile == null || !profile.applySeatedPose) return;
@@ -42,9 +63,13 @@ namespace Codetective.Gameplay
             Aim(Bone(model, HumanBodyBones.RightLowerArm, "RightForeArm"), Bone(model, HumanBodyBones.RightHand, "RightHand"), forward);
             Transform hips = Bone(model, HumanBodyBones.Hips, "Hips");
             if (hips != null) model.transform.position += seat + Vector3.up * profile.seatedHipHeight - hips.position;
+            AlignRigCopies(model);
+        }
+
+        private static void AlignRigCopies(GameObject model)
+        {
             // Modular NPC clothing can carry a second copy of the rig; keep it on the same seated pose.
-            string[] names = { "Hips", "Spine", "Chest", "UpperChest", "Neck", "Head", "LeftShoulder", "RightShoulder", "LeftArm", "RightArm", "LeftForeArm", "RightForeArm", "LeftHand", "RightHand", "LeftUpLeg", "RightUpLeg", "LeftLeg", "RightLeg", "LeftFoot", "RightFoot", "LeftToeBase", "RightToeBase" };
-            foreach (var group in model.GetComponentsInChildren<Transform>(true).Where(t => names.Contains(t.name)).GroupBy(t => t.name))
+            foreach (var group in model.GetComponentsInChildren<Transform>(true).Where(t => SeatedBones.Contains(t.name)).GroupBy(t => t.name))
             {
                 Transform first = group.First();
                 foreach (Transform copy in group.Skip(1)) copy.SetPositionAndRotation(first.position, first.rotation);

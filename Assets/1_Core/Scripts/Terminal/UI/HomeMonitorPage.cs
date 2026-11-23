@@ -46,7 +46,7 @@ namespace Codetective.Terminal
         {
             switch (id)
             {
-                case "kernel": return "명령 작성 · 확보 자료 · Thread · 프로토콜";
+                case "kernel": return "명령 작성 · 권한 목록";
                 case "clinic": return "인물 프로필 · 상담 기록";
                 case "mail": return "커널 메일 · 상담소 메일 · 예약 문의";
                 case "schedule": return "날짜별 예약 · 상담 일정";

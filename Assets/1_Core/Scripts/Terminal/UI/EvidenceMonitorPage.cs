@@ -18,7 +18,6 @@ namespace Codetective.Terminal
         private Text status, detail, feedback;
         private MonitorNoteInput search, referenceName;
         private Button bind;
-        private Button shortcut;
         private Image photo;
         private DataViewerView viewer;
         private readonly List<Button> filters = new List<Button>();
@@ -33,9 +32,6 @@ namespace Codetective.Terminal
         {
             runtime = value; font = typeface; host = GetComponentInParent<MonitorPageHost>(); terminal = host.GetComponent<TerminalController>();
             if (rows == null) Build();
-            MonitorPage kernel = host.FindPage("kernel");
-            if (shortcut == null && kernel != null)
-                shortcut = MonitorWidgets.Button(kernel.transform, font, new Vector2(810, -132), new Vector2(282, 38), "확보 자료", () => host.ShowPage("evidence"));
             signature = null; Refresh();
         }
         private void OnEnable() { if (runtime != null && rows != null) Refresh(); }

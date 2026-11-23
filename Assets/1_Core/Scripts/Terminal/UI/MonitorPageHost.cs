@@ -40,10 +40,8 @@ namespace Codetective.Terminal
         private readonly HashSet<string> worldDataIds = new HashSet<string>(StringComparer.Ordinal);
         private float nextMailRefresh;
         private int unreadMailCount;
-        private Image headerBackground;
         private float mailBlinkSeconds = 0.55f;
-        private float mailBannerUntil;
-        private int receivedMailCount;
+        private float mailBlinkStarted;
         private readonly HashSet<object> overlays = new HashSet<object>();
         private readonly object legacyOverlay = new object();
         public MonitorPage CurrentPage { get; private set; }
@@ -53,7 +51,6 @@ namespace Codetective.Terminal
         public int SelectedScheduleDay { get; set; }
         public int ProfilePageRevision { get; private set; }
         public bool SystemMenuVisible { get; private set; }
-        public bool MailNotificationVisible => initialized && Time.unscaledTime < mailBannerUntil;
         public Font DisplayFont => Font;
         public Action WaitForAppointment { get; set; }
         public Action FinishConsultation { get; set; }
@@ -137,7 +134,6 @@ namespace Codetective.Terminal
             if (initialized || navigationRoot == null) return;
             terminal = terminal != null ? terminal : GetComponent<TerminalController>();
             runtime = runtime ?? terminal?.Runtime;
-            BuildHeader();
             BuildNavigation();
             navigation.Changed += Display;
             initialized = true;
@@ -259,21 +255,10 @@ namespace Codetective.Terminal
             tabScroll.content = tabContent; tabScroll.viewport = viewport; tabScroll.horizontal = true; tabScroll.vertical = false;
             tabScroll.movementType = ScrollRect.MovementType.Clamped; tabScroll.scrollSensitivity = 40;
         }
-        private void BuildHeader()
-        {
-            if (heading == null) return;
-            RectTransform bar = MonitorWidgets.Rect("TerminalHeaderBackground", transform, Vector2.zero, Vector2.zero);
-            bar.anchorMin = new Vector2(0, 1); bar.anchorMax = Vector2.one;
-            bar.offsetMin = new Vector2(16, -72); bar.offsetMax = new Vector2(-16, -12);
-            bar.SetAsFirstSibling();
-            headerBackground = bar.gameObject.AddComponent<Image>(); headerBackground.raycastTarget = false; headerBackground.color = Color.clear;
-            bar.gameObject.AddComponent<CrtMeshEffect>();
-        }
         public bool ShowMailReceived(int count, PresentationSettings settings)
         {
-            if (!initialized || heading == null || headerBackground == null || SystemMenuVisible || count <= 0) return false;
-            receivedMailCount = MailNotificationVisible ? receivedMailCount + count : count;
-            mailBannerUntil = Time.unscaledTime + Mathf.Max(0.5f, settings != null ? settings.mailBannerSeconds : 1.2f);
+            if (!initialized || !tabs.ContainsKey("mail") || SystemMenuVisible || count <= 0) return false;
+            mailBlinkStarted = Time.unscaledTime;
             mailBlinkSeconds = Mathf.Max(0.15f, settings != null ? settings.mailBlinkSeconds : 0.55f);
             RefreshUnreadMail();
             RefreshHeader();
@@ -287,20 +272,13 @@ namespace Codetective.Terminal
         }
         private void RefreshHeader()
         {
-            bool notifying = MailNotificationVisible && !SystemMenuVisible;
-            bool blinkMail = !notifying && !SystemMenuVisible && unreadMailCount > 0 &&
-                Mathf.Repeat(Time.unscaledTime - mailBannerUntil, mailBlinkSeconds * 2) < mailBlinkSeconds;
+            bool blinkMail = !SystemMenuVisible && unreadMailCount > 0 &&
+                Mathf.Repeat(Time.unscaledTime - mailBlinkStarted, mailBlinkSeconds * 2) < mailBlinkSeconds;
             Color selected = MonitorWidgets.SelectedButtonColor;
-            if (headerBackground != null) headerBackground.color = notifying ? selected : Color.clear;
-            if (heading != null)
-                heading.text = notifying ? "메일 수신 · " + receivedMailCount + "건" : "CODETECTIVE / " + (CurrentPage != null ? CurrentPage.Title : "");
-            Color navigationColor = notifying ? selected : MonitorWidgets.ButtonColor;
-            back.image.color = navigationColor;
-            forward.image.color = navigationColor;
-            home.image.color = navigationColor;
+            if (heading != null) heading.text = "CODETECTIVE / " + (CurrentPage != null ? CurrentPage.Title : "");
             foreach (var tab in tabs)
             {
-                Color color = notifying || tab.Key == CurrentMenuId ? selected : MonitorWidgets.ButtonColor;
+                Color color = tab.Key == CurrentMenuId ? selected : MonitorWidgets.ButtonColor;
                 if (blinkMail && tab.Key == "mail") color = UnreadMailColor;
                 tab.Value.image.color = color;
             }

@@ -72,7 +72,7 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
-        public void MailArrivalUsesTheSelectedColorThenOnlyTheUnreadMailTabPulses()
+        public void MailArrivalImmediatelyPulsesOnlyTheMailTabUntilTheMailIsRead()
         {
             var root = new GameObject("Monitor", typeof(RectTransform));
             root.SetActive(false);
@@ -87,27 +87,23 @@ namespace Codetective.Terminal.Tests.UI
                 host.ShowPage("kernel");
                 var tabs = (Dictionary<string, Button>)typeof(MonitorPageHost)
                     .GetField("tabs", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(host);
-                Image bar = root.transform.Find("TerminalHeaderBackground").GetComponent<Image>();
                 Color selected = tabs["kernel"].image.color;
                 Color idle = tabs["mail"].image.color;
+                Text heading = root.transform.Find("Heading").GetComponent<Text>();
+                string pageHeading = heading.text;
 
                 runtime.RegisterMail(new StoryMail { id = "new", subject = "임무", mailbox = Mailbox.Kernel });
                 Assert.That(host.ShowMailReceived(1, null), Is.True);
-                Assert.That(bar.color, Is.EqualTo(selected));
-                Assert.That(tabs["mail"].image.color, Is.EqualTo(selected));
-
-                Set(host, "mailBannerUntil", Time.unscaledTime - 0.1f);
-                Invoke(host, "RefreshHeader");
-                Assert.That(bar.color, Is.EqualTo(Color.clear));
+                Assert.That(heading.text, Is.EqualTo(pageHeading));
                 Assert.That(tabs["kernel"].image.color, Is.EqualTo(selected));
                 Assert.That(tabs["mail"].image.color, Is.Not.EqualTo(idle));
 
-                Set(host, "mailBannerUntil", Time.unscaledTime - 0.65f);
+                Set(host, "mailBlinkStarted", Time.unscaledTime - 0.65f);
                 Invoke(host, "RefreshHeader");
                 Assert.That(tabs["mail"].image.color, Is.EqualTo(idle));
 
                 runtime.ReadMail("new");
-                Set(host, "mailBannerUntil", Time.unscaledTime - 0.1f);
+                Set(host, "mailBlinkStarted", Time.unscaledTime - 0.1f);
                 Invoke(host, "RefreshUnreadMail");
                 Invoke(host, "RefreshHeader");
                 Assert.That(tabs["mail"].image.color, Is.EqualTo(idle));

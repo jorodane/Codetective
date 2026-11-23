@@ -24,8 +24,8 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = World(commands, display); int sent = 0; int entities = r.World.Objects.Count;
             string[] expected = commands == CommandLocale.Korean
-                ? new[] { "도움말", "암호 연습", "암호 연습 = 지휘소;", "연습.통신확인();", "삭제 연습" }
-                : new[] { "help", "code practice", "code practice = hq;", "practice.checkComms();", "free practice" };
+                ? new[] { "도움말", "암호 연습", "연습 = 지휘소", "연습.통신확인()", "삭제 연습" }
+                : new[] { "help", "code practice", "practice = hq", "practice.checkComms()", "free practice" };
             while (r.TerminalConversationActive && sent < 10)
             {
                 r.AdvanceTerminalConversation(1000);
@@ -63,14 +63,17 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Execute("var practice").Success, Is.True);
             KernelSnapshot snapshot = r.Capture();
             foreach (TerminalConversationLog entry in snapshot.terminalConversations[0].log)
-                if (entry.englishCommand.StartsWith("code ", System.StringComparison.Ordinal))
+                if (entry.textKey == "onboarding.reference") entry.englishCommand = "var practice = hq;";
+                else if (entry.englishCommand.StartsWith("code ", System.StringComparison.Ordinal))
                     entry.englishCommand = "var " + entry.englishCommand.Substring(5);
 
             KernelRuntime restored = World(CommandLocale.English, "en");
             restored.Restore(snapshot);
             restored.AdvanceTerminalConversation(1000);
-            Assert.That(restored.TerminalExpectedCommand, Is.EqualTo("code practice = hq;"));
-            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Enter code practice = hq;"));
+            Assert.That(restored.TerminalExpectedCommand, Is.EqualTo("practice = hq"));
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("\npractice = hq").And.Not.Contain("code practice = hq;"));
+            Assert.That(restored.Execute("practice = hq").Success, Is.True);
+            Assert.That(restored.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("invoke"));
         }
         [Test] public void ThirdSuccessfulDetourUsesTheAuthoredAngryReplyAndRecoversToTheSameLesson()
         {

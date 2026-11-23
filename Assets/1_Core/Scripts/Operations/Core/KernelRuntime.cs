@@ -34,8 +34,8 @@ namespace Codetective.Operations
             "code <name> : register an empty substitution\nfree <name> : discard a substitution\n" +
             "answer <choice> : respond to the current question (or enter just the choice)\nhelp : list commands\n\n" +
             "Assign references to existing objects; new/malloc are unavailable.\n" +
-            "object. lists currently available commands.\nname = object.command(input);\n" +
-            "Examples: hq.requestCoffee();\ndoc = archive.inspect();\nthread01.run(recon, archive);\n" +
+            "object. lists currently available commands.\nname = target\nname = object.command(input)\n" +
+            "Examples: hq.requestCoffee()\ndoc = archive.inspect()\nthread01.run(recon, archive)\n" +
             "Protocol editor: protocol recon(Place target) { return target.inspect(); }";
 
         public void Register(Entity entity, params string[] rootAliases) => Register(entity, true, rootAliases);

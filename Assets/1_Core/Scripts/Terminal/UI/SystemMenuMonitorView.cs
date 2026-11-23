@@ -132,8 +132,8 @@ namespace Codetective.Terminal
                 case "guide":
                     MonitorWidgets.ScrollText(content, font, Vector2.zero, new Vector2(1000, 344)).text =
                         "화면 이동\n1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기\nESC 물건 내려놓기 → 전체 보기 → 메뉴 · Q 전체 보기 · F5 빠른 저장\n입력 중에는 화면 이동과 빠른 저장 단축키가 작동하지 않습니다.\n\n" +
-                        "터미널\n입력창을 클릭해서 명령을 작성하세요.\n대상 뒤에 '.'을 입력하면 권한 목록을 볼 수 있습니다.\nTab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정\n다음 Enter로 명령 실행 · 입력하지 않을 때 Tab / Shift+Tab 메뉴 이동\nhelp / 도움말: 사용 가능한 명령 확인\n\n" +
-                        "확보 자료와 상담\n커널 → 확보 자료에서 도구와 단서를 보고 명령용 참조를 연결하세요.\n상담소에서 프로필과 상담 일지를 기록할 수 있습니다.\n스케쥴에서 다음 예약까지 기다리거나 상담을 마칠 수 있습니다.\n\n" +
+                        "터미널\n입력창을 클릭하거나 Enter로 명령창에 돌아올 수 있습니다.\n대상 뒤에 '.'을 입력하면 권한 목록을 볼 수 있습니다.\nTab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정\n다음 Enter로 명령 실행 · 입력하지 않을 때 Tab / Shift+Tab 메뉴 이동\nhelp / 도움말: 사용 가능한 명령 확인\n\n" +
+                        "상담\n상담소에서 프로필과 상담 일지를 기록할 수 있습니다.\n스케쥴에서 다음 예약까지 기다리거나 상담을 마칠 수 있습니다.\n\n" +
                         "물건 확인\n물건을 클릭해서 확인하고 '내려놓기'로 배치하세요.\n배치 중 서랍 클릭 / 4 서랍 앵글 · 서랍 앞면 클릭: 열기 / 닫기\n우클릭: 배치 취소 · 종이의 인쇄 영역 클릭: 내용 읽기";
                     Option(5, "돌아가기", () => Open("main"));
                     break;
@@ -255,7 +255,7 @@ namespace Codetective.Terminal
             switch (settingsCategory)
             {
                 case 0:
-                    AddSettingChoice(page, "명령 언어", () => (actions.GetLanguage?.Invoke() ?? CommandLocale.Korean) == CommandLocale.Korean ? "한국어" : "English",
+                    AddSettingChoice(page, "언어", () => (actions.GetLanguage?.Invoke() ?? CommandLocale.Korean) == CommandLocale.Korean ? "한국어" : "English",
                         () => actions.SetLanguage?.Invoke((actions.GetLanguage?.Invoke() ?? CommandLocale.Korean) == CommandLocale.Korean ? CommandLocale.English : CommandLocale.Korean), actions.SetLanguage != null);
                     break;
                 case 1:

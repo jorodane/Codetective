@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text;
+using Codetective.Operations;
 using NUnit.Framework;
 
 namespace Codetective.Terminal.Tests
@@ -116,6 +117,31 @@ namespace Codetective.Terminal.Tests
             Assert.That(session.Complete("free clue extra"), Is.Empty);
             Assert.That(session.Complete("free\nclue"), Is.Empty);
             Assert.That(session.Count, Is.EqualTo(1));
+        }
+
+        [TestCase(CommandLocale.Korean, "암호 ㅇ", "암호 연습", "연", "연습", "연습 = 지", "연습 = 지휘소")]
+        [TestCase(CommandLocale.English, "code pr", "code practice", "pr", "practice", "practice = h", "practice = hq")]
+        public void LessonCompletesTheNameAndBindsTheExistingSlotWithoutRedeclaring(CommandLocale language, string prefix,
+            string declaration, string namePrefix, string name, string targetPrefix, string assignment)
+        {
+            KernelRuntime runtime = ClinicScenario.Create(); runtime.Language = language;
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "practice", koreanVariableBase = "연습",
+                steps = new[] {
+                    new TerminalConversationStep { id = "allocate", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate } },
+                    new TerminalConversationStep { id = "bind", goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } }
+                } });
+            runtime.EnterTerminalPage("kernel");
+            var session = new TerminalSession(runtime);
+            bool composing = language == CommandLocale.Korean;
+            Assert.That(session.Complete(prefix, composing).Single().ReplacementText, Is.EqualTo(declaration));
+            Assert.That(session.Execute(declaration).Success, Is.True);
+            Assert.That(runtime.TerminalExpectedCommand, Is.EqualTo(assignment));
+            Assert.That(session.Complete(namePrefix).Select(c => c.ReplacementText), Does.Contain(name));
+            Assert.That(session.Complete(prefix, composing).Single().ReplacementText, Is.EqualTo(declaration + " = "));
+            Assert.That(session.Complete(targetPrefix).Select(c => c.ReplacementText), Does.Contain(assignment));
+            Assert.That(session.Execute(assignment).Success, Is.True);
+            Assert.That(runtime.Data[name].value.id, Is.EqualTo("hq"));
+            Assert.That(runtime.TerminalConversationActive, Is.False);
         }
 
         [Test]

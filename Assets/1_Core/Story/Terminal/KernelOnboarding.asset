@@ -110,7 +110,7 @@ MonoBehaviour:
         quests: []
     - id: reference
       lines:
-      - text: '다음 명령으로 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.
+      - text: '이미 등록한 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.
 
           {command}'
         textKey: onboarding.reference

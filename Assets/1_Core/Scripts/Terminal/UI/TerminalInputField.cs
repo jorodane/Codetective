@@ -22,8 +22,20 @@ namespace Codetective.Terminal
 
         public override void OnPointerDown(PointerEventData eventData)
         {
+            bool entering = !isFocused && IsActive() && IsInteractable() && eventData.button == PointerEventData.InputButton.Left;
             using (new CrtPointerProjection(eventData, CurvedScreen))
+            {
                 base.OnPointerDown(eventData);
+                if (entering && textComponent != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    textComponent.rectTransform, eventData.position, eventData.pressEventCamera, out Vector2 point))
+                    FocusAt(Mathf.Clamp(GetCharacterIndexFromPosition(point) + m_DrawStart, 0, text.Length));
+            }
+        }
+
+        public void FocusFromEnter()
+        {
+            IgnoreEnterForCurrentFrame();
+            FocusAtEnd();
         }
 
         public override void OnDrag(PointerEventData eventData)

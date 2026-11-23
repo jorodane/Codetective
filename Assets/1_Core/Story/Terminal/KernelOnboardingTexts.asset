@@ -39,18 +39,6 @@ MonoBehaviour:
   - key: profile.regularVisitor.name
     language: en
     text: Han Jeong-woo
-  - key: terminal.dialogue.receiving
-    language: ko
-    text: 수신 중 · 안내가 끝나면 입력할 수 있습니다.
-  - key: terminal.dialogue.receiving
-    language: en
-    text: Receiving · wait until the message finishes.
-  - key: terminal.dialogue.command
-    language: ko
-    text: 안내 명령
-  - key: terminal.dialogue.command
-    language: en
-    text: Requested command
   - key: terminal.dialogue.standby
     language: ko
     text: 작전망 연결 대기
@@ -119,12 +107,14 @@ MonoBehaviour:
     text: Let's register an empty substitution. Enter {command}. We will use the name {slot} for this exercise.
   - key: onboarding.reference
     language: ko
-    text: '다음 명령으로 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.
+    text: '이미 등록한 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.
 
       {command}'
   - key: onboarding.reference
     language: en
-    text: Enter {command} to bind {slot} to headquarters. Write the target on the right of the equals sign.
+    text: |-
+      Bind the substitution you registered to headquarters. Write the target on the right of the equals sign.
+      {command}
   - key: onboarding.substitution
     language: ko
     text: 이제 지휘소를 가리키는 이름은 {slot}입니다.

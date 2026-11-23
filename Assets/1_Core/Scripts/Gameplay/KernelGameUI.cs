@@ -55,6 +55,7 @@ namespace Codetective.Gameplay
         private GameObject saveNoticeRoot;
         private Text saveNotice;
         private ProfileArchiveView profileArchive;
+        private ConsultationOverlay dialogue;
         private float saveNoticeUntil;
         public bool IsInitialized { get; private set; }
         public bool SummaryVisible => clinicDay != null && clinicDay.SummaryVisible;
@@ -62,7 +63,7 @@ namespace Codetective.Gameplay
         public bool IsCompositionProtected => (protocolSource is CompletingInputField source && source.isFocused && source.IsCompositionProtected) ||
             (arguments is CompletingInputField args && args.isFocused && args.IsCompositionProtected);
 
-        public void Initialize(KernelGameController game, InspectionController inspection, Font font)
+        public void Initialize(KernelGameController game, InspectionController inspection, Font font, Camera view, Transform terminalBody)
         {
             if (IsInitialized) return;
             this.game = game; this.inspection = inspection;
@@ -91,9 +92,9 @@ namespace Codetective.Gameplay
             feedback = Label(panel, new Vector2(20, -552), new Vector2(530, 54), "", 17);
             panel.gameObject.SetActive(false);
             BuildOperationsPage();
-            var dialogue = GetComponent<ConsultationOverlay>();
+            dialogue = GetComponent<ConsultationOverlay>();
             if (dialogue == null) dialogue = gameObject.AddComponent<ConsultationOverlay>();
-            dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation);
+            dialogue.Initialize(game, inspection, root.transform, this.font, game.DialoguePresentation, view, terminalBody);
             BuildItemControls();
             RectTransform archiveRoot = OverlayWidgets.Rect("ProfileArchive", root.transform, new Vector2(-18, -86), new Vector2(250, 534), new Vector2(1, 1));
             profileArchive = archiveRoot.gameObject.AddComponent<ProfileArchiveView>();
@@ -116,6 +117,7 @@ namespace Codetective.Gameplay
         private void Update()
         {
             if (!IsInitialized) return;
+            if (profileArchive.IsVisible) profileArchive.SetTopInset(dialogue.TopInset);
             if (saveNoticeRoot.activeSelf && Time.unscaledTime >= saveNoticeUntil) saveNoticeRoot.SetActive(false);
             bool inMenu = inspection.Mode == InspectionMode.Menu || inspection.PresentingOnTerminal || DayStartVisible || game.IsDateTransitioning;
             interfaceInteraction.alpha = inMenu ? 0 : 1;
@@ -265,12 +267,6 @@ namespace Codetective.Gameplay
             foreach (Graphic graphic in page.GetComponentsInChildren<Graphic>(true))
                 if (graphic.GetComponent<CrtMeshEffect>() == null) graphic.gameObject.AddComponent<CrtMeshEffect>();
             host.Register(definition);
-            MonitorPage kernel = host.FindPage("kernel");
-            if (kernel != null)
-            {
-                Button tools = OverlayWidgets.Button(kernel.transform, font, new Vector2(610, -84), new Vector2(148, 34), "작전 도구", () => host.ShowPage("operations"));
-                foreach (Graphic graphic in tools.GetComponentsInChildren<Graphic>(true)) graphic.gameObject.AddComponent<CrtMeshEffect>();
-            }
         }
         public void RefreshCommandLanguage() { if (languageLabel != null) RefreshLanguageLabel(); }
         private void BuildItemControls()
