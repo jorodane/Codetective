@@ -25,8 +25,9 @@ namespace Codetective.Terminal.Tests
             var committed = new TerminalCompletionInput("save 단서", "", 7, 7);
             submit.Request(5, composing);
             submit.Request(5, committed);
-            Assert.That(submit.TryTake(committed, out string line), Is.True);
+            Assert.That(submit.TryTake(committed, out string line, out bool hadComposition), Is.True);
             Assert.That(line, Is.EqualTo("save 단서"));
+            Assert.That(hadComposition, Is.True, "IME cleanup is still needed after the backend commits the syllable.");
             submit.Request(5, committed);
             Assert.That(submit.TryTake(committed, out _), Is.False);
         }
@@ -38,6 +39,17 @@ namespace Codetective.Terminal.Tests
             submit.Request(1, new TerminalCompletionInput("save 단", "", 6, 6));
             Assert.That(submit.TryTake(new TerminalCompletionInput("save 단서", "", 7, 7), out string line), Is.True);
             Assert.That(line, Is.EqualTo("save 단서"));
+        }
+
+        [Test]
+        public void OrdinarySubmissionDoesNotRequireEndingTheInputSession()
+        {
+            var submit = new TerminalSubmission();
+            var input = new TerminalCompletionInput("help", "", 4, 4);
+            submit.Request(1, input);
+            Assert.That(submit.TryTake(input, out string line, out bool hadComposition), Is.True);
+            Assert.That(line, Is.EqualTo("help"));
+            Assert.That(hadComposition, Is.False);
         }
 
         [Test]

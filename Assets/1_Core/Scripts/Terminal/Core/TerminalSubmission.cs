@@ -18,12 +18,18 @@ namespace Codetective.Terminal
             pending = true;
         }
 
-        public bool TryTake(TerminalCompletionInput current, out string line)
+        public bool TryTake(TerminalCompletionInput current, out string line) => TryTake(current, out line, out _);
+
+        public bool TryTake(TerminalCompletionInput current, out string line, out bool hadComposition)
         {
             line = string.Empty;
+            hadComposition = false;
             if (!pending)
                 return false;
             pending = false;
+            // Keep IME cleanup required even if the OS finished composing between
+            // the Enter gesture and delivery of the submitted command.
+            hadComposition = requested.IsComposing || current.IsComposing;
             // The OS may deliver committed characters after its Enter event. If a
             // composition was visible at the keypress, its snapshot is already complete.
             line = requested.IsComposing ? requested.Text : current.Text;

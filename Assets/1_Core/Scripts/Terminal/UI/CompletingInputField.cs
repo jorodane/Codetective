@@ -79,15 +79,18 @@ namespace Codetective.Terminal
                 UpdateLabel();
             }
             if (isFocused) PollPhysicalKeys();
+            bool protectedComposition = IsCompositionProtected;
             wasComposing = IsComposing;
             if (pendingCompletion.HasValue)
             {
                 ApplyPendingCompletion();
                 return;
             }
-            if (isFocused && submission.TryTake(CompletionInput, out string line))
+            if (isFocused && submission.TryTake(CompletionInput, out string line, out bool hadComposition))
             {
-                FinishImeSession();
+                // Ordinary submission can keep the selected field and its caret alive.
+                // A composed command must drain its IME session before being cleared.
+                if (protectedComposition || hadComposition) FinishImeSession();
                 LineSubmitted?.Invoke(line);
             }
         }
@@ -114,25 +117,29 @@ namespace Codetective.Terminal
             while (Event.PopEvent(keyEvent))
             {
                 if (keyEvent.rawType == EventType.KeyDown)
-                {
-                    // Preserve ordinary text typed immediately after accepting a Latin suggestion.
-                    // IME commits are drained first and the final replacement is applied in LateUpdate.
-                    if (pendingCompletion.HasValue && !pendingHadComposition && !TryGetCompletionKey(keyEvent.keyCode, out _)) ApplyPendingCompletion();
-                    bool handled;
-                    if (TryGetCompletionKey(keyEvent.keyCode, out CompletionKey key))
-                    {
-                        keyEventFrames[(int)key] = Time.frameCount;
-                        handled = IsHeldRepeat(key) || HandleCompletionKey(key);
-                    }
-                    else handled = HandleEditorKey(keyEvent.keyCode, IsCompositionProtected);
-                    if (!handled) ProcessEditingKey(keyEvent);
-                    UpdateLabel();
-                }
+                    ProcessKeyDown(keyEvent);
                 else if ((keyEvent.type == EventType.ValidateCommand || keyEvent.type == EventType.ExecuteCommand) && keyEvent.commandName == "SelectAll")
                 { CommitComposition(); SelectAll(); }
             }
             UpdateLabel();
             eventData.Use();
+        }
+
+        private void ProcessKeyDown(Event inputEvent)
+        {
+            bool completionKey = TryGetCompletionKey(inputEvent, out CompletionKey key);
+            // Preserve ordinary text typed immediately after accepting a Latin suggestion.
+            // IME commits are drained first and the final replacement is applied in LateUpdate.
+            if (pendingCompletion.HasValue && !pendingHadComposition && !completionKey) ApplyPendingCompletion();
+            bool handled;
+            if (completionKey)
+            {
+                keyEventFrames[(int)key] = Time.frameCount;
+                handled = IsHeldRepeat(key) || HandleCompletionKey(key);
+            }
+            else handled = HandleEditorKey(inputEvent.keyCode, IsCompositionProtected);
+            if (!handled) ProcessEditingKey(inputEvent);
+            UpdateLabel();
         }
 
         protected virtual bool HandleEditorKey(KeyCode key, bool protectComposition) => protectComposition &&
@@ -412,8 +419,21 @@ namespace Codetective.Terminal
             if (!focused && isFocused) { EndImeSession(); DeactivateInputField(); HideInlinePreview(); }
         }
 
-        private static bool TryGetCompletionKey(KeyCode key, out CompletionKey completionKey)
+        private static bool TryGetCompletionKey(Event inputEvent, out CompletionKey completionKey)
         {
+            KeyCode key = inputEvent.keyCode;
+            // The input backend can send the physical key and its text as separate
+            // events. Route both through the same per-frame completion guard instead
+            // of inserting the confirming character after applying the suggestion.
+            if (key == KeyCode.None)
+            {
+                switch (inputEvent.character)
+                {
+                    case ' ': key = KeyCode.Space; break;
+                    case '\t': key = KeyCode.Tab; break;
+                    case '\r': case '\n': key = KeyCode.Return; break;
+                }
+            }
             if (key == KeyCode.Return || key == KeyCode.KeypadEnter) { completionKey = CompletionKey.Enter; return true; }
             if (key == KeyCode.Tab) { completionKey = CompletionKey.Tab; return true; }
             completionKey = CompletionKey.Space;

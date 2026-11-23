@@ -16,7 +16,7 @@ namespace Codetective.Terminal
         private CrtScreen conversationScreen;
 
         private void ResetConversationPresentation()
-        { mergedConversations.Clear(); renderedConversationRevision = -1; renderedConversationLocale = null; renderedConversationId = null; conversationInputLocked = false; ClearConversationDisturbance(); }
+        { mergedConversations.Clear(); renderedConversationRevision = -1; renderedConversationLocale = null; renderedConversationId = null; conversationInputLocked = false; restoreCommandFocus = false; ClearConversationDisturbance(); }
         private void ClearConversationDisturbance()
         { if (conversationScreen != null) conversationScreen.SetConversationDisturbance(0); }
         private void MergeCompletedConversation()

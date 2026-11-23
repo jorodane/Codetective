@@ -93,9 +93,161 @@ namespace Codetective.Terminal.Tests.UI
         [Test]
         public void EmptyArrowBrowsingStaysOpenAcrossActualControllerWorldRefreshes()
         {
+            var runtime = new KernelRuntime();
+            var controller = Controller(runtime, out GameObject panel);
+            Invoke(typeof(TerminalController), controller, "MoveCompletion", 1);
+            Assert.That(panel.activeSelf, Is.True);
+            for (int i = 0; i < 5; i++)
+            {
+                runtime.Tick(1);
+                Invoke(typeof(TerminalController), controller, "LateUpdate");
+                Assert.That(panel.activeSelf, Is.True, "The default refresh must remember explicit empty-prompt browsing.");
+                Invoke(typeof(TerminalController), controller, "MoveCompletion", 1);
+            }
+        }
+
+        [TestCase(KeyCode.Space, ' ', false)]
+        [TestCase(KeyCode.Space, ' ', true)]
+        [TestCase(KeyCode.Tab, '\t', false)]
+        [TestCase(KeyCode.Return, '\r', false)]
+        public void PhysicalAndTextConfirmationEventsAcceptOnlyOnce(KeyCode key, char character, bool textFirst)
+        {
+            field.SetTextWithoutNotify("sa"); field.FocusAtEnd();
+            field.CompletionQuery = _ => new InlineCompletion("save ", 5);
+            int submissions = 0; field.LineSubmitted += _ => submissions++;
+            var physical = new Event { type = EventType.KeyDown, keyCode = key };
+            var text = new Event { type = EventType.KeyDown, character = character };
+            PumpInput(textFirst ? text : physical, textFirst ? physical : text);
+            Assert.That(field.text, Is.EqualTo("save "));
+            Assert.That(submissions, Is.Zero);
+        }
+
+        [Test]
+        public void APolledSpaceAndItsTextEchoDoNotLoseTheNextTypedName()
+        {
+            field.SetTextWithoutNotify("sa"); field.FocusAtEnd();
+            field.CompletionQuery = _ => new InlineCompletion("save ", 5);
+            Invoke(typeof(CompletingInputField), field, "Poll", CompletionKey.Space);
+            PumpInput(new Event { type = EventType.KeyDown, character = ' ' },
+                new Event { type = EventType.KeyDown, character = 'x' });
+            Assert.That(field.text, Is.EqualTo("save x"));
+        }
+
+        [Test]
+        public void SpaceConfirmsLiveKoreanCompletionWithoutAppendingADelimiterEcho()
+        {
+            Compose("ㅈ"); field.CompletionQuery = _ => new InlineCompletion("저장 ", 3);
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
+                new Event { type = EventType.KeyDown, character = ' ' });
+            Assert.That(field.text, Is.EqualTo("저장 "));
+        }
+
+        [Test]
+        public void SpacesWithoutASuggestionRemainAvailableForIndentation()
+        {
+            field.lineType = InputField.LineType.MultiLineNewline;
+            PumpInput(new Event { type = EventType.KeyDown, character = ' ' },
+                new Event { type = EventType.KeyDown, character = ' ' });
+            Assert.That(field.text, Is.EqualTo("  "));
+        }
+
+        [Test]
+        public void SubmittingAnOrdinaryCommandKeepsTheInputSelectedAndFocused()
+        {
+            var runtime = new KernelRuntime(); Controller(runtime, out _);
+            Submit("save sample");
+            Assert.That(runtime.Data.ContainsKey("sample"), Is.True);
+            Assert.That(field.text, Is.Empty);
+            Assert.That(events.currentSelectedGameObject, Is.EqualTo(field.gameObject));
+            Assert.That(field.isFocused, Is.True);
+        }
+
+        [Test]
+        public void SubmittingAComposedNameRestoresFocusAndConsumesTheDelayedImeCommit()
+        {
+            var runtime = new KernelRuntime(); Controller(runtime, out _);
+            field.SetTextWithoutNotify("save "); field.FocusAtEnd(); Compose("단");
+            field.CompletionQuery = _ => null;
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
+            Invoke(typeof(CompletingInputField), field, "LateUpdate");
+            PumpInput(new Event { type = EventType.KeyDown, character = '단' });
+            Assert.That(runtime.Data.ContainsKey("단"), Is.True);
+            Assert.That(field.text, Is.Empty);
+            Assert.That(field.isFocused, Is.True);
+            Assert.That(events.currentSelectedGameObject, Is.EqualTo(field.gameObject));
+        }
+
+        [Test]
+        public void ADialogueReplyRestoresTheSubmittedCommandFocusAfterUnlocking()
+        {
+            KernelRuntime runtime = Dialogue(); var controller = Controller(runtime, out _);
+            Submit("help");
+            Assert.That(runtime.TerminalInputLocked, Is.True);
+            Assert.That(field.isFocused, Is.False);
+            runtime.AdvanceTerminalConversation(1000);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Invoke(typeof(CompletingInputField), field, "LateUpdate");
+            Assert.That(field.interactable, Is.True);
+            Assert.That(events.currentSelectedGameObject, Is.EqualTo(field.gameObject));
+            Assert.That(field.isFocused, Is.True);
+        }
+
+        [TestCase("page")]
+        [TestCase("interaction")]
+        [TestCase("selection")]
+        public void LeavingDuringADialogueReplyCancelsCommandFocusRestoration(string destination)
+        {
+            KernelRuntime runtime = Dialogue(); var controller = Controller(runtime, out _);
+            Submit("help");
+            Assert.That(runtime.TerminalInputLocked, Is.True);
+            if (destination == "page") { controller.SetPageVisible(false); controller.SetPageVisible(true); }
+            else if (destination == "interaction") { controller.SetInteractionEnabled(false); controller.SetInteractionEnabled(true); }
+            else
+            {
+                var other = new GameObject("Other control", typeof(RectTransform), typeof(Button)); other.transform.SetParent(root.transform);
+                events.SetSelectedGameObject(other);
+                Invoke(typeof(TerminalController), controller, "LateUpdate");
+                events.SetSelectedGameObject(null);
+            }
+            runtime.AdvanceTerminalConversation(1000);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Invoke(typeof(CompletingInputField), field, "LateUpdate");
+            Assert.That(field.interactable, Is.True);
+            Assert.That(field.isFocused, Is.False);
+            Assert.That(events.currentSelectedGameObject, Is.Null);
+        }
+
+        private static KernelRuntime Dialogue()
+        {
+            var runtime = new KernelRuntime();
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "focus", steps = new[] {
+                new TerminalConversationStep { id = "command", lines = new[] { new TerminalDialogueLine { text = "Enter help." } },
+                    goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
+                new TerminalConversationStep { id = "reply", lines = new[] { new TerminalDialogueLine { text = "Receiving the next instructions.", charactersPerSecond = 1 } } }
+            } });
+            runtime.EnterTerminalPage("kernel"); runtime.AdvanceTerminalConversation(1000);
+            Assert.That(runtime.TerminalInputLocked, Is.False);
+            return runtime;
+        }
+
+        private void Submit(string command)
+        {
+            field.SetTextWithoutNotify(command); field.FocusAtEnd();
+            field.CompletionQuery = _ => null;
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
+        }
+
+        private void PumpInput(params Event[] keys)
+        {
+            foreach (Event key in keys) Invoke(typeof(CompletingInputField), field, "ProcessKeyDown", key);
+            Invoke(typeof(CompletingInputField), field, "LateUpdate");
+        }
+
+        private TerminalController Controller(KernelRuntime runtime, out GameObject panel)
+        {
             var host = new GameObject("Controller"); host.transform.SetParent(root.transform); host.SetActive(false);
             var controller = host.AddComponent<TerminalController>();
-            var panel = new GameObject("Candidates"); panel.transform.SetParent(root.transform);
+            panel = new GameObject("Candidates"); panel.transform.SetParent(root.transform);
             var buttons = new Button[3]; var labels = new Text[3];
             for (int i = 0; i < 3; i++)
             {
@@ -107,17 +259,13 @@ namespace Codetective.Terminal.Tests.UI
             Set(controller, "memoryHeading", Label(host.transform, "Heading"));
             Set(controller, "completionPanel", panel); Set(controller, "completionHeading", Label(panel.transform, "Heading"));
             Set(controller, "completionButtons", buttons); Set(controller, "completionLabels", labels);
-            var runtime = new KernelRuntime(); controller.AttachRuntime(runtime);
+            var scroll = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect)); scroll.transform.SetParent(host.transform);
+            var transcript = Label(scroll.transform, "Transcript");
+            scroll.GetComponent<ScrollRect>().content = transcript.rectTransform;
+            Set(controller, "transcript", transcript); Set(controller, "transcriptScroll", scroll.GetComponent<ScrollRect>());
+            controller.AttachRuntime(runtime);
             host.SetActive(true);
-            Invoke(typeof(TerminalController), controller, "MoveCompletion", 1);
-            Assert.That(panel.activeSelf, Is.True);
-            for (int i = 0; i < 5; i++)
-            {
-                runtime.Tick(1);
-                Invoke(typeof(TerminalController), controller, "LateUpdate");
-                Assert.That(panel.activeSelf, Is.True, "The default refresh must remember explicit empty-prompt browsing.");
-                Invoke(typeof(TerminalController), controller, "MoveCompletion", 1);
-            }
+            return controller;
         }
 
         [Test]

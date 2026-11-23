@@ -29,20 +29,21 @@ namespace Codetective.Terminal
         public bool IsCompositionProtected => (AcceptsInput && input != null && input.IsCompositionProtected) ||
             (GetComponent<MonitorPageHost>()?.IsCompositionProtected ?? false);
         private bool pageVisible = true;
+        private bool restoreCommandFocus;
         private bool AcceptsInput => interactionEnabled && pageVisible && !session.Runtime.TerminalInputLocked;
 
         public void SetPageVisible(bool visible)
         {
             if (pageVisible == visible) return;
             pageVisible = visible;
-            if (!visible) ClearConversationDisturbance();
+            if (!visible) { restoreCommandFocus = false; ClearConversationDisturbance(); }
             ApplyInputInteraction();
         }
 
         public void SetInteractionEnabled(bool enabled)
         {
             interactionEnabled = enabled;
-            if (!enabled) ClearConversationDisturbance();
+            if (!enabled) { restoreCommandFocus = false; ClearConversationDisturbance(); }
             if (!enabled)
             {
                 var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
@@ -70,6 +71,22 @@ namespace Codetective.Terminal
             }
             input.interactable = AcceptsInput;
             input.readOnly = !AcceptsInput;
+        }
+
+        private void RestoreCommandFocus()
+        {
+            if (!restoreCommandFocus) return;
+            if (!isActiveAndEnabled || !interactionEnabled || !pageVisible)
+            { restoreCommandFocus = false; return; }
+            EventSystem events = EventSystem.current;
+            if (events == null) return;
+            // A reply may temporarily disable the field. Restore only the focus
+            // owned by the submitted command; let another selected control keep it.
+            if (events.currentSelectedGameObject != null && events.currentSelectedGameObject != input.gameObject)
+            { restoreCommandFocus = false; return; }
+            if (!AcceptsInput || Time.timeScale == 0f) return;
+            restoreCommandFocus = false;
+            input.FocusAtEnd();
         }
 
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);
@@ -137,6 +154,7 @@ namespace Codetective.Terminal
 
         private void OnDisable()
         {
+            restoreCommandFocus = false;
             ClearConversationDisturbance();
             input.LineSubmitted -= Submit;
             input.CompletionQuery = null;
@@ -153,6 +171,7 @@ namespace Codetective.Terminal
         {
             while (reports.Count > 0) AppendHistory("[보고] " + reports.Dequeue());
             UpdateConversationPresentation();
+            RestoreCommandFocus();
             if (runtimeRevision != session.Runtime.Revision)
             {
                 runtimeRevision = session.Runtime.Revision;
@@ -198,6 +217,7 @@ namespace Codetective.Terminal
             if (!AcceptsInput || string.IsNullOrWhiteSpace(line))
                 return;
 
+            restoreCommandFocus = true;
             bool conversation = session.Runtime.TerminalConversationActive;
             MergeCompletedConversation();
             CommandResult result = session.Execute(line);
@@ -206,7 +226,7 @@ namespace Codetective.Terminal
 
             input.SetTextWithoutNotify(string.Empty);
             ApplyInputInteraction();
-            if (AcceptsInput) input.FocusAtEnd();
+            RestoreCommandFocus();
             visibility.Edit();
             RefreshCompletions();
         }
