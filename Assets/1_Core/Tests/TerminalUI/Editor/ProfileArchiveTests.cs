@@ -17,6 +17,7 @@ namespace Codetective.Terminal.Tests.UI
         private KernelRuntime runtime;
         private string selected;
         private bool allowed;
+        private bool closed;
         [SetUp]
         public void Setup()
         {
@@ -24,8 +25,9 @@ namespace Codetective.Terminal.Tests.UI
             var view = new GameObject("ProfileArchive", typeof(RectTransform)); view.transform.SetParent(root.transform, false);
             ((RectTransform)view.transform).sizeDelta = new Vector2(250, 534);
             runtime = ClinicScenario.Create(); archive = view.AddComponent<ProfileArchiveView>();
-            selected = null; allowed = true;
-            archive.Initialize(runtime, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), id => { selected = id; return true; }, () => selected, () => allowed);
+            selected = null; allowed = true; closed = false;
+            archive.Initialize(runtime, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), id => { selected = id; return true; },
+                () => selected, () => allowed, () => closed = true);
         }
         [TearDown] public void Cleanup() => Object.DestroyImmediate(root);
         private string Texts() => string.Join("\n", archive.GetComponentsInChildren<Text>().Select(t => t.text));
@@ -38,7 +40,8 @@ namespace Codetective.Terminal.Tests.UI
             runtime.Discover("hiddenVisitor"); archive.Refresh(); Assert.That(Texts(), Does.Contain("숨겨진 인물"));
             Assert.That(archive.SelectProfile("hiddenVisitor"), Is.True); Assert.That(selected, Is.EqualTo("hiddenVisitor"));
             Assert.That(archive.GetComponentInChildren<ProfileFormView>(), Is.Null, "The list must leave the form on the desk sheet.");
-            Assert.That(archive.GetComponentsInChildren<Button>().Any(b => b.GetComponentInChildren<Text>().text == "닫기"), Is.False);
+            archive.GetComponentsInChildren<Button>().Single(b => b.GetComponentInChildren<Text>().text == "닫기").onClick.Invoke();
+            Assert.That(closed, Is.True);
             archive.Hide(); Assert.That(archive.SelectProfile("kernel"), Is.False);
         }
         [Test]
@@ -58,7 +61,7 @@ namespace Codetective.Terminal.Tests.UI
         {
             archive.Show(); allowed = false; archive.Refresh();
             Assert.That(archive.SelectProfile("kernel"), Is.False); Assert.That(selected, Is.Null);
-            Assert.That(archive.GetComponentsInChildren<Button>().All(b => !b.interactable), Is.True);
+            Assert.That(archive.GetComponentsInChildren<Button>().Where(b => b.name.StartsWith("Profile_", StringComparison.Ordinal)).All(b => !b.interactable), Is.True);
             allowed = true; archive.Refresh(); Assert.That(archive.SelectProfile("kernel"), Is.True);
         }
     }

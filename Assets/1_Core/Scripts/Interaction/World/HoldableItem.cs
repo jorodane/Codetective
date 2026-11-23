@@ -25,6 +25,7 @@ namespace Codetective.Interaction
         private Quaternion restingWorldRotation;
         private ItemPlacementSurface pickupSurface;
         private Vector3 pickupPosition;
+        private int pickupDrawerSlot;
         private Vector3 placementOffset;
         private Vector3 measuredSize;
         private Collider[] colliders;
@@ -42,6 +43,8 @@ namespace Codetective.Interaction
         public string ProfileId => profileId;
         public bool IsHeld => owner != null && owner.HeldItem == this;
         public ItemPlacementSurface Storage { get; private set; }
+        public int DrawerSlot { get; private set; }
+        internal ItemPlacementSurface PickupSurface => pickupSurface;
         public bool IsStored => Storage != null;
         public bool IsRolled => Use == HeldItemUse.Newspaper && (!IsHeld || Storage != null);
         public Transform PlacementVisual { get; private set; }
@@ -88,6 +91,7 @@ namespace Codetective.Interaction
         {
             pickupSurface = Storage;
             pickupPosition = transform.localPosition;
+            pickupDrawerSlot = DrawerSlot;
             ReleaseStorage();
             colliders = GetComponentsInChildren<Collider>(true); colliderEnabled = new bool[colliders.Length];
             for (int i = 0; i < colliders.Length; i++) { colliderEnabled[i] = colliders[i].enabled; colliders[i].enabled = false; }
@@ -138,7 +142,7 @@ namespace Codetective.Interaction
         }
         internal void PutDown()
         {
-            if (pickupSurface != null && pickupSurface.PlaceAt(this, pickupPosition, true)) return;
+            if (pickupSurface != null && pickupSurface.RestorePlacement(this, pickupPosition, pickupDrawerSlot)) return;
             ReturnHome();
         }
         internal void ReturnHome()
@@ -152,7 +156,7 @@ namespace Codetective.Interaction
             SetPresentationVisible(true);
             PoseChanged?.Invoke();
         }
-        internal void Store(ItemPlacementSurface surface, Vector3 position)
+        internal void Store(ItemPlacementSurface surface, Vector3 position, int drawerSlot)
         {
             pickupSurface = null;
             if (Storage != surface) ReleaseStorage();
@@ -161,9 +165,18 @@ namespace Codetective.Interaction
             Vector3 parentScale = surface.transform.lossyScale;
             transform.localScale = new Vector3(restingWorldScale.x / parentScale.x, restingWorldScale.y / parentScale.y, restingWorldScale.z / parentScale.z);
             if (colliders != null) for (int i = 0; i < colliders.Length; i++) if (colliders[i] != null) colliders[i].enabled = colliderEnabled[i];
-            Storage = surface; SetPresentationVisible(true); PoseChanged?.Invoke();
+            Storage = surface; DrawerSlot = drawerSlot; SetPresentationVisible(true); PoseChanged?.Invoke();
         }
-        private void ReleaseStorage() { if (Storage != null) Storage.Remove(this); Storage = null; }
+        private void ReleaseStorage()
+        {
+            if (Storage != null) Storage.Remove(this);
+            Storage = null; DrawerSlot = 0;
+        }
+        private void OnDestroy()
+        {
+            ReleaseStorage();
+            if (owner != null) owner.Unregister(this);
+        }
         internal void SetPresentationVisible(bool visible)
         {
             if (renderers != null) for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = visible && rendererEnabled[i];

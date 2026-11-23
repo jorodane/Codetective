@@ -12,13 +12,16 @@ namespace Codetective.Interaction
         [SerializeField] private Shader shader;
         private static Camera selectedCamera;
         private static IReadOnlyList<(Mesh mesh, Renderer renderer)> selectedMeshes;
+        private static IReadOnlyList<(Mesh mesh, Renderer renderer)> selectedContents;
         private Material material;
         private OutlinePass pass;
 
-        internal static void Show(Camera camera, IReadOnlyList<(Mesh mesh, Renderer renderer)> meshes)
+        internal static void Show(Camera camera, IReadOnlyList<(Mesh mesh, Renderer renderer)> meshes,
+            IReadOnlyList<(Mesh mesh, Renderer renderer)> contents)
         {
             selectedCamera = camera;
             selectedMeshes = meshes;
+            selectedContents = contents;
         }
 
         internal static void Hide(IReadOnlyList<(Mesh mesh, Renderer renderer)> meshes)
@@ -26,6 +29,7 @@ namespace Codetective.Interaction
             if (!ReferenceEquals(selectedMeshes, meshes)) return;
             selectedCamera = null;
             selectedMeshes = null;
+            selectedContents = null;
         }
 
         public override void Create()
@@ -48,11 +52,13 @@ namespace Codetective.Interaction
         private sealed class OutlinePass : ScriptableRenderPass
         {
             private readonly Material material;
+            private const int VisibleSilhouette = 0, VisibleContents = 1, FullSilhouette = 2, Outline = 3;
 
             private sealed class MaskData
             {
                 public Material material;
                 public IReadOnlyList<(Mesh mesh, Renderer renderer)> meshes;
+                public IReadOnlyList<(Mesh mesh, Renderer renderer)> contents;
             }
 
             private sealed class OutlineData
@@ -79,7 +85,8 @@ namespace Codetective.Interaction
                 if (!color.IsValid() || !depth.IsValid()) return;
                 TextureDesc maskSettings = graph.GetTextureDesc(depth);
                 maskSettings.name = "Inspection silhouette";
-                maskSettings.colorFormat = GraphicsFormat.R8_UNorm;
+                bool hasContents = selectedContents != null && selectedContents.Count > 0;
+                maskSettings.colorFormat = hasContents ? GraphicsFormat.R8G8B8A8_UNorm : GraphicsFormat.R8_UNorm;
                 maskSettings.filterMode = FilterMode.Point;
                 maskSettings.wrapMode = TextureWrapMode.Clamp;
                 maskSettings.bindTextureMS = false;
@@ -92,13 +99,15 @@ namespace Codetective.Interaction
                 {
                     data.material = material;
                     data.meshes = selectedMeshes;
+                    data.contents = hasContents ? selectedContents : null;
                     builder.SetRenderAttachment(mask, 0);
                     builder.SetRenderAttachmentDepth(depth, AccessFlags.Read);
                     builder.SetRenderFunc(static (MaskData data, RasterGraphContext context) =>
                     {
-                        foreach (var (mesh, renderer) in data.meshes)
-                            for (int i = 0; i < mesh.subMeshCount; i++)
-                                context.cmd.DrawMesh(mesh, renderer.localToWorldMatrix, data.material, i, 0);
+                        DrawMeshes(context, data.material, data.meshes, VisibleSilhouette);
+                        if (data.contents == null) return;
+                        DrawMeshes(context, data.material, data.contents, VisibleContents);
+                        DrawMeshes(context, data.material, data.meshes, FullSilhouette);
                     });
                 }
 
@@ -109,8 +118,15 @@ namespace Codetective.Interaction
                     builder.UseTexture(mask, AccessFlags.Read);
                     builder.SetRenderAttachment(color, 0, AccessFlags.ReadWrite);
                     builder.SetRenderFunc(static (OutlineData data, RasterGraphContext context) =>
-                        Blitter.BlitTexture(context.cmd, (RTHandle)data.mask, new Vector4(1, 1, 0, 0), data.material, 1));
+                        Blitter.BlitTexture(context.cmd, (RTHandle)data.mask, new Vector4(1, 1, 0, 0), data.material, Outline));
                 }
+            }
+
+            private static void DrawMeshes(RasterGraphContext context, Material material, IReadOnlyList<(Mesh mesh, Renderer renderer)> meshes, int shaderPass)
+            {
+                foreach (var (mesh, renderer) in meshes)
+                    for (int i = 0; i < mesh.subMeshCount; i++)
+                        context.cmd.DrawMesh(mesh, renderer.localToWorldMatrix, material, i, shaderPass);
             }
         }
     }

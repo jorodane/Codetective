@@ -84,6 +84,85 @@ namespace Codetective.Tests.Interaction
             }
             finally { Object.DestroyImmediate(root); Object.DestroyImmediate(paper); Object.DestroyImmediate(second); Object.DestroyImmediate(drawer); Object.DestroyImmediate(camera); }
         }
+
+        [Test]
+        public void TheDrawerGridFitsEightFullWidthRollsAndRejectsTheNinth()
+        {
+            var root = new GameObject("Grid test");
+            try
+            {
+                var carry = root.AddComponent<ItemCarryController>(); carry.Initialize(root.transform);
+                var drawerObject = new GameObject("Drawer"); drawerObject.transform.SetParent(root.transform, false);
+                SlidingDrawer drawer = drawerObject.AddComponent<SlidingDrawer>(); drawer.Initialize(new KernelRuntime(), "drawer");
+                var surface = drawerObject.AddComponent<ItemPlacementSurface>();
+                surface.Initialize("drawer", drawer, new Bounds(Vector3.zero, new Vector3(0.32f, 0.1f, 0.44f)));
+                Assert.That(ItemPlacementSurface.DrawerSize, Is.EqualTo(new Vector3Int(4, 2, 8)));
+                var occupied = new System.Collections.Generic.HashSet<int>();
+                for (int i = 0; i < 9; i++)
+                {
+                    var paper = new GameObject("Paper " + i); paper.transform.SetParent(root.transform, false);
+                    HoldableItem item = paper.AddComponent<HoldableItem>();
+                    item.Configure("paper" + i, "신문", HeldItemUse.Newspaper); carry.Register(item);
+                    Assert.That(carry.RestoreStorage(item, surface), Is.EqualTo(i < 8));
+                    if (i < 8)
+                    {
+                        Assert.That(occupied.Add(item.DrawerSlot), Is.True);
+                        Assert.That(item.transform.localPosition.x, Is.Zero.Within(0.0001f));
+                    }
+                }
+                Assert.That(surface.ItemCount, Is.EqualTo(8));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [Test]
+        public void ClosingKeepsAStackInPlaceAndMovingItsSupportSettlesTheUpperItem()
+        {
+            var root = new GameObject("Stack test"); root.transform.position = Vector3.one * 50;
+            try
+            {
+                var carry = root.AddComponent<ItemCarryController>(); carry.Initialize(root.transform);
+                ItemPlacementSurface Surface(string id, Vector3 position, bool container)
+                {
+                    var holder = new GameObject(id); holder.transform.SetParent(root.transform, false); holder.transform.localPosition = position;
+                    SlidingDrawer drawer = null;
+                    if (container)
+                    {
+                        var runtime = new KernelRuntime(); runtime.SetDrawerOpen(id, true);
+                        drawer = holder.AddComponent<SlidingDrawer>(); drawer.Initialize(runtime, id); drawer.SetInteractionEnabled(true);
+                    }
+                    var surface = holder.AddComponent<ItemPlacementSurface>();
+                    surface.Initialize(id, drawer, new Bounds(Vector3.zero, new Vector3(0.4f, 0.1f, 0.8f)));
+                    return surface;
+                }
+                HoldableItem Paper(string id)
+                {
+                    var paper = new GameObject(id); paper.transform.SetParent(root.transform, false);
+                    var item = paper.AddComponent<HoldableItem>(); item.Configure(id, "기록", HeldItemUse.Profile);
+                    item.ConfigurePaper(new Vector3(0.09f, 0.02f, 0.09f)); carry.Register(item);
+                    return item;
+                }
+                ItemPlacementSurface drawerSurface = Surface("drawer", Vector3.forward, true);
+                ItemPlacementSurface desktop = Surface("desk", Vector3.right, false);
+                HoldableItem lower = Paper("lower"), upper = Paper("upper");
+                Assert.That(carry.RestoreStorage(lower, drawerSurface, Vector3.zero, 1), Is.True);
+                Assert.That(carry.RestoreStorage(upper, drawerSurface, Vector3.zero, 33), Is.True);
+                Vector3 lowerPosition = lower.transform.localPosition, upperPosition = upper.transform.localPosition;
+                Assert.That(upperPosition.y - lowerPosition.y, Is.EqualTo(0.02f).Within(0.0001f));
+                Assert.That(carry.TryPickup(lower), Is.True); carry.PutDown();
+                Assert.That(lower.DrawerSlot, Is.EqualTo(1));
+                Assert.That(lower.transform.localPosition, Is.EqualTo(lowerPosition));
+                Assert.That(upper.transform.localPosition, Is.EqualTo(upperPosition));
+
+                Assert.That(carry.TryPickup(lower), Is.True);
+                Assert.That(carry.BeginPlacement(), Is.True);
+                Assert.That(carry.TryPlaceOn(desktop), Is.True);
+                Assert.That(upper.DrawerSlot, Is.EqualTo(1));
+                Assert.That(upper.transform.localPosition, Is.EqualTo(lowerPosition));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
         [Test]
         public void CursorPlacementUsesTheChosenPointAndRejectsOccupiedOrOutOfBoundsPositions()
         {

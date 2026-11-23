@@ -13,6 +13,8 @@ namespace Codetective.Interaction
         private readonly bool supportsOutline;
         private readonly List<(MeshFilter filter, Renderer renderer)> parts = new List<(MeshFilter, Renderer)>();
         private readonly List<(Mesh mesh, Renderer renderer)> visibleParts = new List<(Mesh, Renderer)>();
+        private readonly List<(Mesh mesh, Renderer renderer)> visibleContents = new List<(Mesh, Renderer)>();
+        private readonly List<MeshFilter> contentFilters = new List<MeshFilter>();
         private Transform visualRoot;
 
         internal InspectionHoverView(Font font)
@@ -44,7 +46,7 @@ namespace Codetective.Interaction
             Hide();
         }
 
-        internal void Draw(Camera camera, Transform visual, string name, BoxCollider frontFace = null)
+        internal void Draw(Camera camera, Transform visual, string name, BoxCollider frontFace = null, ItemPlacementSurface interior = null)
         {
             if (!supportsOutline) { Hide(); return; }
             if (visualRoot != visual)
@@ -63,12 +65,7 @@ namespace Codetective.Interaction
             Bounds bounds = default;
             foreach (var part in parts)
             {
-                if (part.filter == null || part.renderer == null || !part.renderer.enabled || part.renderer.forceRenderingOff || !part.renderer.gameObject.activeInHierarchy ||
-                    (camera.cullingMask & (1 << part.renderer.gameObject.layer)) == 0) continue;
-                // Static batches can share mesh data that includes other scene objects in batch space.
-                if (part.renderer.isPartOfStaticBatch) continue;
-                Mesh mesh = part.filter.sharedMesh;
-                if (mesh == null || mesh.subMeshCount == 0) continue;
+                if (!TryVisibleMesh(camera, part.filter, part.renderer, out Mesh mesh)) continue;
                 if (visibleParts.Count == 0) bounds = part.renderer.bounds;
                 else bounds.Encapsulate(part.renderer.bounds);
                 visibleParts.Add((mesh, part.renderer));
@@ -90,7 +87,18 @@ namespace Codetective.Interaction
                 }
             }
 
-            InspectionOutlineFeature.Show(camera, visibleParts);
+            visibleContents.Clear();
+            if (interior != null)
+            {
+                foreach (HoldableItem item in interior.Contents)
+                {
+                    item.GetComponentsInChildren(true, contentFilters);
+                    foreach (MeshFilter filter in contentFilters)
+                        if (filter.TryGetComponent(out Renderer renderer) && TryVisibleMesh(camera, filter, renderer, out Mesh mesh))
+                            visibleContents.Add((mesh, renderer));
+                }
+            }
+            InspectionOutlineFeature.Show(camera, visibleParts, visibleContents);
             tag.gameObject.SetActive(true);
             if (label.text != name) label.text = name;
             tag.sizeDelta = new Vector2(Mathf.Max(52, label.preferredWidth + 18), 25);
@@ -99,6 +107,15 @@ namespace Codetective.Interaction
             float halfWidth = tag.sizeDelta.x * 0.5f + 6;
             tag.anchoredPosition = new Vector2(Mathf.Clamp(point.x, rect.xMin + halfWidth, rect.xMax - halfWidth),
                 Mathf.Clamp(point.y + 7, rect.yMin + 6, rect.yMax - tag.sizeDelta.y - 6));
+        }
+
+        private static bool TryVisibleMesh(Camera camera, MeshFilter filter, Renderer renderer, out Mesh mesh)
+        {
+            mesh = filter != null ? filter.sharedMesh : null;
+            // Static batch meshes may also include other objects, in batch space.
+            return mesh != null && mesh.subMeshCount > 0 && renderer != null && renderer.enabled &&
+                !renderer.forceRenderingOff && renderer.gameObject.activeInHierarchy && !renderer.isPartOfStaticBatch &&
+                (camera.cullingMask & (1 << renderer.gameObject.layer)) != 0;
         }
 
         internal void Hide()

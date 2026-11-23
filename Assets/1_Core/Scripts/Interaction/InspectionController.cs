@@ -88,6 +88,7 @@ namespace Codetective.Interaction
         }
         public ItemCarryController Carry { get; set; }
         public ItemPlacementSurface Desktop { get; set; }
+        public Func<InspectionTarget, string> HoverCaption { get; set; }
         public bool TextInputFocused => TextInputFocus.IsActive || (activeTerminal != null && activeTerminal.IsCompositionProtected);
         public void InitializePointerFeedback(Font font) => hover = hover ?? new InspectionHoverView(font);
 
@@ -236,6 +237,9 @@ namespace Codetective.Interaction
             if (Carry != null && Carry.IsExamining) return true;
             if (TextInputFocused) TextInputFocus.ReleaseAll();
             Component target = ResolvePointerTarget(point, out RaycastHit? obstruction);
+            bool insideMonitorView = views.ActiveAngle?.Id == "monitor";
+            if (insideMonitorView && CanReturnByPointer(point, obstruction))
+            { ReturnToOverview(); return true; }
             if (target is InspectionActionTarget action)
             { action.Interact(); return true; }
             if (target is InspectionTarget angle)
@@ -244,7 +248,7 @@ namespace Codetective.Interaction
             }
             if (target is ItemPlacementSurface tray)
             { Carry.TryPlaceAtScreenPoint(point, tray); return true; }
-            if (CanReturnFromDesk(point, obstruction))
+            if (!insideMonitorView && CanReturnByPointer(point, obstruction))
             { ReturnToOverview(); return true; }
             if (Carry != null && Carry.IsPlacing)
             { Carry.TryPlaceAtScreenPoint(point); return true; }
@@ -313,9 +317,31 @@ namespace Codetective.Interaction
             target != null && target.isActiveAndEnabled && target.Angle != null && target.Angle != views.ActiveAngle &&
             (CanInspectByPointer || (placing && target.Angle.Id == "drawer"));
 
-        private bool CanReturnFromDesk(Vector2 point, RaycastHit? obstruction)
+        private bool CanReturnByPointer(Vector2 point, RaycastHit? obstruction)
         {
-            if (Desktop == null || views.ActiveAngle?.Id != "drawer" || flow.Mode != InspectionMode.Inspecting) return false;
+            if (flow.Mode != InspectionMode.Inspecting) return false;
+            string angle = views.ActiveAngle?.Id;
+            bool placing = Carry != null && Carry.IsPlacing;
+            if (angle == "drawer") return Desktop != null && CanReturnFromDrawer(point, obstruction, placing);
+            if (placing) return false;
+            Transform hit = obstruction?.collider.transform;
+            if (angle == "monitor")
+            {
+                Transform body = GetTarget("monitor")?.VisualRoot;
+                return hit == null || body == null || !hit.IsChildOf(body);
+            }
+            if (Desktop == null || hit == null) return false;
+            Transform desk = Desktop.transform.parent;
+            if (angle == "gramophone") return desk != null && hit.IsChildOf(desk);
+            if (angle != "counsel" || hit != desk) return false;
+            RaycastHit surface = obstruction.Value;
+            float height = Desktop.transform.InverseTransformPoint(surface.point).y;
+            return Vector3.Dot(surface.normal, Desktop.transform.up) > 0.5f &&
+                (Desktop.LocalBounds.min.y - height) * Mathf.Abs(Desktop.transform.lossyScale.y) < 0.035f;
+        }
+
+        private bool CanReturnFromDrawer(Vector2 point, RaycastHit? obstruction, bool placing)
+        {
             Camera camera = views.ControlledCamera;
             Bounds bounds = Desktop.LocalBounds;
             Vector3 min = bounds.min, max = bounds.max;
@@ -325,7 +351,6 @@ namespace Codetective.Interaction
             Vector3 backLeft = Project(min.x, min.z), backRight = Project(max.x, min.z);
             if (Mathf.Min(frontLeft.z, frontRight.z, backLeft.z, backRight.z) <= camera.nearClipPlane) return false;
 
-            bool placing = Carry != null && Carry.IsPlacing;
             float edge = placing ? Mathf.Max(frontLeft.y, frontRight.y, backLeft.y, backRight.y) :
                 Mathf.Lerp(frontLeft.y, frontRight.y, Mathf.InverseLerp(frontLeft.x, frontRight.x, point.x));
             if (point.y < edge) return false;
@@ -342,8 +367,14 @@ namespace Codetective.Interaction
         {
             if (hover == null) return;
             if (target is DrawerFrontTarget front) target = front.Drawer;
-            if (target is InspectionTarget angle && angle.ShowHoverFeedback) hover.Draw(views.ControlledCamera, angle.VisualRoot, angle.DisplayName);
-            else if (target is SlidingDrawer drawer) hover.Draw(views.ControlledCamera, drawer.transform, drawer.DisplayName, drawer.FrontFace);
+            if (target is InspectionTarget angle && angle.ShowHoverFeedback)
+                hover.Draw(views.ControlledCamera, angle.VisualRoot, HoverCaption?.Invoke(angle) ?? angle.DisplayName);
+            else if (target is SlidingDrawer drawer)
+            {
+                int count = drawer.Interior != null ? drawer.Interior.ItemCount : 0;
+                string status = count == 0 ? "비어 있음" : $"{count}개 보관 중";
+                hover.Draw(views.ControlledCamera, drawer.transform, $"{drawer.DisplayName} - {status}", drawer.FrontFace, drawer.Interior);
+            }
             else if (target is HoldableItem item) hover.Draw(views.ControlledCamera, item.transform, item.DisplayName);
             else hover.Hide();
         }

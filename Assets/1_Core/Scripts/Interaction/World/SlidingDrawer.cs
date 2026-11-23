@@ -17,6 +17,7 @@ namespace Codetective.Interaction
         public string Id => drawerId;
         public string DisplayName { get; private set; } = "서랍";
         public BoxCollider FrontFace { get; internal set; }
+        public ItemPlacementSurface Interior { get; internal set; }
         public bool IsOpen => runtime != null && runtime.IsDrawerOpen(drawerId);
         public bool CanStore => interactionEnabled && IsOpen && amount >= 0.99f;
         public void Initialize(KernelRuntime value, string id, string label = "서랍")

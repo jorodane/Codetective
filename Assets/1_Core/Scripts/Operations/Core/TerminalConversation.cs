@@ -168,7 +168,24 @@ namespace Codetective.Operations
         public long TerminalConversationRevision => terminalConversationRevision;
         public bool TerminalConversationActive => Conversation != null && (Conversation.phase == TerminalConversationPhase.Speaking || Conversation.phase == TerminalConversationPhase.AwaitingCommand);
         public bool TerminalInputLocked => Conversation?.phase == TerminalConversationPhase.Speaking;
-        public bool TerminalLineUsesEnter => TerminalInputLocked && ConversationDefinition.advanceWithEnter;
+        public bool TerminalLineUsesEnter
+        {
+            get
+            {
+                if (!TerminalInputLocked || !ConversationDefinition.advanceWithEnter) return false;
+                TerminalConversationProgress progress = Conversation;
+                if (progress.pendingIndex + 1 < progress.pending.Count) return true;
+                TerminalConversationStep step = ConversationStep;
+                if (progress.reply || IsUnanswered(step) || GoalRequiresInput(step.goal)) return false;
+                TerminalConversationStep[] steps = ConversationDefinition.steps;
+                for (int i = Array.IndexOf(steps, step) + 1; i < steps.Length; i++)
+                {
+                    if (steps[i].lines.Length > 0) return true;
+                    if (GoalRequiresInput(steps[i].goal)) break;
+                }
+                return false;
+            }
+        }
         public bool TerminalConversationPausesWorld => TerminalConversationActive && ConversationDefinition.pauseWorld || terminalConversations.Values.Any(d =>
             d.pauseWorld && d.replacesStartupGuide && terminalConversationProgress[d.id].phase == TerminalConversationPhase.Dormant && Day >= d.firstDay && Day <= d.lastDay &&
             !string.IsNullOrEmpty(d.requiredMailRead) && IsMailRead(d.requiredMailRead) && d.condition.Matches(this));
@@ -372,22 +389,29 @@ namespace Codetective.Operations
                     continue;
                 }
                 string text = ConversationText(entry, p); int length = StringInfo.ParseCombiningCharacters(text).Length;
-                double duration = length / line.charactersPerSecond + line.pauseAfter;
+                bool waitForEnter = TerminalLineUsesEnter;
+                bool handsOffToInput = ConversationDefinition.advanceWithEnter && !waitForEnter &&
+                    (p.reply || IsUnanswered(ConversationStep) || GoalRequiresInput(ConversationStep.goal));
+                double duration = length / line.charactersPerSecond + (handsOffToInput ? 0 : line.pauseAfter);
                 double used = Math.Min(seconds, Math.Max(0, duration - p.elapsed)); p.elapsed += used; seconds -= used;
                 int visibleElements = Math.Min(length, (int)Math.Min(int.MaxValue, Math.Floor(p.elapsed * line.charactersPerSecond)));
                 if (visibleElements != entry.visibleElements) { entry.visibleElements = visibleElements; ConversationChanged(false); }
                 if (p.elapsed + 0.0000001 < duration) break;
                 entry.complete = true;
-                if (!TerminalLineUsesEnter) FinishTerminalLine();
+                if (!waitForEnter) FinishTerminalLine();
                 ConversationChanged(false);
             }
         }
         public bool ContinueTerminalLine()
         {
-            if (!TerminalLineUsesEnter) return false;
+            if (!TerminalInputLocked || !ConversationDefinition.advanceWithEnter) return false;
             TerminalConversationLog line = Conversation.log[Conversation.activeLog];
-            if (!line.complete) line.complete = true;
-            else FinishTerminalLine();
+            if (line.complete || !TerminalLineUsesEnter)
+            {
+                line.complete = true;
+                FinishTerminalLine();
+            }
+            else line.complete = true;
             ConversationChanged(false);
             return true;
         }
@@ -407,12 +431,18 @@ namespace Codetective.Operations
             if (goal.kind == TerminalGoalKind.Invoke) return p.performed.Any(a => a.targetId == goal.targetId && a.operation == goal.operation && (goal.argumentCount < 0 || a.arguments == goal.argumentCount));
             return goal.kind == TerminalGoalKind.StoryCondition && goal.condition.Matches(this);
         }
+        private bool IsUnanswered(TerminalConversationStep step) =>
+            step.answers.Length > 0 && string.IsNullOrEmpty(Conversation.answerKey);
+
+        private bool GoalRequiresInput(TerminalCommandGoal goal) =>
+            goal.kind != TerminalGoalKind.None && (!goal.acceptExisting || !ConversationGoalSatisfied(goal));
+
         private void ReadyForConversationCommand()
         {
             var p = Conversation; p.pending.Clear(); p.pendingIndex = 0; p.activeLog = -1; p.elapsed = 0;
             if (p.reply) { p.reply = false; p.phase = TerminalConversationPhase.AwaitingCommand; return; }
             TerminalConversationStep step = ConversationStep;
-            if (step.answers.Length > 0 && string.IsNullOrEmpty(p.answerKey))
+            if (IsUnanswered(step))
             {
                 p.phase = TerminalConversationPhase.AwaitingCommand;
                 AddConversationLog(new TerminalConversationLog
@@ -425,8 +455,7 @@ namespace Codetective.Operations
                 ConversationChanged(true);
                 return;
             }
-            TerminalCommandGoal goal = step.goal;
-            if (goal.kind == TerminalGoalKind.None || goal.acceptExisting && ConversationGoalSatisfied(goal)) CompleteConversationStep();
+            if (!GoalRequiresInput(step.goal)) CompleteConversationStep();
             else p.phase = TerminalConversationPhase.AwaitingCommand;
         }
         private void CompleteConversationStep()

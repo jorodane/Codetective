@@ -55,6 +55,8 @@ namespace Codetective.Terminal
             { renderedConversationId = runtime.TerminalConversationId; followTranscript = true; scrollTranscript = true; }
             if (conversationInputLocked != runtime.TerminalInputLocked)
             {
+                if (visible && !runtime.TerminalInputLocked && runtime.TerminalConversationActive)
+                    restoreCommandFocus = true;
                 conversationInputLocked = runtime.TerminalInputLocked;
                 ApplyInputInteraction(); runtimeRevision = -1;
             }
@@ -63,6 +65,7 @@ namespace Codetective.Terminal
             MergeCompletedConversation();
             if (renderedConversationRevision == runtime.TerminalConversationRevision && renderedConversationLocale == runtime.DisplayLanguage && renderedConversationCommandLocale == runtime.Language) return;
             renderedConversationRevision = runtime.TerminalConversationRevision; renderedConversationLocale = runtime.DisplayLanguage; renderedConversationCommandLocale = runtime.Language;
+            RefreshCommandPrompt();
             RefreshAnswerPrompt();
             string text = ConversationTranscript();
             if (transcript.text == text) return;

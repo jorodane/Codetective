@@ -44,7 +44,7 @@ namespace Codetective.Gameplay
         private Image suspicionImage;
         private RectTransform heldBar, newspaperReader;
         private Text heldLabel;
-        private Button putDown;
+        private Button closeItem, placeItem;
         private PaperDocument openedDocument;
         private int documentSection;
         private int documentRevision;
@@ -98,7 +98,8 @@ namespace Codetective.Gameplay
             BuildItemControls();
             RectTransform archiveRoot = OverlayWidgets.Rect("ProfileArchive", root.transform, new Vector2(-18, -86), new Vector2(250, 534), new Vector2(1, 1));
             profileArchive = archiveRoot.gameObject.AddComponent<ProfileArchiveView>();
-            profileArchive.Initialize(game.Runtime, this.font, game.SelectProfile, () => game.DisplayedProfileId, () => game.CanSelectProfile);
+            profileArchive.Initialize(game.Runtime, this.font, game.SelectProfile, () => game.DisplayedProfileId,
+                () => game.CanSelectProfile, inspection.ReturnToOverview);
             Text shortcuts = Label(root.transform, new Vector2(16, 0), new Vector2(1248, 18), "1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기 · Q 전체 · Tab/Shift+Tab 페이지 · F5 빠른 저장 (입력 중 제외) · ESC 내려놓기→전체→메뉴", 14);
             shortcuts.rectTransform.anchorMin = shortcuts.rectTransform.anchorMax = shortcuts.rectTransform.pivot = Vector2.zero;
             nextDayButton = Button(root.transform, new Vector2(500, -66), new Vector2(280, 40), "18:00 업무 종료 / 정산 보기", game.ShowDaySummary).gameObject;
@@ -133,8 +134,8 @@ namespace Codetective.Gameplay
             if (held != null)
             {
                 heldLabel.text = game.Carry.IsPlacing ? game.Carry.PlacementHint : held.DisplayName;
-                putDown.gameObject.SetActive(!game.Carry.IsPlacing);
-                putDown.interactable = game.Carry.CanManipulate;
+                placeItem.gameObject.SetActive(!game.Carry.IsPlacing);
+                closeItem.interactable = placeItem.interactable = game.Carry.CanManipulate;
             }
             nextDayButton.SetActive(game.Runtime.IsDayEnded && !game.IsDateTransitioning && modal == null && inspection.Mode != InspectionMode.Menu);
             if (modal == "protocol" && protocolSource != null && protocolSource.isFocused) RefreshProtocolCompletions();
@@ -273,8 +274,9 @@ namespace Codetective.Gameplay
         {
             heldBar = Box("HeldObject", root.transform, new Vector2(0, 24), new Vector2(1040, 54), new Vector2(0.5f, 0));
             heldBar.GetComponent<Image>().raycastTarget = false;
-            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(850, 32), "", 15);
-            putDown = Button(heldBar, new Vector2(880, -8), new Vector2(144, 38), "내려놓기", game.BeginItemPlacement);
+            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(748, 32), "", 15);
+            closeItem = Button(heldBar, new Vector2(768, -8), new Vector2(120, 38), "닫기", game.CloseItemInspection);
+            placeItem = Button(heldBar, new Vector2(896, -8), new Vector2(128, 38), "배치하기", game.BeginItemPlacement);
             heldBar.gameObject.SetActive(false);
         }
         public void ShowNewspaper() => ShowDocument(game.NewspaperDocument, 0);

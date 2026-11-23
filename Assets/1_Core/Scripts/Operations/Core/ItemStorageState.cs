@@ -10,6 +10,7 @@ namespace Codetective.Operations
         public string containerId;
         public bool hasPosition;
         public float x, y, z;
+        public int drawerSlot;
         public StoredItemState Copy() => (StoredItemState)MemberwiseClone();
     }
     public sealed partial class KernelRuntime
@@ -29,7 +30,8 @@ namespace Codetective.Operations
             else
             {
                 if (storedItems.TryGetValue(itemId, out StoredItemState previous) && previous.containerId == containerId &&
-                    previous.hasPosition == state.hasPosition && (!state.hasPosition || previous.x == state.x && previous.y == state.y && previous.z == state.z)) return;
+                    previous.drawerSlot == state.drawerSlot && previous.hasPosition == state.hasPosition &&
+                    (!state.hasPosition || previous.x == state.x && previous.y == state.y && previous.z == state.z)) return;
                 storedItems[itemId] = state.Copy();
             }
             Revision++; NarrativeUpdated();
@@ -47,7 +49,8 @@ namespace Codetective.Operations
         }
         private static void ValidateItemPosition(StoredItemState state)
         {
-            if (state.hasPosition && (float.IsNaN(state.x) || float.IsInfinity(state.x) || float.IsNaN(state.y) || float.IsInfinity(state.y) || float.IsNaN(state.z) || float.IsInfinity(state.z)))
+            if (state.drawerSlot < 0 || state.drawerSlot > 0 && !state.hasPosition ||
+                state.hasPosition && (float.IsNaN(state.x) || float.IsInfinity(state.x) || float.IsNaN(state.y) || float.IsInfinity(state.y) || float.IsNaN(state.z) || float.IsInfinity(state.z)))
                 throw new CommandException("물건의 배치 좌표가 유효하지 않습니다.");
         }
     }

@@ -24,14 +24,20 @@ namespace Codetective.Terminal
         private bool lastAllowed;
         public string SelectedProfileId => current?.Invoke();
         public bool IsVisible => isActiveAndEnabled;
-        public void Initialize(KernelRuntime world, Font typeface, Func<string, bool> choose, Func<string> selected, Func<bool> canChoose)
+        public void Initialize(KernelRuntime world, Font typeface, Func<string, bool> choose, Func<string> selected, Func<bool> canChoose, Action close)
         {
             runtime = world; font = typeface != null ? typeface : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             select = choose; current = selected; allowed = canChoose;
             RectTransform archive = (RectTransform)transform;
             archivePosition = archive.anchoredPosition; archiveSize = archive.sizeDelta;
             gameObject.AddComponent<Image>().color = new Color(0.80f, 0.77f, 0.67f, 0.97f);
-            Label(transform, new Vector2(14, -12), new Vector2(222, 36), "인물 파일", 24);
+            Label(transform, new Vector2(14, -12), new Vector2(150, 36), "인물 파일", 24);
+            RectTransform closeRect = MonitorWidgets.Rect("Close", archive, new Vector2(173, -12), new Vector2(63, 36));
+            Image closeImage = closeRect.gameObject.AddComponent<Image>(); closeImage.color = new Color(0.68f, 0.66f, 0.57f);
+            Button closeButton = closeRect.gameObject.AddComponent<Button>(); closeButton.targetGraphic = closeImage;
+            closeButton.navigation = new Navigation { mode = Navigation.Mode.None };
+            closeButton.onClick.AddListener(() => close());
+            Label(closeRect, Vector2.zero, closeRect.sizeDelta, "닫기", 17).alignment = TextAnchor.MiddleCenter;
             Label(transform, new Vector2(14, -50), new Vector2(222, 48), "인물을 선택하면\n서류를 가져옵니다.", 16);
             RectTransform viewport = MonitorWidgets.Rect("People", transform, new Vector2(12, -108), new Vector2(226, 410));
             viewport.gameObject.AddComponent<Image>().color = new Color(0.88f, 0.86f, 0.77f); viewport.gameObject.AddComponent<RectMask2D>();

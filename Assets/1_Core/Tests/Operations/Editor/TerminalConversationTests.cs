@@ -43,10 +43,9 @@ namespace Codetective.Tests.Operations
             restored.Restore(runtime.Capture());
             Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(runtime.TerminalConversationTranscript()));
             Assert.That(restored.ContinueTerminalLine(), Is.True);
-            restored.AdvanceTerminalConversation(1000);
+            Assert.That(restored.TerminalLineUsesEnter, Is.False);
+            restored.AdvanceTerminalConversation(7);
             Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Second message"));
-            Assert.That(restored.TerminalInputLocked, Is.True);
-            Assert.That(restored.ContinueTerminalLine(), Is.True);
             Assert.That(restored.TerminalInputLocked, Is.False);
             Assert.That(restored.ContinueTerminalLine(), Is.False);
             Assert.That(restored.Execute("help").Success, Is.True);
@@ -69,6 +68,27 @@ namespace Codetective.Tests.Operations
             };
             definition.steps[0].lines[0].speaker = "Secretariat";
             return definition;
+        }
+
+        [Test]
+        public void ManualDialogueHandsOffToAnswersWithoutAnExtraEnter()
+        {
+            TerminalConversationDefinition definition = QuestionDefinition();
+            definition.advanceWithEnter = true;
+            definition.steps[0].lines[0].pauseAfter = 10;
+            KernelRuntime runtime = World(definition);
+
+            Assert.That(runtime.TerminalInputLocked, Is.True);
+            Assert.That(runtime.TerminalLineUsesEnter, Is.False);
+            runtime.AdvanceTerminalConversation(0.1);
+            Assert.That(runtime.TerminalAwaitingAnswer, Is.True);
+            Assert.That(runtime.Execute("y").Success, Is.True);
+
+            runtime.AdvanceTerminalConversation(10);
+            Assert.That(runtime.TerminalLineUsesEnter, Is.True, "The reply leads into another line of dialogue.");
+            Assert.That(runtime.ContinueTerminalLine(), Is.True);
+            Listen(runtime);
+            Assert.That(runtime.GetTrigger("tutorial.complete"), Is.True);
         }
 
         [Test]

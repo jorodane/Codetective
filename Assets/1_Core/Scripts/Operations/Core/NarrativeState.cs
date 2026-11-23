@@ -71,7 +71,7 @@ namespace Codetective.Operations
         public bool AwaitingAssignment => !string.IsNullOrEmpty(StoryStartFact) && !Facts.Contains(StoryStartFact);
         public IEnumerable<StoryMail> Inbox(Mailbox box) => mail.Values.Where(m => m.mailbox == box && MailAvailable(m))
             .OrderByDescending(m => m.day).ThenBy(m => m.id, StringComparer.Ordinal).Select(m => m.Copy());
-        public int UnreadMailCount(Mailbox box) => Inbox(box).Count(m => !IsMailRead(m.id));
+        public int UnreadMailCount(Mailbox box) => mail.Values.Count(m => m.mailbox == box && !IsMailRead(m.id) && MailAvailable(m));
         public bool IsMailRead(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.read;
         public bool IsMailAccepted(string id) => mailProgress.TryGetValue(id, out MailProgress state) && state.accepted;
         public bool DayMailDeferred => dayPresentation.day == Day && dayPresentation.mailDeferred;

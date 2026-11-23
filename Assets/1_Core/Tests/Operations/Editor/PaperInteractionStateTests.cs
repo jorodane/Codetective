@@ -36,6 +36,21 @@ namespace Codetective.Tests.Operations
             Assert.That(() => restored.RecordNewspaperClue("optional", "funding"), Throws.TypeOf<CommandException>());
         }
         [Test]
+        public void ReadingAnArchivedEditionUsesItsPublicationDayAndClues()
+        {
+            KernelRuntime runtime = World();
+            runtime.DeliverNewspaper(); runtime.Tick(540); runtime.NextDay();
+            KernelRuntime restored = World(); restored.Restore(runtime.Capture());
+
+            restored.ReadNewspaper(1);
+            Assert.That(restored.GetTrigger("newspaper.day.1.read"), Is.True);
+            Assert.That(restored.TodayNewspaper.read, Is.False);
+            Assert.That(restored.Facts.Contains("paper.evidence"), Is.False);
+            restored.RecordNewspaperClue(1, "optional", "funding");
+            Assert.That(restored.Facts.Contains("paper.evidence"), Is.True);
+        }
+
+        [Test]
         public void StoredItemsMoveBetweenDrawersAndRestoreWithoutSharingSnapshotObjects()
         {
             KernelRuntime r = World(); r.SetItemStorage("paper", "drawer1"); r.SetItemStorage("profile", "drawer2");
@@ -62,6 +77,17 @@ namespace Codetective.Tests.Operations
             Assert.That(saved.y, Is.EqualTo(0.04f)); Assert.That(saved.z, Is.EqualTo(-0.3f));
             runtime.SetItemStorage("paper", "old-drawer");
             Assert.That(runtime.StoredItems.Single(s => s.itemId == "paper").hasPosition, Is.False);
+        }
+        [Test]
+        public void AChangeToTheDrawerCellIsSavedEvenWhenTheWorldPositionIsUnchanged()
+        {
+            KernelRuntime runtime = World();
+            var location = new StoredItemState { itemId = "desk.newspaper.day.1", containerId = "drawer", hasPosition = true, drawerSlot = 3 };
+            runtime.SetItemStorage(location);
+            location.drawerSlot = 35;
+            runtime.SetItemStorage(location);
+            KernelRuntime restored = World(); restored.Restore(runtime.Capture());
+            Assert.That(restored.StoredItems.Single().drawerSlot, Is.EqualTo(35));
         }
         [TestCase(float.NaN)]
         [TestCase(float.PositiveInfinity)]

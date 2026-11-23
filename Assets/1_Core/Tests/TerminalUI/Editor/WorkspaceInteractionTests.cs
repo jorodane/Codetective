@@ -381,8 +381,10 @@ namespace Codetective.Terminal.Tests.UI
             }
         }
 
-        [Test]
-        public void TheTopOfTheDeskReturnsToOverviewAndCanStillReceiveADroppedItem()
+        [TestCase("drawer", false)]
+        [TestCase("counsel", false)]
+        [TestCase("gramophone", true)]
+        public void DeskClicksReturnAccordingToTheCurrentViewAndStillAllowItemPlacement(string angleId, bool frontReturns)
         {
             var navigation = new GameObject("Drawer view", typeof(Camera), typeof(CameraAngleController)); navigation.SetActive(false);
             var desk = new GameObject("Desk", typeof(BoxCollider));
@@ -394,7 +396,7 @@ namespace Codetective.Terminal.Tests.UI
             {
                 var origin = new Vector3(81, 81, 81);
                 Set(overview, "angleId", "overview"); Set(overview, "position", origin);
-                Set(drawer, "angleId", "drawer"); Set(drawer, "position", origin);
+                Set(drawer, "angleId", angleId); Set(drawer, "position", origin);
                 Set(drawer, "eulerAngles", new Vector3(27.5f, 0, 0));
                 Set(set, "angles", new List<CameraAnglePreset> { overview, drawer });
                 var views = navigation.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
@@ -411,8 +413,9 @@ namespace Codetective.Terminal.Tests.UI
                 Physics.SyncTransforms();
 
                 Vector2 front = camera.WorldToScreenPoint(desk.transform.TransformPoint(new Vector3(0, -0.15f, 0.7f)));
-                Assert.That(Call(inspection, "InteractAtScreenPoint", front), Is.False);
-                Assert.That(views.ActiveAngle, Is.SameAs(drawer));
+                Assert.That(Call(inspection, "InteractAtScreenPoint", front), Is.EqualTo(frontReturns));
+                Assert.That(views.ActiveAngle, Is.SameAs(frontReturns ? overview : drawer));
+                if (frontReturns) Call(inspection, "InspectAngle", drawer);
 
                 Vector2 tabletop = camera.WorldToScreenPoint(desk.transform.position);
                 Assert.That(Call(inspection, "InteractAtScreenPoint", tabletop), Is.True);
@@ -431,6 +434,50 @@ namespace Codetective.Terminal.Tests.UI
             finally
             {
                 foreach (Object value in new Object[] { carryRoot, itemRoot, navigation, desk, overview, drawer, set }) Object.DestroyImmediate(value);
+            }
+        }
+
+        [Test]
+        public void TheTerminalReturnsOnlyWhenClickingOutsideTheCaseAndItsControls()
+        {
+            var navigation = new GameObject("Terminal view", typeof(Camera), typeof(CameraAngleController)); navigation.SetActive(false);
+            var terminal = new GameObject("Terminal", typeof(BoxCollider));
+            var targetType = FindType("Codetective.Interaction.InspectionTarget");
+            var hotspot = new GameObject("Terminal hotspot", targetType);
+            var set = ScriptableObject.CreateInstance<CameraAngleSet>();
+            var overview = ScriptableObject.CreateInstance<CameraAnglePreset>();
+            var monitor = ScriptableObject.CreateInstance<CameraAnglePreset>();
+            try
+            {
+                var origin = new Vector3(82, 82, 82);
+                Set(overview, "angleId", "overview"); Set(overview, "position", origin);
+                Set(monitor, "angleId", "monitor"); Set(monitor, "position", origin);
+                Set(set, "angles", new List<CameraAnglePreset> { overview, monitor });
+                var views = navigation.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
+                Camera camera = navigation.GetComponent<Camera>(); camera.pixelRect = new Rect(0, 0, 640, 480);
+                camera.orthographic = true; camera.orthographicSize = 1;
+                Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                Set(inspection, "overviewAngle", overview); Call(inspection, "Awake");
+                Component target = hotspot.GetComponent(targetType);
+                Set(target, "closeUpAngle", monitor); Set(target, "visualRoot", terminal.transform);
+                Call(inspection, "RegisterTarget", target); Call(inspection, "InspectAngle", monitor);
+
+                terminal.transform.position = origin + Vector3.forward * 3;
+                Physics.SyncTransforms();
+                Vector2 inside = camera.WorldToScreenPoint(terminal.transform.position);
+                Vector2 outside = camera.WorldToScreenPoint(terminal.transform.position + Vector3.right);
+                Assert.That(Call(inspection, "InteractAtScreenPoint", inside), Is.False);
+                Assert.That(views.ActiveAngle, Is.SameAs(monitor));
+                inspection.GetType().GetProperty("PointerBlocked").SetValue(inspection, (Func<Vector2, bool>)(_ => true));
+                Assert.That(Call(inspection, "InteractAtScreenPoint", outside), Is.False);
+                Assert.That(views.ActiveAngle, Is.SameAs(monitor));
+                inspection.GetType().GetProperty("PointerBlocked").SetValue(inspection, null);
+                Assert.That(Call(inspection, "InteractAtScreenPoint", outside), Is.True);
+                Assert.That(views.ActiveAngle, Is.SameAs(overview));
+            }
+            finally
+            {
+                foreach (Object value in new Object[] { navigation, terminal, hotspot, overview, monitor, set }) Object.DestroyImmediate(value);
             }
         }
 

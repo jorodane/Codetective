@@ -15,6 +15,12 @@ Shader "Hidden/Codetective/InspectionHighlight"
             half4 _OutlineColor;
             float _OutlineWidth;
         CBUFFER_END
+        float4 MaskVert(float3 positionOS : POSITION) : SV_POSITION
+        {
+            return TransformObjectToHClip(positionOS);
+        }
+
+        half4 MaskFrag() : SV_Target { return 1; }
         ENDHLSL
 
         Pass
@@ -22,16 +28,34 @@ Shader "Hidden/Codetective/InspectionHighlight"
             Name "VisibleSilhouette"
             Cull Back ZWrite Off ZTest LEqual
             Offset -1, -1
+            ColorMask R
 
             HLSLPROGRAM
             #pragma vertex MaskVert
             #pragma fragment MaskFrag
-            float4 MaskVert(float3 positionOS : POSITION) : SV_POSITION
-            {
-                return TransformObjectToHClip(positionOS);
-            }
+            ENDHLSL
+        }
+        Pass
+        {
+            Name "VisibleContents"
+            Cull Back ZWrite Off ZTest LEqual
+            Offset -1, -1
+            ColorMask G
 
-            half4 MaskFrag() : SV_Target { return 1; }
+            HLSLPROGRAM
+            #pragma vertex MaskVert
+            #pragma fragment MaskFrag
+            ENDHLSL
+        }
+        Pass
+        {
+            Name "FullSilhouette"
+            Cull Back ZWrite Off ZTest Always
+            ColorMask B
+
+            HLSLPROGRAM
+            #pragma vertex MaskVert
+            #pragma fragment MaskFrag
             ENDHLSL
         }
         Pass
@@ -49,7 +73,9 @@ Shader "Hidden/Codetective/InspectionHighlight"
 
             half Selected(float2 uv)
             {
-                return SAMPLE_TEXTURE2D_X_LOD(_BlitTexture, sampler_PointClamp, uv, 0).r;
+                half3 mask = SAMPLE_TEXTURE2D_X_LOD(_BlitTexture, sampler_PointClamp, uv, 0).rgb;
+                // Fill occlusion by drawer contents only where the drawer itself projects.
+                return max(mask.r, min(mask.g, mask.b));
             }
 
             half4 OutlineFrag(Varyings input) : SV_Target

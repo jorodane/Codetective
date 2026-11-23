@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Codetective.Interaction
@@ -10,6 +11,7 @@ namespace Codetective.Interaction
         [SerializeField] private Transform hand;
         [Tooltip("Preplaced holdable items. Spawned items register explicitly with Register.")]
         [SerializeField] private HoldableItem[] sceneItems = Array.Empty<HoldableItem>();
+        private readonly Dictionary<string, HoldableItem> registeredItems = new Dictionary<string, HoldableItem>(StringComparer.Ordinal);
         public HoldableItem HeldItem { get; private set; }
         public event Action<HoldableItem> Used;
         public event Action<HoldableItem> PickedUp;
@@ -24,21 +26,34 @@ namespace Codetective.Interaction
         private GameObject preview;
         private Material previewMaterial;
         private ItemPlacementSurface destination;
-        private Vector3 destinationPosition;
+        private ItemPlacementSurface.Placement destinationPlacement;
         private bool sessionEnded;
         public void Initialize(Transform camera)
         {
             hand = camera;
             foreach (HoldableItem item in sceneItems) Register(item);
         }
-        public void Register(HoldableItem item) { if (item != null) item.Register(this); }
+        public void Register(HoldableItem item)
+        {
+            if (item == null) return;
+            item.Register(this);
+            if (!string.IsNullOrEmpty(item.Id)) registeredItems[item.Id] = item;
+        }
+        public HoldableItem RegisteredItem(string id) =>
+            id != null && registeredItems.TryGetValue(id, out HoldableItem item) && item != null ? item : null;
+
+        internal void Unregister(HoldableItem item)
+        {
+            if (!string.IsNullOrEmpty(item.Id) && registeredItems.TryGetValue(item.Id, out HoldableItem registered) &&
+                ReferenceEquals(registered, item)) registeredItems.Remove(item.Id);
+        }
         public void SetPresentationVisible(bool visible) { if (HeldItem != null) HeldItem.SetPresentationVisible(visible && isActiveAndEnabled && !sessionEnded); }
         private void LateUpdate()
         { if (IsExamining) HeldItem.FrameForInspection(ViewCamera); }
         public bool TryPickup(HoldableItem item)
         {
             if (!CanManipulate || hand == null || HeldItem != null || item == null || !item.isActiveAndEnabled || (item.IsStored && !item.Storage.CanRetrieve)) return false;
-            item.Register(this); HeldItem = item; item.PickUp(hand); PickedUp?.Invoke(item); return true;
+            Register(item); HeldItem = item; item.PickUp(hand); PickedUp?.Invoke(item); return true;
         }
         public bool TryUse(bool textInputFocused)
         {
@@ -50,7 +65,13 @@ namespace Codetective.Interaction
         {
             CancelPlacement();
             if (HeldItem == null) return;
-            HoldableItem item = HeldItem; HeldItem = null; item.PutDown();
+            HoldableItem item = HeldItem; ItemPlacementSurface source = item.PickupSurface;
+            HeldItem = null; item.PutDown();
+            if (source != null && item.Storage != source)
+            {
+                source.SettleContents(Placed);
+                Placed?.Invoke(item);
+            }
         }
         public bool BeginPlacement()
         {
@@ -110,33 +131,34 @@ namespace Codetective.Interaction
             }
             if (destination != null)
             {
-                PlacementValid = destination.TryGetPosition(HeldItem, ray, out destinationPosition);
-                location = destination.transform.TransformPoint(destinationPosition);
+                PlacementValid = destination.TryGetPlacement(HeldItem, ray, out destinationPlacement);
+                location = destination.transform.TransformPoint(destinationPlacement.Position);
                 rotation = destination.transform.rotation;
             }
             preview.transform.SetPositionAndRotation(location, rotation); preview.SetActive(true);
             previewMaterial.SetColor("_Tint", PlacementValid ? new Color(0.15f, 1f, 0.32f, 0.7f) : new Color(1f, 0.36f, 0.04f, 0.7f));
-            PlacementHint = PlacementValid ? "클릭: 내려놓기 · 우클릭: 확인으로 돌아가기" : "이곳에는 놓을 수 없습니다 · 서랍 앞면 클릭: 열기 / 닫기 · 우클릭: 확인으로 돌아가기";
+            PlacementHint = PlacementValid ? "클릭: 배치 · 우클릭: 확인으로 돌아가기" : "이곳에는 놓을 수 없습니다 · 서랍 앞면 클릭: 열기 / 닫기 · 우클릭: 확인으로 돌아가기";
         }
         public bool TryPlaceAtScreenPoint(Vector2 point, ItemPlacementSurface tray = null)
         {
             UpdatePlacement(point, false, tray);
-            return PlacementValid && CommitPlacement(destination, destinationPosition);
+            return PlacementValid && CommitPlacement(destination, destinationPlacement);
         }
-        public bool TryPlaceOn(ItemPlacementSurface surface)
+        public bool TryPlaceOn(ItemPlacementSurface surface) => TryPlaceOn(surface, null);
+        public bool TryPlaceOn(ItemPlacementSurface surface, Vector3 worldPoint) => TryPlaceOn(surface, (Vector3?)worldPoint);
+        private bool TryPlaceOn(ItemPlacementSurface surface, Vector3? worldPoint)
         {
-            if (surface == null || HeldItem == null || !surface.TryGetPosition(HeldItem, out Vector3 position)) return false;
-            return CommitPlacement(surface, position);
+            return surface != null && HeldItem != null && surface.TryGetPlacement(HeldItem, worldPoint, out var placement) && CommitPlacement(surface, placement);
         }
-        public bool TryPlaceOn(ItemPlacementSurface surface, Vector3 worldPoint)
+        private bool CommitPlacement(ItemPlacementSurface surface, ItemPlacementSurface.Placement placement)
         {
-            if (surface == null || HeldItem == null || !surface.TryGetPosition(HeldItem, worldPoint, out Vector3 position)) return false;
-            return CommitPlacement(surface, position);
-        }
-        private bool CommitPlacement(ItemPlacementSurface surface, Vector3 localPosition)
-        {
-            if (!CanManipulate || !IsPlacing || surface == null || HeldItem == null || !surface.PlaceAt(HeldItem, localPosition)) return false;
-            HoldableItem item = HeldItem; HeldItem = null; CancelPlacement(); Placed?.Invoke(item); return true;
+            if (!CanManipulate || !IsPlacing || surface == null || HeldItem == null) return false;
+            HoldableItem item = HeldItem;
+            ItemPlacementSurface source = item.PickupSurface;
+            if (!surface.PlaceAt(item, placement)) return false;
+            HeldItem = null; CancelPlacement();
+            if (source != null) source.SettleContents(Placed);
+            Placed?.Invoke(item); return true;
         }
         public void HidePlacementPreview() { if (preview != null) preview.SetActive(false); PlacementValid = false; destination = null; }
         public void CancelPlacement()
@@ -148,17 +170,16 @@ namespace Codetective.Interaction
         public void ReturnToDesk(HoldableItem item)
         {
             if (item == null) return;
+            ItemPlacementSurface source = item.Storage != null ? item.Storage : item.PickupSurface;
             if (HeldItem == item) { CancelPlacement(); HeldItem = null; }
             item.ReturnHome();
+            if (source != null) source.SettleContents(Placed);
         }
         public bool RestoreStorage(HoldableItem item, ItemPlacementSurface surface)
-        { return item != null && surface != null && !item.IsHeld && surface.Place(item, true); }
-        public bool RestoreStorage(HoldableItem item, ItemPlacementSurface surface, Vector3 localPosition)
+        { return item != null && surface != null && !item.IsHeld && surface.RestorePlacement(item); }
+        public bool RestoreStorage(HoldableItem item, ItemPlacementSurface surface, Vector3 localPosition, int drawerSlot = 0)
         {
-            return item != null && surface != null && !item.IsHeld &&
-                (surface.PlaceAt(item, localPosition, true) || item.Use == HeldItemUse.Newspaper &&
-                    surface.TryGetPosition(item, surface.transform.TransformPoint(localPosition), out Vector3 adjusted, false) &&
-                    surface.PlaceAt(item, adjusted, true));
+            return item != null && surface != null && !item.IsHeld && surface.RestorePlacement(item, localPosition, drawerSlot);
         }
         private static void Discard(UnityEngine.Object value)
         { if (value == null) return; if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }

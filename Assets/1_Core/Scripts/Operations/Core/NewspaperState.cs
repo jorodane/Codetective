@@ -65,23 +65,25 @@ namespace Codetective.Operations
         }
         public IReadOnlyList<NewsArticle> NewspaperArticles(int day) => editions.TryGetValue(day, out NewspaperEdition edition) ?
             edition.articleIds.Where(news.ContainsKey).Select(id => news[id].Copy()).ToArray() : Array.Empty<NewsArticle>();
-        public void ReadNewspaper()
+        public void ReadNewspaper() => ReadNewspaper(Day);
+        public void ReadNewspaper(int day)
         {
-            DeliverNewspaper();
-            NewspaperEdition edition = editions[Day];
-            if (edition.read) return;
+            if (day == Day) DeliverNewspaper();
+            if (!editions.TryGetValue(day, out NewspaperEdition edition) || edition.read) return;
             foreach (string id in edition.articleIds.Where(news.ContainsKey))
             { NewsArticle article = news[id]; Facts.UnionWith(article.readFacts); ApplyStoryEffects(article.onRead); CollectNewsArticle(article); }
             edition.read = true;
             SetTrigger("newspaper.read", true);
-            SetTrigger("newspaper.day." + Day + ".read", true);
-            Report("DAY " + Day + " 신문 확인 — 새로운 데이터와 권한을 확인하세요."); NarrativeUpdated();
+            SetTrigger("newspaper.day." + day + ".read", true);
+            Report("DAY " + day + " 신문 확인 — 새로운 데이터와 권한을 확인하세요."); NarrativeUpdated();
         }
-        public void RecordNewspaperClue(string articleId, string clueId)
+        public void RecordNewspaperClue(string articleId, string clueId) => RecordNewspaperClue(Day, articleId, clueId);
+        public void RecordNewspaperClue(int day, string articleId, string clueId)
         {
-            DeliverNewspaper();
-            if (!editions[Day].articleIds.Contains(articleId) || !news.TryGetValue(articleId, out NewsArticle article))
-                throw new CommandException("오늘 발행된 기사에서만 단서를 기록할 수 있습니다.");
+            if (day == Day) DeliverNewspaper();
+            if (!editions.TryGetValue(day, out NewspaperEdition edition) || !edition.articleIds.Contains(articleId) ||
+                !news.TryGetValue(articleId, out NewsArticle article))
+                throw new CommandException("해당 날짜에 발행된 기사에서만 단서를 기록할 수 있습니다.");
             NewspaperClue clue = article.clues.FirstOrDefault(c => c.id == clueId) ?? throw new CommandException("기사의 단서를 찾을 수 없습니다.");
             string key = "newspaper." + articleId + "." + clueId;
             if (RecordedClues.Contains(key)) return;

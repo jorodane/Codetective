@@ -57,7 +57,6 @@ namespace Codetective.Gameplay
         private string selectedProfile = "client";
         private DeskNewspaper newspaper;
         private DeskProfilePresenter profilePaper;
-        private int newspaperRevision = -1;
         private readonly List<ItemPlacementSurface> storageSurfaces = new List<ItemPlacementSurface>();
         private ClinicVisitPresentation visits;
         private int summaryShownDay;
@@ -74,8 +73,6 @@ namespace Codetective.Gameplay
         private Quaternion hourBasis;
         private Quaternion minuteBasis;
         private GameObject ownCoffee;
-        private HoldableItem coffeeItem;
-        private HoldableItem guestCoffeeItem;
         private TextMesh dayText;
         private string pendingView;
         private bool delivering;
@@ -156,14 +153,15 @@ namespace Codetective.Gameplay
             inspection.BackHandler = ui.Back;
             inspection.QuickSaveRequested = QuickSave;
             inspection.PointerBlocked = ui.BlocksPointer;
+            inspection.HoverCaption = HoverCaption;
             inspection.InitializePointerFeedback(font);
             CreateCoffeeCopy();
             CreateCalendarText();
             InitializeDrawers();
             InitializeDesktop();
             newspaper = gameObject.AddComponent<DeskNewspaper>();
-            newspaper.Initialize(newspaperAnchor, desktopPlacement, font, Carry, scenario != null ? scenario.newspaper : null); newspaper.Refresh(Runtime);
-            newspaper.Document.AreaClicked += ReadPrintedArea;
+            newspaper.Initialize(newspaperAnchor, desktopPlacement, font, Carry, scenario != null ? scenario.newspaper : null);
+            newspaper.Deliver(Runtime); newspaper.AreaClicked += ReadPrintedArea;
             InitializeProfileSheet();
             RestoreStoredItems();
             initialLights = Array.ConvertAll(sceneLights, light => light != null && light.enabled);
@@ -202,8 +200,6 @@ namespace Codetective.Gameplay
                 ShowDaySummary();
             if (narrativeDirty && !quickSaving && Time.unscaledTime >= narrativeSaveAt) AutoSave();
             foreach (SlidingDrawer drawer in drawers) drawer.SetInteractionEnabled(CanOperateDrawers);
-            if (newspaperRevision != Runtime.Revision)
-            { newspaper.Refresh(Runtime); newspaperRevision = Runtime.Revision; }
             if (pendingView != null && !views.IsTransitioning && !IsDateTransitioning && !IsVisitPresenting)
             {
                 ui.ShowContext(pendingView);
@@ -219,6 +215,18 @@ namespace Codetective.Gameplay
             if (clockHour != null) clockHour.localRotation = hourBasis * Quaternion.AngleAxis((float)((Runtime.Minute * 0.5 + 90) % 360), Vector3.forward);
             if (clockMinute != null) clockMinute.localRotation = minuteBasis * Quaternion.AngleAxis((float)(Runtime.Minute % 60 * 6), Vector3.forward);
             if (dayText != null) dayText.text = "DAY " + Runtime.Day.ToString("D2");
+        }
+
+        private string HoverCaption(InspectionTarget target)
+        {
+            if (target.Angle.Id == "clock")
+            {
+                int minute = (int)Runtime.Minute;
+                return $"Day {Runtime.Day:00} - {minute / 60:00} : {minute % 60:00}";
+            }
+            if (target.Angle.Id != "monitor") return target.DisplayName;
+            int unread = Runtime.UnreadMailCount(Mailbox.Kernel) + Runtime.UnreadMailCount(Mailbox.Clinic);
+            return unread == 0 ? $"{target.DisplayName} - 알림 없음" : $"{target.DisplayName} - 읽지 않은 메일 {unread}건";
         }
 
         private static Quaternion ClockBasis(Transform hand)
@@ -254,13 +262,13 @@ namespace Codetective.Gameplay
         }
         private void PickedUpItem(HoldableItem item)
         {
-            if (item.Use == HeldItemUse.Newspaper) { Runtime.ReadNewspaper(); newspaper.Refresh(Runtime); }
+            if (item.Use == HeldItemUse.Newspaper) newspaper.Read(Runtime, item);
         }
         private void StoredItem(HoldableItem item)
         {
             Vector3 position = item.transform.localPosition;
             Runtime.SetItemStorage(new StoredItemState { itemId = item.Id, containerId = item.Storage?.Id,
-                hasPosition = true, x = position.x, y = position.y, z = position.z });
+                hasPosition = true, x = position.x, y = position.y, z = position.z, drawerSlot = item.DrawerSlot });
         }
         private void ReadPrintedArea(PaperDocument document, int index)
         {
@@ -285,20 +293,30 @@ namespace Codetective.Gameplay
         public bool SelectProfile(string id) => CanSelectProfile && profilePaper.SelectProfile(id);
         private void RestoreStoredItems()
         {
-            foreach (StoredItemState state in Runtime.StoredItems)
+            foreach (StoredItemState state in Runtime.StoredItems.OrderBy(state => state.drawerSlot))
             {
-                HoldableItem item = state.itemId == newspaper.Item.Id ? newspaper.Item :
-                    coffeeItem != null && state.itemId == coffeeItem.Id ? coffeeItem : guestCoffeeItem != null && state.itemId == guestCoffeeItem.Id ? guestCoffeeItem : null;
                 ItemPlacementSurface surface = storageSurfaces.FirstOrDefault(s => s.Id == state.containerId);
-                if (item == null || surface == null) continue;
-                if (state.hasPosition) Carry.RestoreStorage(item, surface, new Vector3(state.x, state.y, state.z));
-                else Carry.RestoreStorage(item, surface);
+                if (surface == null) continue;
+                HoldableItem item = Carry.RegisteredItem(state.itemId) ?? newspaper.ItemForStorage(Runtime, state.itemId);
+                if (item == null) continue;
+                bool restored = state.hasPosition ? Carry.RestoreStorage(item, surface, new Vector3(state.x, state.y, state.z), state.drawerSlot)
+                    : Carry.RestoreStorage(item, surface);
+                if (restored)
+                {
+                    StoredItem(item);
+                    if (item.Id != state.itemId) Runtime.SetItemStorage(state.itemId, null);
+                }
+                else if (item.Use == HeldItemUse.Newspaper && item != newspaper.Item) newspaper.Discard(item);
             }
         }
         public void BeginItemPlacement()
         {
             if (IsDateTransitioning || IsVisitPresenting || inspection.Mode == InspectionMode.Menu || inspection.TextInputFocused || Carry.HeldItem == null) return;
             if (!IsViewTransitioning) Carry.BeginPlacement();
+        }
+        public void CloseItemInspection()
+        {
+            if (Carry != null && Carry.CanManipulate) Carry.PutDown();
         }
         public void BeginNextDay()
         {
@@ -364,8 +382,14 @@ namespace Codetective.Gameplay
             yield return Transitions.Play(Transitions.Settings?.day, TransitionStyle.TerminalFade, () =>
             {
                 ui.HideDay(); inspection.EndTerminalPresentation(); inspection.NavigationBlocked = true;
-                Carry.ReturnToDesk(newspaper.Item); Runtime.SetItemStorage(newspaper.Item.Id, null);
-                Runtime.NextDay(true); newspaper.Refresh(Runtime);
+                HoldableItem previousEdition = newspaper.Item;
+                if (previousEdition != null && (previousEdition.Storage == null || !previousEdition.Storage.IsContainer))
+                {
+                    Carry.ReturnToDesk(previousEdition);
+                    Runtime.SetItemStorage(previousEdition.Id, null);
+                    newspaper.Discard(previousEdition);
+                }
+                Runtime.NextDay(true); newspaper.Deliver(Runtime);
                 inspection.SnapToOverview(); RefreshRoomTime(); AutoSave();
             });
             yield return IntroduceDay();
@@ -509,11 +533,11 @@ namespace Codetective.Gameplay
                 foreach (Renderer renderer in cupRenderers) bounds.Encapsulate(renderer.bounds);
                 ownCoffee.transform.position += Vector3.up * (position.y - bounds.min.y);
             }
-            coffeeItem = RegisterCoffeeItem(ownCoffee, "desk.coffee", "커피");
-            guestCoffeeItem = RegisterCoffeeItem(guestCoffeeTemplate.gameObject, "desk.guest-coffee", "손님용 커피");
+            RegisterCoffeeItem(ownCoffee, "desk.coffee", "커피");
+            RegisterCoffeeItem(guestCoffeeTemplate.gameObject, "desk.guest-coffee", "손님용 커피");
             ownCoffee.SetActive(Runtime.CoffeeReceived);
         }
-        private HoldableItem RegisterCoffeeItem(GameObject cup, string id, string label)
+        private void RegisterCoffeeItem(GameObject cup, string id, string label)
         {
             HoldableItem item = cup.GetComponent<HoldableItem>();
             if (item == null) item = cup.AddComponent<HoldableItem>();
@@ -523,7 +547,7 @@ namespace Codetective.Gameplay
                 BoxCollider collider = cup.AddComponent<BoxCollider>(); Bounds local = LocalBounds(cup.transform, cup.GetComponentsInChildren<Renderer>());
                 collider.center = local.center; collider.size = local.size;
             }
-            Carry.Register(item); return item;
+            Carry.Register(item);
         }
 
         private void CreateCalendarText()
