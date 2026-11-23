@@ -21,7 +21,7 @@ namespace Codetective.Terminal
         public TerminalCompletionInput CompletionInput => new TerminalCompletionInput(text, CompositionText, m_CaretPosition, m_CaretSelectPosition);
 
         private readonly Event keyEvent = new Event();
-        private readonly Event typedSpace = new Event { type = EventType.KeyDown, keyCode = KeyCode.Space, character = ' ' };
+        private Event typedSpace;
         private readonly TerminalSubmission submission = new TerminalSubmission();
         private readonly ImeSession imeSession = new ImeSession();
         private readonly TextGenerator previewLayout = new TextGenerator();
@@ -49,6 +49,12 @@ namespace Codetective.Terminal
                 return isFocused && system != null && system.currentSelectedGameObject == gameObject && system.currentInputModule != null ?
                     system.currentInputModule.input.compositionString ?? "" : "";
             }
+        }
+
+        protected override void Awake()
+        {
+            base.Awake();
+            typedSpace = new Event { type = EventType.KeyDown, keyCode = KeyCode.Space, character = ' ' };
         }
 
         public override void OnSelect(BaseEventData eventData)
