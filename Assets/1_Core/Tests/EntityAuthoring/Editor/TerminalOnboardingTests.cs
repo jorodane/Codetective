@@ -11,6 +11,14 @@ namespace Codetective.Tests.Operations
         [SetUp] public void Setup() => asset = TerminalOnboarding.Create();
         [TearDown] public void Cleanup()
         { foreach (ContentTextTableAsset table in asset.textTables) UnityEngine.Object.DestroyImmediate(table); UnityEngine.Object.DestroyImmediate(asset); }
+        internal static void ReadBriefing(KernelRuntime runtime)
+        {
+            while (runtime.TerminalInputLocked)
+            {
+                runtime.AdvanceTerminalConversation(1000);
+                if (runtime.TerminalInputLocked) Assert.That(runtime.ContinueTerminalLine(), Is.True);
+            }
+        }
         private KernelRuntime World(CommandLocale commands = CommandLocale.Korean, string display = "ko")
         {
             KernelRuntime r = ClinicScenario.Create(); r.Language = commands; r.DisplayLanguage = display; ContentTextTableAsset.Install(r, asset.textTables);
@@ -28,7 +36,7 @@ namespace Codetective.Tests.Operations
                 : new[] { "help", "code practice", "practice = hq", "practice.checkComms()", "free practice" };
             while (r.TerminalConversationActive && sent < 10)
             {
-                r.AdvanceTerminalConversation(1000);
+                ReadBriefing(r);
                 if (!r.TerminalConversationActive) break;
                 if (r.TerminalAwaitingAnswer)
                 {
@@ -44,7 +52,7 @@ namespace Codetective.Tests.Operations
                 Assert.That(r.Execute(command).Success, Is.True, command);
                 sent++;
             }
-            r.AdvanceTerminalConversation(1000);
+            ReadBriefing(r);
             Assert.That(sent, Is.EqualTo(5)); Assert.That(r.TerminalConversationActive, Is.False);
             Assert.That(r.GetTrigger("terminal.onboarding.complete"), Is.True); Assert.That(r.Data.ContainsKey(r.ConversationProgress("kernel-onboarding").slotName), Is.False);
             Assert.That(r.GetTrigger("kernel.oath.accepted"), Is.EqualTo(answer == "y"));
@@ -57,9 +65,9 @@ namespace Codetective.Tests.Operations
         public void RestoredEnglishInstructionsRenderOlderDeclarationsWithTheNewKeyword()
         {
             KernelRuntime r = World(CommandLocale.English, "en");
-            r.AdvanceTerminalConversation(1000);
+            ReadBriefing(r);
             Assert.That(r.Execute("help").Success, Is.True);
-            r.AdvanceTerminalConversation(1000);
+            ReadBriefing(r);
             Assert.That(r.Execute("var practice").Success, Is.True);
             KernelSnapshot snapshot = r.Capture();
             foreach (TerminalConversationLog entry in snapshot.terminalConversations[0].log)
@@ -69,7 +77,7 @@ namespace Codetective.Tests.Operations
 
             KernelRuntime restored = World(CommandLocale.English, "en");
             restored.Restore(snapshot);
-            restored.AdvanceTerminalConversation(1000);
+            ReadBriefing(restored);
             Assert.That(restored.TerminalExpectedCommand, Is.EqualTo("practice = hq"));
             Assert.That(restored.TerminalConversationTranscript(), Does.Contain("\npractice = hq").And.Not.Contain("code practice = hq;"));
             Assert.That(restored.CanUseTerminalKeyword("code"), Is.True);
@@ -80,13 +88,13 @@ namespace Codetective.Tests.Operations
         }
         [Test] public void ThirdSuccessfulDetourUsesTheAuthoredAngryReplyAndRecoversToTheSameLesson()
         {
-            KernelRuntime r = World(); r.AdvanceTerminalConversation(1000);
+            KernelRuntime r = World(); ReadBriefing(r);
             Assert.That(r.Execute("도움말").Success, Is.True);
-            r.AdvanceTerminalConversation(1000);
+            ReadBriefing(r);
             foreach (string command in new[] { "암호 첫번째", "암호 두번째", "암호 세번째" })
-            { Assert.That(r.Execute(command).Success, Is.True); if (command != "암호 세번째") r.AdvanceTerminalConversation(1000); }
+            { Assert.That(r.Execute(command).Success, Is.True); if (command != "암호 세번째") ReadBriefing(r); }
             Assert.That(r.TerminalDisturbance, Is.GreaterThan(0));
-            r.AdvanceTerminalConversation(1000); Assert.That(r.TerminalConversationTranscript(), Does.Contain("지금은 장난칠 때가 아닙니다."));
+            ReadBriefing(r); Assert.That(r.TerminalConversationTranscript(), Does.Contain("지금은 장난칠 때가 아닙니다."));
             Assert.That(r.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("allocate"));
             Assert.That(r.Execute("암호 연습").Success, Is.True);
             Assert.That(r.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("reference"));

@@ -27,6 +27,10 @@ namespace Codetective.Interaction
         [Tooltip("Scene-authored angle targets. Runtime targets can call RegisterTarget / UnregisterTarget.")]
         [SerializeField] private InspectionTarget[] inspectionTargets = Array.Empty<InspectionTarget>();
         private readonly List<InspectionTarget> targets = new List<InspectionTarget>();
+        private RaycastHit[] pointerHits = new RaycastHit[32];
+        private static readonly IComparer<RaycastHit> NearestFirst =
+            Comparer<RaycastHit>.Create((a, b) => a.distance.CompareTo(b.distance));
+        private InspectionHoverView hover;
 
         private readonly InspectionFlow flow = new InspectionFlow();
         private CameraAngleController views;
@@ -83,7 +87,9 @@ namespace Codetective.Interaction
             }
         }
         public ItemCarryController Carry { get; set; }
+        public ItemPlacementSurface Desktop { get; set; }
         public bool TextInputFocused => TextInputFocus.IsActive || (activeTerminal != null && activeTerminal.IsCompositionProtected);
+        public void InitializePointerFeedback(Font font) => hover = hover ?? new InspectionHoverView(font);
 
         private void Awake()
         {
@@ -120,11 +126,13 @@ namespace Codetective.Interaction
             if (Transitions != null) { Transitions.SetTerminalFocus("menu", false); Transitions.SetTerminalFocus("day", false); }
             PresentingOnTerminal = false; AllowPresentationMenu = false;
             Carry?.SetPresentationVisible(true);
+            hover?.Hide();
             DisableTerminal();
             flow.Resume();
             flow.ReturnToOverview();
             inspectedAngle = null; returningToOverview = false; hasInformationReturn = false;
         }
+        private void OnDestroy() => hover?.Dispose();
 
         private void Update()
         {
@@ -148,8 +156,11 @@ namespace Codetective.Interaction
             }
             if (ModalInputBlocked) return;
 
-            if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame) &&
-                !TextInputFocused && TryFocusKernel()) return;
+            if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame) && !TextInputFocused)
+            {
+                if (!ViewBusy && activeTerminal != null && activeTerminal.TryContinueConversation()) return;
+                if (TryFocusKernel()) return;
+            }
 
             if (enableAngleShortcuts && keyboard != null && !TextInputFocused)
             {
@@ -173,10 +184,7 @@ namespace Codetective.Interaction
             }
 
             Mouse mouse = Mouse.current;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
-            {
-                if (!InteractAtScreenPoint(mouse.position.ReadValue())) InspectAtScreenPoint(mouse.position.ReadValue());
-            }
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame) InteractAtScreenPoint(mouse.position.ReadValue());
 #endif
         }
 
@@ -187,6 +195,7 @@ namespace Codetective.Interaction
                 (Carry == null || Carry.HeldItem == null);
             if (flow.Mode == InspectionMode.Menu || PresentingOnTerminal)
             {
+                hover?.Hide();
                 // Only system controls are shown; command input and page navigation remain suspended.
                 bool allow = Transitions == null || !Transitions.IsBusy;
                 if (terminal != null && terminal.InteractionEnabled != allow) terminal.SetInteractionEnabled(allow);
@@ -200,31 +209,19 @@ namespace Codetective.Interaction
                 activeTerminal.TryFocusCommandInput();
             }
 #if ENABLE_INPUT_SYSTEM
-            if (Carry == null) return;
-            if (NavigationBlocked || flow.Mode == InspectionMode.Menu || views.IsTransitioning || ModalInputBlocked)
-            { Carry.HidePlacementPreview(); return; }
-            if (Carry.IsPlacing && Mouse.current != null)
-                Carry.UpdatePlacement(Mouse.current.position.ReadValue(), PointerBlocked != null && PointerBlocked(Mouse.current.position.ReadValue()));
-            if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame && !TextInputFocused)
-            { if (Carry.IsPlacing) Carry.CancelPlacement(); }
+            Mouse mouse = Mouse.current;
+            if (mouse == null || NavigationBlocked || ViewBusy || ModalInputBlocked || (Carry != null && Carry.IsExamining))
+            { hover?.Hide(); Carry?.HidePlacementPreview(); return; }
+            if (Carry != null && Carry.IsPlacing && mouse.rightButton.wasPressedThisFrame && !TextInputFocused)
+            { Carry.CancelPlacement(); hover?.Hide(); return; }
+            Vector2 point = mouse.position.ReadValue();
+            bool blocked = PointerBlocked?.Invoke(point) ?? false;
+            Collider collider = null;
+            Component target = blocked ? null : ResolvePointerTarget(point, out collider, out _);
+            if (Carry != null && Carry.IsPlacing)
+                Carry.UpdatePlacement(point, blocked || target is InspectionTarget || target is InspectionActionTarget, target as ItemPlacementSurface);
+            DrawPointerFeedback(target, collider);
 #endif
-        }
-
-        public void InspectAtScreenPoint(Vector2 point)
-        {
-            if (!CanInspectByPointer || (Carry != null && Carry.IsExamining) || ViewBusy || NavigationBlocked || ModalInputBlocked || (PointerBlocked != null && PointerBlocked(point)))
-                return;
-            Ray ray = views.ControlledCamera.ScreenPointToRay(point);
-            RaycastHit[] hits = Physics.RaycastAll(ray, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
-            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-            foreach (RaycastHit hit in hits)
-            {
-                InspectionTarget target = hit.collider.GetComponentInParent<InspectionTarget>();
-                if (target != null && target.isActiveAndEnabled)
-                { InspectTarget(target); return; }
-                // Drawer/item action volumes may sit in front of the camera-angle hotspot.
-                if (!hit.collider.isTrigger && hit.collider.GetComponentInParent<InspectionActionTarget>() == null) return;
-            }
         }
 
         public void InspectTarget(InspectionTarget target)
@@ -236,53 +233,118 @@ namespace Codetective.Interaction
         public bool InteractAtScreenPoint(Vector2 point)
         {
             if (flow.Mode == InspectionMode.Menu || NavigationBlocked || ViewBusy || ModalInputBlocked ||
-                (PointerBlocked != null && PointerBlocked(point))) return false;
+                PresentingOnTerminal || (PointerBlocked?.Invoke(point) ?? false)) return false;
             if (Carry != null && Carry.IsExamining) return true;
             if (TextInputFocused) TextInputFocus.ReleaseAll();
-            RaycastHit[] hits = Physics.RaycastAll(views.ControlledCamera.ScreenPointToRay(point), clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
-            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-            if (TryInspectPlacementTarget(hits)) return true;
-            foreach (RaycastHit hit in hits)
+            Component target = ResolvePointerTarget(point, out _, out RaycastHit? obstruction);
+            if (target is InspectionActionTarget action)
+            { action.Interact(); return true; }
+            if (target is InspectionTarget angle)
             {
-                if (hit.collider.GetComponent<ItemPlacementSurface>() != null)
-                {
-                    if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
-                    continue;
-                }
-                InspectionActionTarget action = hit.collider.GetComponentInParent<InspectionActionTarget>();
-                if (action is DrawerFrontTarget front && front.CanInteract(views.ActiveAngle?.Id)) { front.Interact(); return true; }
-                // Prefab body colliders must not turn the entire open tray into a close button.
-                if (action is SlidingDrawer) continue;
-                if (hit.collider.isTrigger && hit.collider.GetComponentInParent<InspectionTarget>() != null) continue;
-                if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
-                if (action != null && action.CanInteract(views.ActiveAngle?.Id)) { action.Interact(); return true; }
-                // Coarse inspection volumes select an angle; they must not obstruct its detailed controls.
-                if (hit.collider.GetComponentInParent<InspectionTarget>() == null && !hit.collider.isTrigger) return false;
+                InspectAngle(angle.Angle, angle.Terminal ?? FindTerminalFor(angle.Angle)); return true;
             }
-            if (Carry != null && Carry.IsPlacing) { Carry.TryPlaceAtScreenPoint(point); return true; }
+            if (target is ItemPlacementSurface tray)
+            { Carry.TryPlaceAtScreenPoint(point, tray); return true; }
+            if (CanReturnAboveDesk(point, obstruction))
+            { ReturnToOverview(); return true; }
+            if (Carry != null && Carry.IsPlacing)
+            { Carry.TryPlaceAtScreenPoint(point); return true; }
             return false;
         }
-        private bool TryInspectPlacementTarget(RaycastHit[] hits)
+
+        private Component ResolvePointerTarget(Vector2 point, out Collider collider, out RaycastHit? obstruction)
         {
-            if (Carry == null || !Carry.IsPlacing) return false;
-            foreach (RaycastHit hit in hits)
+            Ray ray = views.ControlledCamera.ScreenPointToRay(point);
+            int count = Physics.RaycastNonAlloc(ray, pointerHits, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
+            while (count == pointerHits.Length)
             {
-                InspectionTarget target = hit.collider.GetComponentInParent<InspectionTarget>();
-                if (target != null && target.isActiveAndEnabled && target.Angle != null && target.Angle != views.ActiveAngle &&
-                    (CanInspectByPointer || target.Angle.Id == "drawer"))
-                { InspectAngle(target.Angle); return true; }
-                bool drawer = hit.collider.GetComponentInParent<SlidingDrawer>() != null || hit.collider.GetComponent<DrawerFrontTarget>() != null;
-                if (drawer && views.ActiveAngle?.Id != "drawer")
-                {
-                    CameraAnglePreset angle = target != null && target.Angle != null && target.Angle.Id == "drawer" ? target.Angle : GetTarget("drawer")?.Angle;
-                    if (angle == null && views.AngleSet != null) angle = views.AngleSet.Get(views.AngleSet.FindId("drawer"));
-                    if (angle == null) return false;
-                    InspectAngle(angle); return true;
-                }
-                // A desk placement surface or solid foreground object still occludes drawers behind it.
-                if (!hit.collider.isTrigger) return false;
+                Array.Resize(ref pointerHits, pointerHits.Length * 2);
+                count = Physics.RaycastNonAlloc(ray, pointerHits, clickDistance, inspectionLayers, QueryTriggerInteraction.Collide);
             }
-            return false;
+            Array.Sort(pointerHits, 0, count, NearestFirst);
+            collider = null; obstruction = null;
+            bool placing = Carry != null && Carry.IsPlacing;
+            string angleId = views.ActiveAngle?.Id;
+            ItemPlacementSurface tray = null;
+            Collider trayCollider = null, angleCollider = null;
+            InspectionTarget angleTarget = null;
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit hit = pointerHits[i];
+                Collider part = hit.collider;
+                ItemPlacementSurface surface = part.GetComponent<ItemPlacementSurface>();
+                InspectionActionTarget action = part.GetComponentInParent<InspectionActionTarget>();
+                if (tray != null)
+                {
+                    // The tray owns this hit. An exposed item in that tray can still be picked up.
+                    if (action is HoldableItem stored && stored.Storage == tray && stored.CanInteract(angleId))
+                    { collider = part; return stored; }
+                    if (part.isTrigger && surface == null && !(action is DrawerFrontTarget)) continue;
+                    break;
+                }
+                if (surface != null)
+                {
+                    if (surface.Drawer != null && surface.Drawer.IsOpen && surface.Drawer.CanInteract(angleId))
+                    {
+                        if (placing) { collider = part; return surface; }
+                        tray = surface; trayCollider = part;
+                    }
+                    continue;
+                }
+                if (action != null && action.CanInteract(angleId))
+                { collider = part; return action; }
+                InspectionTarget candidate = part.GetComponentInParent<InspectionTarget>();
+                if (candidate == null && (CanInspectByPointer || placing))
+                {
+                    bool drawerPart = action is SlidingDrawer || action is DrawerFrontTarget;
+                    foreach (InspectionTarget registered in targets)
+                        if (IsSelectableAngle(registered, placing) && (registered.Angle.Id != "drawer" || drawerPart) &&
+                            part.transform.IsChildOf(registered.VisualRoot))
+                        { candidate = registered; break; }
+                }
+                if (IsSelectableAngle(candidate, placing))
+                {
+                    if (!part.isTrigger) { collider = part; return candidate; }
+                    if (angleTarget == null) { angleTarget = candidate; angleCollider = part; }
+                }
+                if (!part.isTrigger) { obstruction = hit; break; }
+            }
+            if (tray != null) { collider = trayCollider; return tray.Drawer; }
+            collider = angleCollider;
+            return angleTarget;
+        }
+
+        private bool IsSelectableAngle(InspectionTarget target, bool placing) =>
+            target != null && target.isActiveAndEnabled && target.Angle != null && target.Angle != views.ActiveAngle &&
+            (CanInspectByPointer || (placing && target.Angle.Id == "drawer"));
+
+        private bool CanReturnAboveDesk(Vector2 point, RaycastHit? obstruction)
+        {
+            if (Desktop == null || views.ActiveAngle?.Id != "drawer" || flow.Mode != InspectionMode.Inspecting) return false;
+            Camera camera = views.ControlledCamera;
+            Bounds bounds = Desktop.LocalBounds;
+            float edge = float.NegativeInfinity, depth = 0;
+            for (int x = -1; x <= 1; x += 2) for (int z = -1; z <= 1; z += 2)
+            {
+                Vector3 corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, -1, z));
+                Vector3 screen = camera.WorldToScreenPoint(Desktop.transform.TransformPoint(corner));
+                if (screen.z <= camera.nearClipPlane) continue;
+                edge = Mathf.Max(edge, screen.y);
+                depth = Mathf.Max(depth, screen.z);
+            }
+            // Room walls and distant scenery are the backdrop. Props before the far desk edge still take the click.
+            return depth > 0 && point.y > edge &&
+                (!obstruction.HasValue || camera.WorldToScreenPoint(obstruction.Value.point).z > depth);
+        }
+
+        private void DrawPointerFeedback(Component target, Collider collider)
+        {
+            if (hover == null) return;
+            if (target is DrawerFrontTarget front) target = front.Drawer;
+            if (target is InspectionTarget angle) hover.Draw(views.ControlledCamera, angle.VisualRoot, angle.DisplayName, collider);
+            else if (target is SlidingDrawer drawer) hover.Draw(views.ControlledCamera, drawer.transform, drawer.DisplayName, collider);
+            else if (target is HoldableItem item) hover.Draw(views.ControlledCamera, item.transform, item.DisplayName, collider);
+            else hover.Hide();
         }
 
         public void InspectAngle(CameraAnglePreset angle)

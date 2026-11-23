@@ -15,12 +15,13 @@ namespace Codetective.Interaction
         private float amount;
         private bool interactionEnabled;
         public string Id => drawerId;
+        public string DisplayName { get; private set; } = "서랍";
         public bool IsOpen => runtime != null && runtime.IsDrawerOpen(drawerId);
         public bool CanStore => interactionEnabled && IsOpen && amount >= 0.99f;
-        public void Initialize(KernelRuntime value, string id)
+        public void Initialize(KernelRuntime value, string id, string label = "서랍")
         {
             if (runtime == null) closedPosition = transform.localPosition;
-            runtime = value; drawerId = id; amount = IsOpen ? 1 : 0; Apply();
+            runtime = value; drawerId = id; DisplayName = label; amount = IsOpen ? 1 : 0; Apply();
         }
         public void SetInteractionEnabled(bool value) => interactionEnabled = value;
         public override bool CanInteract(string angleId) => interactionEnabled && runtime != null && angleId == inspectionAngleId;

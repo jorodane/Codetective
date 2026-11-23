@@ -43,6 +43,26 @@ namespace Codetective.Tests.Interaction
             finally { Object.DestroyImmediate(paper); Object.DestroyImmediate(root); }
         }
         [Test]
+        public void ANewspaperSnapsIntoANarrowDrawerEvenAtItsOuterEdge()
+        {
+            var root = new GameObject("Drawer"); var paper = new GameObject("Paper");
+            try
+            {
+                var runtime = new KernelRuntime(); runtime.SetDrawerOpen("drawer", true);
+                SlidingDrawer drawer = root.AddComponent<SlidingDrawer>(); drawer.Initialize(runtime, "drawer"); drawer.SetInteractionEnabled(true);
+                ItemPlacementSurface surface = root.AddComponent<ItemPlacementSurface>();
+                var interior = new Bounds(Vector3.zero, new Vector3(HoldableItem.NewspaperRollSize.x, 0.1f, 0.4f));
+                surface.Initialize("drawer", drawer, interior);
+                HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("paper", "신문", HeldItemUse.Newspaper);
+
+                Vector3 edge = surface.transform.TransformPoint(new Vector3(interior.max.x, 0, 0));
+                Assert.That(surface.TryGetPosition(item, edge, out Vector3 snapped), Is.True);
+                Assert.That(snapped.x, Is.Zero.Within(0.001f));
+                Assert.That(snapped.y - item.PlacementSize.y * 0.5f, Is.EqualTo(interior.min.y).Within(0.001f));
+            }
+            finally { Object.DestroyImmediate(paper); Object.DestroyImmediate(root); }
+        }
+        [Test]
         public void DrawerContentsDoNotOverlapAndPickupFreesTheirOccupiedSpace()
         {
             var root = new GameObject("Carry"); var camera = new GameObject("Camera"); var drawer = new GameObject("Drawer");

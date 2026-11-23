@@ -24,6 +24,34 @@ namespace Codetective.Tests.Operations
         }
         private static void Listen(KernelRuntime r) => r.AdvanceTerminalConversation(1000);
 
+        [Test]
+        public void ManualDialogueWaitsOnTheCurrentLineAfterTypingAndAfterLoading()
+        {
+            TerminalConversationDefinition definition = Definition();
+            definition.advanceWithEnter = true;
+            definition.steps[0].lines = new[] { Line("First message", 2), Line("Second message", 2) };
+            KernelRuntime runtime = World(definition);
+
+            Assert.That(runtime.TerminalLineUsesEnter, Is.True);
+            Assert.That(runtime.ContinueTerminalLine(), Is.True, "Enter during typing reveals the current line.");
+            Assert.That(runtime.TerminalConversationTranscript(), Does.Contain("First message").And.Not.Contain("Second message"));
+            runtime.AdvanceTerminalConversation(1000);
+            Assert.That(runtime.TerminalInputLocked, Is.True);
+            Assert.That(runtime.Execute("help").Success, Is.False);
+
+            KernelRuntime restored = World(definition, false);
+            restored.Restore(runtime.Capture());
+            Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(runtime.TerminalConversationTranscript()));
+            Assert.That(restored.ContinueTerminalLine(), Is.True);
+            restored.AdvanceTerminalConversation(1000);
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Second message"));
+            Assert.That(restored.TerminalInputLocked, Is.True);
+            Assert.That(restored.ContinueTerminalLine(), Is.True);
+            Assert.That(restored.TerminalInputLocked, Is.False);
+            Assert.That(restored.ContinueTerminalLine(), Is.False);
+            Assert.That(restored.Execute("help").Success, Is.True);
+        }
+
         private static TerminalConversationDefinition QuestionDefinition()
         {
             TerminalConversationDefinition definition = Definition();

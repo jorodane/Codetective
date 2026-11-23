@@ -78,8 +78,20 @@ namespace Codetective.Terminal
         {
             if (!(input.placeholder is Text placeholder)) return;
             bool english = session.Runtime.DisplayLanguage == "en";
-            placeholder.text = session.Runtime.TerminalInputLocked ? (english ? "Receiving.." : "수신중..") :
+            KernelRuntime runtime = session.Runtime;
+            placeholder.text = runtime.TerminalLineUsesEnter ? (english ? "Press Enter to continue.." : "Enter를 눌러 넘기기..") :
+                runtime.TerminalInputLocked ? (english ? "Receiving.." : "수신중..") :
                 (english ? "Awaiting input.." : "입력 대기중..");
+        }
+
+        public bool TryContinueConversation()
+        {
+            if (!interactionEnabled || !pageVisible || !isActiveAndEnabled || Time.timeScale <= 0 ||
+                !session.Runtime.ContinueTerminalLine()) return false;
+            // The Enter that advances the dialogue must not also reach the selected button or input.
+            if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject != input.gameObject)
+                EventSystem.current.SetSelectedGameObject(null);
+            return true;
         }
 
         private void RefreshAnswerPrompt()

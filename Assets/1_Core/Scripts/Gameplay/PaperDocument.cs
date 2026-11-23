@@ -53,9 +53,15 @@ namespace Codetective.Gameplay
             stock = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")); stock.color = new Color(0.83f, 0.80f, 0.69f);
             sheet = GameObject.CreatePrimitive(PrimitiveType.Cube); sheet.name = "PaperSheet"; sheet.transform.SetParent(transform, false);
             sheet.transform.localScale = new Vector3(size.x, 0.004f, size.y); sheet.GetComponent<Renderer>().sharedMaterial = stock;
-            roll = GameObject.CreatePrimitive(PrimitiveType.Cylinder); roll.name = "RolledNewspaper"; roll.transform.SetParent(transform, false);
-            roll.transform.localRotation = Quaternion.Euler(0, 0, 90); roll.transform.localScale = new Vector3(0.052f, 0.14f, 0.052f);
-            roll.GetComponent<Renderer>().sharedMaterial = stock; roll.SetActive(false);
+            if (Item.Use == HeldItemUse.Newspaper)
+            {
+                Vector3 rollSize = HoldableItem.NewspaperRollSize;
+                roll = GameObject.CreatePrimitive(PrimitiveType.Cylinder); roll.name = "RolledNewspaper"; roll.transform.SetParent(transform, false);
+                roll.transform.localRotation = Quaternion.Euler(0, 0, 90);
+                roll.transform.localScale = new Vector3(rollSize.y, rollSize.x * 0.5f, rollSize.z);
+                roll.GetComponent<Renderer>().sharedMaterial = stock;
+                Item.SetPlacementVisual(roll.transform);
+            }
             ink = (RectTransform)new GameObject("PrintedDocument", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster), typeof(CanvasGroup)).transform;
             ink.SetParent(transform, false); ink.localPosition = new Vector3(0, 0.0025f, 0); ink.localRotation = Quaternion.Euler(90, 0, 0);
             ink.sizeDelta = pageSize; ink.localScale = Vector3.one * 0.0004f;
@@ -132,7 +138,8 @@ namespace Codetective.Gameplay
         public void RefreshShape()
         {
             bool rolled = Item.IsRolled;
-            sheet.SetActive(!rolled); ink.gameObject.SetActive(!rolled); roll.SetActive(rolled);
+            sheet.SetActive(!rolled); ink.gameObject.SetActive(!rolled);
+            if (roll != null) roll.SetActive(rolled);
         }
         private void Update()
         {

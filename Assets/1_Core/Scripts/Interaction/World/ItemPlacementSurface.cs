@@ -12,8 +12,10 @@ namespace Codetective.Interaction
         private readonly List<HoldableItem> contents = new List<HoldableItem>();
         private SlidingDrawer drawer;
         public string Id { get; private set; }
+        public SlidingDrawer Drawer => drawer;
         public bool IsContainer => drawer != null;
         public bool CanRetrieve => drawer == null || drawer.CanStore;
+        public Bounds LocalBounds => new Bounds(center, size);
         public void Initialize(string id, SlidingDrawer owner, Bounds interior)
         {
             Id = id; drawer = owner; center = interior.center; size = interior.size;
@@ -26,26 +28,41 @@ namespace Codetective.Interaction
         {
             position = center;
             if (item == null || (requireOpen && drawer != null && !drawer.CanStore)) return false;
-            Vector3 itemSize = LocalSize(item);
-            if (itemSize.x > size.x || itemSize.y > size.y || itemSize.z > size.z) return false;
-            contents.RemoveAll(value => value == null);
-            // Try a small grid; every candidate is checked against the full interior and existing contents.
-            Vector3 margin = (size - itemSize) * 0.5f;
-            for (int z = 0; z < 3; z++) for (int x = 0; x < 3; x++)
-            {
-                Vector3 candidate = center + new Vector3((x - 1) * margin.x, -margin.y, (z - 1) * margin.z) - LocalOffset(item);
-                if (Fits(item, candidate, requireOpen)) { position = candidate; return true; }
-            }
-            return false;
+            Vector3 margin = (size - LocalSize(item)) * 0.5f;
+            Vector3 origin = center - LocalOffset(item) - Vector3.up * margin.y;
+            return TryFindSlot(item, origin, margin, origin, out position, requireOpen);
         }
         public bool TryGetPosition(HoldableItem item, Vector3 worldPoint, out Vector3 position, bool requireOpen = true)
         {
             position = transform.InverseTransformPoint(worldPoint);
             if (item == null || (requireOpen && drawer != null && !drawer.CanStore)) return false;
-            Vector3 offset = LocalOffset(item), itemSize = LocalSize(item);
+            Vector3 offset = LocalOffset(item), margin = (size - LocalSize(item)) * 0.5f;
+            Vector3 origin = center - offset - Vector3.up * margin.y;
             position.x -= offset.x; position.z -= offset.z;
-            position.y = center.y - size.y * 0.5f + itemSize.y * 0.5f - offset.y;
+            position.y = origin.y;
+            if (margin.x < 0 || margin.y < 0 || margin.z < 0) return false;
+            if (drawer != null || !requireOpen)
+            {
+                position.x = Mathf.Clamp(position.x, origin.x - margin.x, origin.x + margin.x);
+                position.z = Mathf.Clamp(position.z, origin.z - margin.z, origin.z + margin.z);
+            }
+            if (drawer != null && requireOpen && TryFindSlot(item, origin, margin, position, out Vector3 slot, true))
+            { position = slot; return true; }
             return Fits(item, position, requireOpen);
+        }
+        private bool TryFindSlot(HoldableItem item, Vector3 origin, Vector3 margin, Vector3 preferred, out Vector3 position, bool checkObstacles)
+        {
+            position = preferred;
+            if (margin.x < 0 || margin.y < 0 || margin.z < 0) return false;
+            float nearest = float.PositiveInfinity;
+            for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++)
+            {
+                Vector3 candidate = origin + new Vector3(x * margin.x, 0, z * margin.z);
+                float distance = (candidate - preferred).sqrMagnitude;
+                if (distance >= nearest || !Fits(item, candidate, checkObstacles)) continue;
+                nearest = distance; position = candidate;
+            }
+            return nearest < float.PositiveInfinity;
         }
         public bool TryGetPosition(HoldableItem item, Ray ray, out Vector3 position)
         {
@@ -65,7 +82,7 @@ namespace Codetective.Interaction
                 if (other != item && bounds.Intersects(new Bounds(other.transform.localPosition + LocalOffset(other), LocalSize(other)))) return false;
             // During load, other items may still be at their authored pose until their own record is restored.
             if (!checkObstacles) return true;
-            Vector3 worldSize = item.PlacementSizeOn(this);
+            Vector3 worldSize = item.PlacementSize;
             Vector3 extents = new Vector3(Mathf.Max(0.0001f, worldSize.x * 0.5f - 0.001f), Mathf.Max(0.0001f, worldSize.y * 0.5f - 0.001f), Mathf.Max(0.0001f, worldSize.z * 0.5f - 0.001f));
             foreach (Collider obstacle in Physics.OverlapBox(transform.TransformPoint(target), extents, transform.rotation, ~0, QueryTriggerInteraction.Ignore))
             {
@@ -90,7 +107,7 @@ namespace Codetective.Interaction
         internal void Remove(HoldableItem item) => contents.Remove(item);
         private Vector3 LocalSize(HoldableItem item)
         {
-            Vector3 scale = transform.lossyScale, world = item.PlacementSizeOn(this);
+            Vector3 scale = transform.lossyScale, world = item.PlacementSize;
             return new Vector3(world.x / Mathf.Abs(scale.x), world.y / Mathf.Abs(scale.y), world.z / Mathf.Abs(scale.z));
         }
         private Vector3 LocalOffset(HoldableItem item)

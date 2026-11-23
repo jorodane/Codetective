@@ -25,7 +25,6 @@ namespace Codetective.Interaction
         private Material previewMaterial;
         private ItemPlacementSurface destination;
         private Vector3 destinationPosition;
-        private Transform flatPreview, rolledPreview;
         private bool sessionEnded;
         public void Initialize(Transform camera)
         {
@@ -63,33 +62,26 @@ namespace Codetective.Interaction
             Shader shader = Resources.Load<Shader>("PlacementPreview");
             if (shader == null) { CancelPlacement(); return false; }
             previewMaterial = new Material(shader);
-            flatPreview = new GameObject("UnfoldedPreview").transform; flatPreview.SetParent(preview.transform, false);
-            flatPreview.localRotation = HeldItem.PlacementRotation; flatPreview.localScale = HeldItem.RestingWorldScale;
-            foreach (MeshFilter source in HeldItem.GetComponentsInChildren<MeshFilter>())
+            Transform shape = new GameObject("PlacementShape").transform; shape.SetParent(preview.transform, false);
+            shape.localRotation = HeldItem.PlacementRotation; shape.localScale = HeldItem.RestingWorldScale;
+            Transform visual = HeldItem.PlacementVisual;
+            MeshFilter[] meshes = visual != null ? visual.GetComponentsInChildren<MeshFilter>(true) : HeldItem.GetComponentsInChildren<MeshFilter>();
+            foreach (MeshFilter source in meshes)
             {
                 if (source.sharedMesh == null) continue;
-                var part = new GameObject("PreviewMesh", typeof(MeshFilter), typeof(MeshRenderer)); part.transform.SetParent(flatPreview, false);
+                var part = new GameObject("PreviewMesh", typeof(MeshFilter), typeof(MeshRenderer)); part.transform.SetParent(shape, false);
                 part.GetComponent<MeshFilter>().sharedMesh = source.sharedMesh;
                 part.transform.localPosition = HeldItem.transform.InverseTransformPoint(source.transform.position);
                 part.transform.localRotation = Quaternion.Inverse(HeldItem.transform.rotation) * source.transform.rotation;
                 Vector3 scale = HeldItem.transform.lossyScale, partScale = source.transform.lossyScale;
                 part.transform.localScale = new Vector3(partScale.x / scale.x, partScale.y / scale.y, partScale.z / scale.z);
-                part.GetComponent<Renderer>().sharedMaterial = previewMaterial;
+                Renderer renderer = part.GetComponent<Renderer>();
+                renderer.sharedMaterial = previewMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows = false;
             }
-            if (HeldItem.Use == HeldItemUse.Newspaper)
-            {
-                rolledPreview = new GameObject("RolledPreview").transform; rolledPreview.SetParent(preview.transform, false);
-                rolledPreview.localScale = HeldItem.RestingWorldScale;
-                GameObject roll = GameObject.CreatePrimitive(PrimitiveType.Cylinder); roll.transform.SetParent(rolledPreview, false);
-                roll.transform.localRotation = Quaternion.Euler(0, 0, 90); roll.transform.localScale = new Vector3(0.052f, 0.14f, 0.052f);
-                Discard(roll.GetComponent<Collider>()); roll.GetComponent<Renderer>().sharedMaterial = previewMaterial;
-                rolledPreview.gameObject.SetActive(false);
-            }
-            foreach (Renderer renderer in preview.GetComponentsInChildren<Renderer>())
-            { renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows = false; }
             preview.SetActive(false); return true;
         }
-        public void UpdatePlacement(Vector2 point, bool pointerBlocked = false)
+        public void UpdatePlacement(Vector2 point, bool pointerBlocked = false, ItemPlacementSurface tray = null)
         {
             if (!IsPlacing || HeldItem == null || preview == null) return;
             destination = null; PlacementValid = false;
@@ -97,35 +89,38 @@ namespace Codetective.Interaction
             Camera camera = ViewCamera;
             if (camera == null) { HidePlacementPreview(); return; }
             Ray ray = camera.ScreenPointToRay(point);
-            RaycastHit[] hits = Physics.RaycastAll(ray, 10, ~0, QueryTriggerInteraction.Collide);
-            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
             Vector3 location = ray.GetPoint(1); Quaternion rotation = Quaternion.identity;
-            foreach (RaycastHit hit in hits)
+            destination = tray;
+            if (destination == null)
             {
-                ItemPlacementSurface surface = hit.collider.GetComponentInParent<ItemPlacementSurface>();
-                HoldableItem other = hit.collider.GetComponentInParent<HoldableItem>();
-                if (surface == null && other != null) surface = other.Storage;
-                if (surface == null && hit.collider.GetComponentInParent<SlidingDrawer>() != null && hit.collider.GetComponent<DrawerFrontTarget>() == null) continue;
-                if (surface == null && other == null && hit.collider.isTrigger && hit.collider.GetComponent<DrawerFrontTarget>() == null) continue;
-                location = hit.point;
-                if (surface != null)
+                RaycastHit[] hits = Physics.RaycastAll(ray, 10, ~0, QueryTriggerInteraction.Collide);
+                Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                foreach (RaycastHit hit in hits)
                 {
+                    ItemPlacementSurface surface = hit.collider.GetComponentInParent<ItemPlacementSurface>();
+                    HoldableItem other = hit.collider.GetComponentInParent<HoldableItem>();
+                    if (surface == null && other != null) surface = other.Storage;
+                    if (surface != null && surface.IsContainer && !surface.Drawer.IsOpen) continue;
+                    if (surface == null && hit.collider.GetComponentInParent<SlidingDrawer>() != null && hit.collider.GetComponent<DrawerFrontTarget>() == null) continue;
+                    if (surface == null && other == null && hit.collider.isTrigger && hit.collider.GetComponent<DrawerFrontTarget>() == null) continue;
+                    location = hit.point;
                     destination = surface;
-                    PlacementValid = surface.TryGetPosition(HeldItem, ray, out destinationPosition);
-                    location = surface.transform.TransformPoint(destinationPosition);
-                    rotation = surface.transform.rotation;
+                    break;
                 }
-                break;
             }
-            bool rolled = HeldItem.Use == HeldItemUse.Newspaper && destination != null && destination.IsContainer;
-            flatPreview.gameObject.SetActive(!rolled); if (rolledPreview != null) rolledPreview.gameObject.SetActive(rolled);
+            if (destination != null)
+            {
+                PlacementValid = destination.TryGetPosition(HeldItem, ray, out destinationPosition);
+                location = destination.transform.TransformPoint(destinationPosition);
+                rotation = destination.transform.rotation;
+            }
             preview.transform.SetPositionAndRotation(location, rotation); preview.SetActive(true);
             previewMaterial.SetColor("_Tint", PlacementValid ? new Color(0.15f, 1f, 0.32f, 0.7f) : new Color(1f, 0.36f, 0.04f, 0.7f));
             PlacementHint = PlacementValid ? "클릭: 내려놓기 · 우클릭: 확인으로 돌아가기" : "이곳에는 놓을 수 없습니다 · 서랍 앞면 클릭: 열기 / 닫기 · 우클릭: 확인으로 돌아가기";
         }
-        public bool TryPlaceAtScreenPoint(Vector2 point)
+        public bool TryPlaceAtScreenPoint(Vector2 point, ItemPlacementSurface tray = null)
         {
-            UpdatePlacement(point);
+            UpdatePlacement(point, false, tray);
             return PlacementValid && CommitPlacement(destination, destinationPosition);
         }
         public bool TryPlaceOn(ItemPlacementSurface surface)
@@ -149,18 +144,22 @@ namespace Codetective.Interaction
             IsPlacing = false; PlacementValid = false; destination = null;
             Discard(preview); Discard(previewMaterial);
             preview = null; previewMaterial = null; SetPresentationVisible(true);
-            flatPreview = rolledPreview = null;
         }
         public void ReturnToDesk(HoldableItem item)
         {
             if (item == null) return;
             if (HeldItem == item) { CancelPlacement(); HeldItem = null; }
-            item.PutDown();
+            item.ReturnHome();
         }
         public bool RestoreStorage(HoldableItem item, ItemPlacementSurface surface)
         { return item != null && surface != null && !item.IsHeld && surface.Place(item, true); }
         public bool RestoreStorage(HoldableItem item, ItemPlacementSurface surface, Vector3 localPosition)
-        { return item != null && surface != null && !item.IsHeld && surface.PlaceAt(item, localPosition, true); }
+        {
+            return item != null && surface != null && !item.IsHeld &&
+                (surface.PlaceAt(item, localPosition, true) || item.Use == HeldItemUse.Newspaper &&
+                    surface.TryGetPosition(item, surface.transform.TransformPoint(localPosition), out Vector3 adjusted, false) &&
+                    surface.PlaceAt(item, adjusted, true));
+        }
         private static void Discard(UnityEngine.Object value)
         { if (value == null) return; if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
         // Disabling suspends the held object. Reparenting here is illegal while the

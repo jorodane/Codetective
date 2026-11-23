@@ -8,6 +8,8 @@ namespace Codetective.Interaction
     [DisallowMultipleComponent]
     public sealed class HoldableItem : InspectionActionTarget
     {
+        public static readonly Vector3 NewspaperRollSize = new Vector3(0.28f, 0.052f, 0.052f);
+
         [SerializeField] private string itemId;
         [SerializeField] private string displayName = "물건";
         [SerializeField] private HeldItemUse use;
@@ -21,6 +23,8 @@ namespace Codetective.Interaction
         private Vector3 restingPosition, restingScale, restingWorldScale;
         private Quaternion restingRotation;
         private Quaternion restingWorldRotation;
+        private ItemPlacementSurface pickupSurface;
+        private Vector3 pickupPosition;
         private Vector3 placementOffset;
         private Vector3 measuredSize;
         private Collider[] colliders;
@@ -39,16 +43,19 @@ namespace Codetective.Interaction
         public bool IsHeld => owner != null && owner.HeldItem == this;
         public ItemPlacementSurface Storage { get; private set; }
         public bool IsStored => Storage != null;
-        public bool IsRolled => Use == HeldItemUse.Newspaper && Storage != null && Storage.IsContainer;
+        public bool IsRolled => Use == HeldItemUse.Newspaper && (!IsHeld || Storage != null);
+        public Transform PlacementVisual { get; private set; }
         public Vector3 RestingWorldScale => owner != null ? restingWorldScale : transform.lossyScale;
         public Quaternion PlacementRotation => use == HeldItemUse.Custom ? restingWorldRotation : Quaternion.identity;
-        public Vector3 PlacementSize => PlacementSizeOn(Storage);
-        public Vector3 PlacementSizeOn(ItemPlacementSurface surface)
+        public Vector3 PlacementSize
         {
-            if (use == HeldItemUse.Custom && measuredSize != Vector3.zero) return measuredSize;
-            Vector3 scale = RestingWorldScale;
-            return Vector3.Scale(use == HeldItemUse.Newspaper && surface != null && surface.IsContainer ?
-                new Vector3(0.28f, 0.052f, 0.052f) : placementSize, new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
+            get
+            {
+                if (use == HeldItemUse.Custom && measuredSize != Vector3.zero) return measuredSize;
+                Vector3 scale = RestingWorldScale;
+                return Vector3.Scale(use == HeldItemUse.Newspaper ? NewspaperRollSize : placementSize,
+                    new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
+            }
         }
         public Vector3 PlacementOffset => use == HeldItemUse.Custom ? placementOffset : Vector3.zero;
         public event System.Action PoseChanged;
@@ -57,6 +64,7 @@ namespace Codetective.Interaction
         { itemId = id; displayName = label; use = action; profileId = personId; }
         public void ConfigurePaper(Vector3 size)
         { placementSize = size; heldPosition = new Vector3(0, -0.02f, 0.55f); heldEuler = new Vector3(-90, 0, 0); }
+        public void SetPlacementVisual(Transform visual) => PlacementVisual = visual;
         public void Register(ItemCarryController controller)
         {
             if (owner != null) return;
@@ -78,6 +86,8 @@ namespace Codetective.Interaction
         public override void Interact() { if (CanInteract(null)) owner.TryPickup(this); }
         internal void PickUp(Transform hand)
         {
+            pickupSurface = Storage;
+            pickupPosition = transform.localPosition;
             ReleaseStorage();
             colliders = GetComponentsInChildren<Collider>(true); colliderEnabled = new bool[colliders.Length];
             for (int i = 0; i < colliders.Length; i++) { colliderEnabled[i] = colliders[i].enabled; colliders[i].enabled = false; }
@@ -128,6 +138,12 @@ namespace Codetective.Interaction
         }
         internal void PutDown()
         {
+            if (pickupSurface != null && pickupSurface.PlaceAt(this, pickupPosition, true)) return;
+            ReturnHome();
+        }
+        internal void ReturnHome()
+        {
+            pickupSurface = null;
             ReleaseStorage();
             transform.SetParent(restingParent, false); transform.localPosition = restingPosition;
             transform.localRotation = restingRotation; transform.localScale = restingScale;
@@ -138,6 +154,8 @@ namespace Codetective.Interaction
         }
         internal void Store(ItemPlacementSurface surface, Vector3 position)
         {
+            pickupSurface = null;
+            if (Storage != surface) ReleaseStorage();
             transform.SetParent(surface.transform, false); transform.localPosition = position;
             transform.localRotation = PlacementRotation;
             Vector3 parentScale = surface.transform.lossyScale;

@@ -2,11 +2,12 @@ using UnityEngine;
 
 namespace Codetective.Interaction
 {
-    /// <summary>Only the front face toggles the drawer; its interior remains a placement target.</summary>
+    /// <summary>Front-face control that stays selectable when placing an item.</summary>
     [DisallowMultipleComponent, RequireComponent(typeof(BoxCollider))]
     public sealed class DrawerFrontTarget : InspectionActionTarget
     {
         private SlidingDrawer drawer;
+        public SlidingDrawer Drawer => drawer;
         public void Initialize(SlidingDrawer owner, Bounds front)
         {
             drawer = owner;

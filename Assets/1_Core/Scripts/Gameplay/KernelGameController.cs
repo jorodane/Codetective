@@ -62,6 +62,7 @@ namespace Codetective.Gameplay
         private ClinicVisitPresentation visits;
         private int summaryShownDay;
         private readonly List<SlidingDrawer> drawers = new List<SlidingDrawer>();
+        private ItemPlacementSurface desktopPlacement;
         public IReadOnlyList<SlidingDrawer> Drawers => drawers;
         public bool CanOperateDrawers => inspection != null && inspection.Mode == InspectionMode.Inspecting && CurrentView == "drawer" &&
             !IsViewTransitioning && !inspection.ModalInputBlocked && !IsDateTransitioning && !IsVisitPresenting;
@@ -155,12 +156,13 @@ namespace Codetective.Gameplay
             inspection.BackHandler = ui.Back;
             inspection.QuickSaveRequested = QuickSave;
             inspection.PointerBlocked = ui.BlocksPointer;
+            inspection.InitializePointerFeedback(font);
             CreateCoffeeCopy();
             CreateCalendarText();
             InitializeDrawers();
             InitializeDesktop();
             newspaper = gameObject.AddComponent<DeskNewspaper>();
-            newspaper.Initialize(newspaperAnchor, deskSurface, font, Carry, scenario != null ? scenario.newspaper : null); newspaper.Refresh(Runtime);
+            newspaper.Initialize(newspaperAnchor, desktopPlacement, font, Carry, scenario != null ? scenario.newspaper : null); newspaper.Refresh(Runtime);
             newspaper.Document.AreaClicked += ReadPrintedArea;
             InitializeProfileSheet();
             RestoreStoredItems();
@@ -252,7 +254,6 @@ namespace Codetective.Gameplay
         }
         private void PickedUpItem(HoldableItem item)
         {
-            Runtime.SetItemStorage(item.Id, null);
             if (item.Use == HeldItemUse.Newspaper) { Runtime.ReadNewspaper(); newspaper.Refresh(Runtime); }
         }
         private void StoredItem(HoldableItem item)
@@ -372,23 +373,15 @@ namespace Codetective.Gameplay
         private void InitializeDrawers()
         {
             if (deskSurface == null) return;
-            foreach (Transform child in deskSurface.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("Desk_big_Drawer_", StringComparison.Ordinal)).OrderBy(t => t.name, StringComparer.Ordinal))
+            const string prefix = "Desk_big_Drawer_";
+            foreach (Transform child in deskSurface.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith(prefix, StringComparison.Ordinal)).OrderBy(t => t.name, StringComparer.Ordinal))
             {
                 SlidingDrawer drawer = child.GetComponent<SlidingDrawer>();
                 if (drawer == null) drawer = child.gameObject.AddComponent<SlidingDrawer>();
-                drawer.Initialize(Runtime, "desk." + child.name); drawers.Add(drawer);
+                drawer.Initialize(Runtime, "desk." + child.name, "서랍 " + child.name.Substring(prefix.Length)); drawers.Add(drawer);
                 var storage = new GameObject("DrawerInterior"); storage.transform.SetParent(child, false);
                 ItemPlacementSurface surface = storage.AddComponent<ItemPlacementSurface>();
-                Bounds local = new Bounds(Vector3.zero, new Vector3(0.4f, 0.14f, 0.4f)); bool found = false;
-                foreach (Renderer renderer in child.GetComponentsInChildren<Renderer>())
-                {
-                    Bounds world = renderer.bounds;
-                    for (int x = -1; x <= 1; x += 2) for (int y = -1; y <= 1; y += 2) for (int z = -1; z <= 1; z += 2)
-                    {
-                        Vector3 corner = child.InverseTransformPoint(world.center + Vector3.Scale(world.extents, new Vector3(x, y, z)));
-                        if (!found) { local = new Bounds(corner, Vector3.zero); found = true; } else local.Encapsulate(corner);
-                    }
-                }
+                Bounds local = LocalBounds(child, child.GetComponentsInChildren<Renderer>(), new Bounds(Vector3.zero, new Vector3(0.4f, 0.14f, 0.4f)));
                 Vector3 scale = child.lossyScale;
                 Vector3 size = new Vector3(Mathf.Max(0.01f, local.size.x - 0.04f / Mathf.Abs(scale.x)), Mathf.Max(0.01f, local.size.y - 0.025f / Mathf.Abs(scale.y)), Mathf.Max(0.01f, local.size.z - 0.06f / Mathf.Abs(scale.z)));
                 surface.Initialize(drawer.Id, drawer, new Bounds(local.center + Vector3.up * 0.008f, size)); storageSurfaces.Add(surface);
@@ -400,25 +393,30 @@ namespace Codetective.Gameplay
         private void InitializeDesktop()
         {
             if (deskSurface == null) return;
-            Renderer[] renderers = deskSurface.GetComponentsInChildren<Renderer>().Where(r => r.GetComponentInParent<SlidingDrawer>() == null).ToArray();
-            if (renderers.Length == 0) return;
-            Bounds local = LocalBounds(deskSurface, renderers); Vector3 scale = deskSurface.lossyScale;
-            float height = 0.25f / Mathf.Abs(scale.y);
+            Renderer tabletop = deskSurface.GetComponent<Renderer>();
+            if (tabletop == null) return;
+            Bounds local = tabletop.localBounds;
+            float height = 0.25f / Mathf.Abs(deskSurface.lossyScale.y);
             var desktop = new GameObject("DesktopPlacement"); desktop.transform.SetParent(deskSurface, false);
-            ItemPlacementSurface surface = desktop.AddComponent<ItemPlacementSurface>();
-            surface.Initialize("desk.top", null, new Bounds(new Vector3(local.center.x, local.max.y + height * 0.5f + 0.002f / Mathf.Abs(scale.y), local.center.z),
+            desktopPlacement = desktop.AddComponent<ItemPlacementSurface>();
+            desktopPlacement.Initialize("desk.top", null, new Bounds(new Vector3(local.center.x, local.max.y + height * 0.5f, local.center.z),
                 new Vector3(local.size.x, height, local.size.z)));
-            storageSurfaces.Add(surface);
+            storageSurfaces.Add(desktopPlacement);
+            inspection.Desktop = desktopPlacement;
         }
-        private static Bounds LocalBounds(Transform root, Renderer[] renderers)
+        private static Bounds LocalBounds(Transform root, Renderer[] renderers, Bounds fallback = default)
         {
-            Bounds result = default; bool found = false;
+            Bounds result = fallback; bool found = false;
             foreach (Renderer renderer in renderers)
+            {
+                Matrix4x4 toRoot = root.worldToLocalMatrix * renderer.localToWorldMatrix;
+                Bounds local = renderer.localBounds;
                 for (int x = -1; x <= 1; x += 2) for (int y = -1; y <= 1; y += 2) for (int z = -1; z <= 1; z += 2)
                 {
-                    Vector3 point = root.InverseTransformPoint(renderer.bounds.center + Vector3.Scale(renderer.bounds.extents, new Vector3(x, y, z)));
-                    if (!found) { result = new Bounds(point, Vector3.zero); found = true; } else result.Encapsulate(point);
+                    Vector3 corner = toRoot.MultiplyPoint3x4(local.center + Vector3.Scale(local.extents, new Vector3(x, y, z)));
+                    if (!found) { result = new Bounds(corner, Vector3.zero); found = true; } else result.Encapsulate(corner);
                 }
+            }
             return result;
         }
 

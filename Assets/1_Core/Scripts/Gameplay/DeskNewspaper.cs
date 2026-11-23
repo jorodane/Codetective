@@ -12,21 +12,19 @@ namespace Codetective.Gameplay
         private NewspaperArticleAsset[] layouts;
         public HoldableItem Item { get; private set; }
         public PaperDocument Document { get; private set; }
-        public void Initialize(Transform anchor, Transform desk, Font font, ItemCarryController carry, NewspaperArticleAsset[] articles = null)
+        public void Initialize(Transform anchor, ItemPlacementSurface desk, Font font, ItemCarryController carry, NewspaperArticleAsset[] articles = null)
         {
             layouts = articles ?? System.Array.Empty<NewspaperArticleAsset>();
             paper = new GameObject("DailyNewspaper"); paper.transform.SetParent(transform, false);
-            Vector3 position = anchor != null ? anchor.position : new Vector3(-0.15f, 0.91f, -2.66f);
-            if (desk != null)
-            {
-                Renderer[] surfaces = desk.GetComponentsInChildren<Renderer>();
-                if (surfaces.Length > 0) position.y = Mathf.Max(position.y, surfaces.Max(r => r.bounds.max.y) + 0.005f);
-            }
+            Vector3 position = anchor != null ? anchor.position : new Vector3(-0.15f, 0.9f, -2.57f);
             paper.transform.SetPositionAndRotation(position, anchor != null ? anchor.rotation : Quaternion.identity);
             Item = paper.AddComponent<HoldableItem>();
             Item.Configure("desk.newspaper", "오늘의 신문", HeldItemUse.Newspaper);
             Document = paper.AddComponent<PaperDocument>();
-            Document.Initialize(Item, carry, carry.ViewCamera, font, new Vector2(0.44f, 0.28f)); carry.Register(Item);
+            Document.Initialize(Item, carry, carry.ViewCamera, font, new Vector2(0.44f, 0.28f));
+            if (desk != null && desk.TryGetPosition(Item, position, out Vector3 slot, false))
+                paper.transform.SetPositionAndRotation(desk.transform.TransformPoint(slot), desk.transform.rotation);
+            carry.Register(Item);
         }
         public void Refresh(KernelRuntime runtime)
         {

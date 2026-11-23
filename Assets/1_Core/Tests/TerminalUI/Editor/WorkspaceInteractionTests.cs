@@ -331,7 +331,55 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
-        public void PrintedPaperIsFlatOnTheDeskAndRollsOnlyInsideADrawer()
+        public void DrawerInteriorOwnsTheClickAndAnEmptyClickAboveTheDeskReturnsToOverview()
+        {
+            var navigation = new GameObject("Drawer view", typeof(Camera), typeof(CameraAngleController)); navigation.SetActive(false);
+            var upper = new GameObject("Upper drawer"); var lower = new GameObject("Lower drawer");
+            var desktop = new GameObject("Desktop"); var prop = new GameObject("Foreground prop", typeof(BoxCollider));
+            var set = ScriptableObject.CreateInstance<CameraAngleSet>();
+            var overview = ScriptableObject.CreateInstance<CameraAnglePreset>(); var drawer = ScriptableObject.CreateInstance<CameraAnglePreset>();
+            try
+            {
+                var origin = new Vector3(80, 80, 80);
+                Set(overview, "angleId", "overview"); Set(overview, "position", origin);
+                Set(drawer, "angleId", "drawer"); Set(drawer, "position", origin);
+                Set(set, "angles", new List<CameraAnglePreset> { overview, drawer });
+                var views = navigation.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
+                Camera camera = navigation.GetComponent<Camera>();
+                camera.orthographic = true; camera.orthographicSize = 1; camera.pixelRect = new Rect(0, 0, 640, 480);
+                Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                Set(inspection, "overviewAngle", overview); Call(inspection, "Awake"); Call(inspection, "InspectAngle", drawer);
+
+                var runtime = new KernelRuntime(); runtime.SetDrawerOpen("upper", true);
+                upper.transform.position = origin + Vector3.forward * 2;
+                lower.transform.position = origin + Vector3.forward * 3;
+                SlidingDrawer top = upper.AddComponent<SlidingDrawer>(); top.Initialize(runtime, "upper"); top.SetInteractionEnabled(true);
+                SlidingDrawer bottom = lower.AddComponent<SlidingDrawer>(); bottom.Initialize(runtime, "lower"); bottom.SetInteractionEnabled(true);
+                upper.AddComponent<ItemPlacementSurface>().Initialize("upper", top, new Bounds(Vector3.zero, Vector3.one * 0.4f));
+                lower.AddComponent<DrawerFrontTarget>().Initialize(bottom, new Bounds(Vector3.zero, Vector3.one * 0.4f));
+                desktop.transform.position = origin + new Vector3(0, -0.65f, 3);
+                var surface = desktop.AddComponent<ItemPlacementSurface>(); surface.Initialize("desk.top", null, new Bounds(Vector3.zero, Vector3.one * 0.4f));
+                inspection.GetType().GetProperty("Desktop").SetValue(inspection, surface);
+                prop.transform.position = origin + new Vector3(0, 0.65f, 2); prop.transform.localScale = Vector3.one * 0.2f;
+                Physics.SyncTransforms();
+
+                Assert.That(Call(inspection, "InteractAtScreenPoint", (Vector2)camera.WorldToScreenPoint(upper.transform.position)), Is.True);
+                Assert.That(top.IsOpen, Is.False); Assert.That(bottom.IsOpen, Is.False);
+                Vector2 above = camera.WorldToScreenPoint(prop.transform.position);
+                Assert.That(Call(inspection, "InteractAtScreenPoint", above), Is.False);
+                Assert.That(views.ActiveAngle, Is.SameAs(drawer));
+                prop.SetActive(false); Physics.SyncTransforms();
+                Assert.That(Call(inspection, "InteractAtScreenPoint", above), Is.True);
+                Assert.That(views.ActiveAngle, Is.SameAs(overview));
+            }
+            finally
+            {
+                foreach (Object value in new Object[] { navigation, upper, lower, desktop, prop, overview, drawer, set }) Object.DestroyImmediate(value);
+            }
+        }
+
+        [Test]
+        public void NewspaperRollsOnTheDeskAndInDrawersAndOpensOnlyWhenExamined()
         {
             var system = new GameObject("Carry"); var camera = new GameObject("Camera", typeof(Camera)); var paper = new GameObject("Paper"); var drawer = new GameObject("Drawer");
             try
@@ -343,12 +391,18 @@ namespace Codetective.Terminal.Tests.UI
                 Type sectionType = FindType("Codetective.Gameplay.PaperSection"); object section = Activator.CreateInstance(sectionType);
                 sectionType.GetField("title").SetValue(section, "기사 제목"); sectionType.GetField("text").SetValue(section, "종이에 인쇄된 본문");
                 Array sections = Array.CreateInstance(sectionType, 1); sections.SetValue(section, 0); Call(document, "SetContent", "DAY 01", sections);
-                carry.Register(item); Assert.That(carry.TryPickup(item), Is.True);
-                Canvas ink = paper.GetComponentInChildren<Canvas>(); Assert.That(ink.renderMode, Is.EqualTo(RenderMode.WorldSpace));
+                carry.Register(item);
+                Canvas ink = paper.GetComponentInChildren<Canvas>(true); Assert.That(ink.renderMode, Is.EqualTo(RenderMode.WorldSpace));
+                Assert.That(item.IsRolled, Is.True); Assert.That(ink.gameObject.activeSelf, Is.False);
+                Assert.That(carry.TryPickup(item), Is.True);
                 Assert.That(paper.GetComponentsInChildren<Text>().Any(t => t.text.Contains("종이에 인쇄된 본문")), Is.True);
                 ItemPlacementSurface surface = drawer.AddComponent<ItemPlacementSurface>(); surface.Initialize("desk.top", null, new Bounds(Vector3.zero, Vector3.one));
                 Assert.That(carry.BeginPlacement(), Is.True); Assert.That(carry.TryPlaceOn(surface), Is.True);
-                Assert.That(ink.gameObject.activeSelf, Is.True); Assert.That(item.IsRolled, Is.False);
+                Assert.That(ink.gameObject.activeSelf, Is.False); Assert.That(item.IsRolled, Is.True);
+                Vector3 onDesk = item.transform.localPosition;
+                Assert.That(carry.TryPickup(item), Is.True);
+                carry.PutDown();
+                Assert.That(item.Storage, Is.SameAs(surface)); Assert.That(item.transform.localPosition, Is.EqualTo(onDesk));
                 carry.TryPickup(item);
                 var runtime = new KernelRuntime(); runtime.SetDrawerOpen("drawer", true);
                 SlidingDrawer owner = drawer.AddComponent<SlidingDrawer>(); owner.Initialize(runtime, "drawer"); owner.SetInteractionEnabled(true);
@@ -356,6 +410,8 @@ namespace Codetective.Terminal.Tests.UI
                 Assert.That(carry.BeginPlacement(), Is.True); Assert.That(carry.TryPlaceOn(surface), Is.True);
                 Assert.That(ink.gameObject.activeSelf, Is.False); Assert.That(paper.transform.Find("RolledNewspaper").gameObject.activeSelf, Is.True);
                 Assert.That(carry.TryPickup(item), Is.True); Assert.That(ink.gameObject.activeSelf, Is.True);
+                carry.ReturnToDesk(item);
+                Assert.That(item.Storage, Is.Null); Assert.That(item.transform.parent, Is.Null); Assert.That(item.IsRolled, Is.True);
             }
             finally { Object.DestroyImmediate(system); Object.DestroyImmediate(paper); Object.DestroyImmediate(drawer); Object.DestroyImmediate(camera); }
         }

@@ -99,7 +99,7 @@ namespace Codetective.Terminal
             { restoreCommandFocus = false; return; }
             if (!AcceptsInput || Time.timeScale == 0f) return;
             restoreCommandFocus = false;
-            input.FocusAtEnd();
+            input.FocusFromEnter();
         }
 
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);

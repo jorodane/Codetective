@@ -63,6 +63,7 @@ namespace Codetective.Operations
         public bool pauseWorld = true;
         public bool replacesStartupGuide;
         public bool unlockCommandsByStep;
+        public bool advanceWithEnter;
         public bool skipIfMailAlreadyReadOnExistingSave;
         public StoryCondition condition = new StoryCondition();
         public TerminalConversationStep[] steps = Array.Empty<TerminalConversationStep>();
@@ -71,7 +72,7 @@ namespace Codetective.Operations
         public StoryEffects onComplete = new StoryEffects();
         public TerminalConversationDefinition Copy() => new TerminalConversationDefinition { id = id, requiredMailRead = requiredMailRead, pageId = pageId,
             variableBase = variableBase, koreanVariableBase = koreanVariableBase, speaker = speaker, speakerKey = speakerKey, firstDay = firstDay, lastDay = lastDay, pauseWorld = pauseWorld, replacesStartupGuide = replacesStartupGuide,
-            unlockCommandsByStep = unlockCommandsByStep, skipIfMailAlreadyReadOnExistingSave = skipIfMailAlreadyReadOnExistingSave,
+            unlockCommandsByStep = unlockCommandsByStep, advanceWithEnter = advanceWithEnter, skipIfMailAlreadyReadOnExistingSave = skipIfMailAlreadyReadOnExistingSave,
             condition = condition.Copy(), steps = steps.Select(s => s.Copy()).ToArray(), forgivingReplies = forgivingReplies.Select(l => l.Copy()).ToArray(),
             angryReplies = angryReplies.Select(l => l.Copy()).ToArray(), angryAfter = angryAfter, onComplete = onComplete.Copy() };
         public void Validate()
@@ -167,6 +168,7 @@ namespace Codetective.Operations
         public long TerminalConversationRevision => terminalConversationRevision;
         public bool TerminalConversationActive => Conversation != null && (Conversation.phase == TerminalConversationPhase.Speaking || Conversation.phase == TerminalConversationPhase.AwaitingCommand);
         public bool TerminalInputLocked => Conversation?.phase == TerminalConversationPhase.Speaking;
+        public bool TerminalLineUsesEnter => TerminalInputLocked && ConversationDefinition.advanceWithEnter;
         public bool TerminalConversationPausesWorld => TerminalConversationActive && ConversationDefinition.pauseWorld || terminalConversations.Values.Any(d =>
             d.pauseWorld && d.replacesStartupGuide && terminalConversationProgress[d.id].phase == TerminalConversationPhase.Dormant && Day >= d.firstDay && Day <= d.lastDay &&
             !string.IsNullOrEmpty(d.requiredMailRead) && IsMailRead(d.requiredMailRead) && d.condition.Matches(this));
@@ -257,7 +259,7 @@ namespace Codetective.Operations
             get
             {
                 TerminalConversationProgress p = Conversation;
-                if (!TerminalInputLocked || p.pendingIndex >= p.pending.Count) return 0;
+                if (!TerminalInputLocked || p.pendingIndex >= p.pending.Count || p.log[p.activeLog].complete) return 0;
                 TerminalDialogueLine line = p.pending[p.pendingIndex];
                 return line.emotion != TerminalEmotion.Angry || line.effectSeconds <= 0 ? 0 : Math.Max(0, 1 - p.elapsed / line.effectSeconds);
             }
@@ -362,17 +364,39 @@ namespace Codetective.Operations
             while (TerminalInputLocked && seconds > 0 && budget-- > 0)
             {
                 var p = Conversation; var line = p.pending[p.pendingIndex]; var entry = p.log[p.activeLog];
+                if (entry.complete)
+                {
+                    if (TerminalLineUsesEnter) break;
+                    FinishTerminalLine();
+                    ConversationChanged(false);
+                    continue;
+                }
                 string text = ConversationText(entry, p); int length = StringInfo.ParseCombiningCharacters(text).Length;
                 double duration = length / line.charactersPerSecond + line.pauseAfter;
                 double used = Math.Min(seconds, Math.Max(0, duration - p.elapsed)); p.elapsed += used; seconds -= used;
                 int visibleElements = Math.Min(length, (int)Math.Min(int.MaxValue, Math.Floor(p.elapsed * line.charactersPerSecond)));
                 if (visibleElements != entry.visibleElements) { entry.visibleElements = visibleElements; ConversationChanged(false); }
                 if (p.elapsed + 0.0000001 < duration) break;
-                entry.complete = true; p.activeLog = -1; p.pendingIndex++;
-                if (p.pendingIndex < p.pending.Count) BeginConversationLine();
-                else ReadyForConversationCommand();
+                entry.complete = true;
+                if (!TerminalLineUsesEnter) FinishTerminalLine();
                 ConversationChanged(false);
             }
+        }
+        public bool ContinueTerminalLine()
+        {
+            if (!TerminalLineUsesEnter) return false;
+            TerminalConversationLog line = Conversation.log[Conversation.activeLog];
+            if (!line.complete) line.complete = true;
+            else FinishTerminalLine();
+            ConversationChanged(false);
+            return true;
+        }
+        private void FinishTerminalLine()
+        {
+            TerminalConversationProgress p = Conversation;
+            p.activeLog = -1; p.pendingIndex++;
+            if (p.pendingIndex < p.pending.Count) BeginConversationLine();
+            else ReadyForConversationCommand();
         }
         private bool ConversationGoalSatisfied(TerminalCommandGoal goal)
         {
@@ -495,7 +519,7 @@ namespace Codetective.Operations
                         l.pauseAfter < 0 || double.IsNaN(l.pauseAfter) || double.IsInfinity(l.pauseAfter) || l.effectSeconds < 0 || double.IsNaN(l.effectSeconds) || double.IsInfinity(l.effectSeconds) || !Enum.IsDefined(typeof(TerminalEmotion), l.emotion)) ||
                     item.log == null || item.performed == null || item.performed.Any(a => a == null || a.targetId == null || a.operation == null || a.arguments < 0) || item.log.Count > 128 || item.pendingIndex < 0 || item.pendingIndex > item.pending.Count ||
                     item.elapsed < 0 || double.IsNaN(item.elapsed) || double.IsInfinity(item.elapsed) || item.log.Any(l => l == null || l.text == null || l.visibleElements < 0) ||
-                    item.phase == TerminalConversationPhase.Speaking && (item.activeLog < 0 || item.activeLog >= item.log.Count || item.pendingIndex >= item.pending.Count || item.log[item.activeLog].complete))
+                    item.phase == TerminalConversationPhase.Speaking && (item.activeLog < 0 || item.activeLog >= item.log.Count || item.pendingIndex >= item.pending.Count))
                     throw new CommandException("저장된 터미널 대화 상태가 유효하지 않습니다.");
                 var state = item.Copy();
                 if (terminalConversations.TryGetValue(state.id, out var definition) && state.phase != TerminalConversationPhase.Dormant && !definition.steps.Any(s => s.id == state.stepId)) state.phase = TerminalConversationPhase.Completed;

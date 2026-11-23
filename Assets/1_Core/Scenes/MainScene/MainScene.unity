@@ -268,6 +268,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: bbed99faed1c9f0498665b9240cc1263, type: 3}
+--- !u!4 &2000000300 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3606956804665597407, guid: bbed99faed1c9f0498665b9240cc1263, type: 3}
+  m_PrefabInstance: {fileID: 12840735}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &15150517 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6929431203630242184, guid: f3da15c047aefc049920cae943fe9c2f, type: 3}
@@ -377,6 +382,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 9d9443ee0b1e1e94c81fb2b7946e1a35, type: 2}
   terminalRoot: {fileID: 0}
+  displayName: 초상화
+  visualRoot: {fileID: 2000000300}
 --- !u!65 &17712048
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -1449,6 +1456,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: ed7ab7338718fb54b94e3d081fcfc035, type: 2}
   terminalRoot: {fileID: 0}
+  displayName: 상담 자리
+  visualRoot: {fileID: 2000000301}
 --- !u!65 &387702992
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -2881,6 +2890,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 8f92d3c640bb63749b773fa126e57e59, type: 2}
   terminalRoot: {fileID: 0}
+  displayName: 책상 서랍
+  visualRoot: {fileID: 84028777}
 --- !u!65 &922546358
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -3021,6 +3032,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: b8fa13df50f0ba4f1d36ebce213051b7, type: 2}
   terminalRoot: {fileID: 942849806}
+  displayName: 터미널
+  visualRoot: {fileID: 786780035}
 --- !u!65 &942849808
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -3907,6 +3920,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: bfdd538b02290514cbd952c5208b808e, type: 2}
   terminalRoot: {fileID: 0}
+  displayName: 인물 프로필
+  visualRoot: {fileID: 794855006}
 --- !u!65 &1216147798
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -4555,6 +4570,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: abc00000000015847332656139811962, type: 3}
+--- !u!4 &2000000303 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1030976988, guid: abc00000000015847332656139811962, type: 3}
+  m_PrefabInstance: {fileID: 1349429507}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1364760205
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -6455,6 +6475,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 11223ef15c9300b4283e6175cc9acdcf, type: 2}
   terminalRoot: {fileID: 0}
+  displayName: 벽시계
+  visualRoot: {fileID: 2000000302}
 --- !u!65 &1744334640
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -7085,6 +7107,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: abc00000000010344285443936220656, type: 3}
+--- !u!4 &2000000301 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1030972161, guid: abc00000000010344285443936220656, type: 3}
+  m_PrefabInstance: {fileID: 1918864411}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1927566127
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -7200,6 +7227,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   closeUpAngle: {fileID: 11400000, guid: 57c29c912a727894080e971113439735, type: 2}
   terminalRoot: {fileID: 0}
+  displayName: 축음기
+  visualRoot: {fileID: 2000000303}
 --- !u!65 &1971720973
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -7435,7 +7464,7 @@ Transform:
   m_GameObject: {fileID: 2000000130}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.15, y: 0.9, z: -2.66}
+  m_LocalPosition: {x: -0.15, y: 0.871, z: -2.57}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -7772,6 +7801,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 59aabf08a7ae59741ade9f3b5b62d086, type: 3}
+--- !u!4 &2000000302 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8173441048495443238, guid: 59aabf08a7ae59741ade9f3b5b62d086, type: 3}
+  m_PrefabInstance: {fileID: 2092761958}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2123335506
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -320,7 +320,7 @@ namespace Codetective.Tests.Operations
             runtime.ReadMail("government-intro"); runtime.EnterTerminalPage("kernel");
             for (int i = 0; i < 16 && runtime.TerminalConversationActive; i++)
             {
-                runtime.AdvanceTerminalConversation(1000);
+                TerminalOnboardingTests.ReadBriefing(runtime);
                 if (runtime.TerminalConversationActive)
                     Assert.That(runtime.Execute(runtime.TerminalAwaitingAnswer ? "y" : runtime.TerminalExpectedCommand).Success, Is.True);
             }
