@@ -13,17 +13,22 @@ namespace Codetective.Terminal
     {
         private const int Width = 1064;
         private const int TimeWidth = 212;
-        private const int HourHeight = 57;
+        private const int NameWidth = 244;
+        private const int ContentWidth = Width - TimeWidth;
+        private const int HourHeight = 54;
+        private const int CellGap = 3;
         private const int Hours = (ClinicHours.Closing - ClinicHours.Opening) / ClinicHours.MinutesPerSlot;
         private static readonly string[] Weekdays = { "일", "월", "화", "수", "목", "금", "토" };
         private static readonly Color SlotColor = new Color(0.038f, 0.061f, 0.045f);
         private static readonly Color TimeColor = new Color(0.065f, 0.105f, 0.077f);
+        private static readonly Color DividerColor = Color.Lerp(SlotColor, MonitorWidgets.Foreground, 0.30f);
+        private static readonly Color SelectionBorderColor = Color.Lerp(MonitorWidgets.Foreground, MonitorWidgets.SelectedButtonColor, 0.22f);
 
         private KernelRuntime runtime;
         private MonitorPageHost host;
         private TerminalController terminal;
         private Font font;
-        private RectTransform table, appointmentCells, calendar, calendarDays, journal;
+        private RectTransform table, emptyCells, appointmentCells, calendar, calendarDays, journal;
         private Text dateLabel, monthLabel, journalText;
         private Button previousDay, nextDay, previousMonth, nextMonth;
         private DateTime firstDate, calendarMonth;
@@ -66,31 +71,34 @@ namespace Codetective.Terminal
 
         private void Build()
         {
-            previousDay = MonitorWidgets.Button(transform, font, new Vector2(28, -90), new Vector2(178, 46), "이전 날", () => ShowDay(selectedDay - 1));
-            var date = MonitorWidgets.Button(transform, font, new Vector2(222, -90), new Vector2(676, 46), "날짜", ToggleCalendar);
+            Vector2 arrowSize = new Vector2(48, 44);
+            previousDay = MonitorWidgets.Button(transform, font, new Vector2(382, -90), arrowSize, "<", () => ShowDay(selectedDay - 1));
+            var date = MonitorWidgets.Button(transform, font, new Vector2(434, -90), new Vector2(252, 44), "날짜", ToggleCalendar);
             dateLabel = date.GetComponentInChildren<Text>(); dateLabel.fontSize = 26;
-            nextDay = MonitorWidgets.Button(transform, font, new Vector2(914, -90), new Vector2(178, 46), "다음 날", () => ShowDay(selectedDay + 1));
+            nextDay = MonitorWidgets.Button(transform, font, new Vector2(690, -90), arrowSize, ">", () => ShowDay(selectedDay + 1));
 
-            Vector2 origin = new Vector2(28, -152);
-            Vector2 size = new Vector2(Width, Hours * HourHeight);
-            table = MonitorWidgets.Rect("Timetable", transform, origin, size);
+            table = MonitorWidgets.Rect("Timetable", transform, new Vector2(28, -176), new Vector2(Width, Hours * HourHeight));
+            CellLabel(table, new Vector2(0, 36), new Vector2(TimeWidth - CellGap, 30), "상담 시간", 22, TextAnchor.MiddleCenter);
+            CellLabel(table, new Vector2(TimeWidth + 12, 36), new Vector2(NameWidth - 24, 30), "이름", 22);
+            CellLabel(table, new Vector2(TimeWidth + NameWidth + 12, 36), new Vector2(ContentWidth - NameWidth - 24, 30), "상담 내용", 22);
             for (int row = 0; row < Hours; row++)
             {
                 int start = ClinicHours.Opening + row * ClinicHours.MinutesPerSlot;
-                var clock = Panel("Time", table, new Vector2(0, -row * HourHeight), new Vector2(TimeWidth - 4, HourHeight - 3), TimeColor);
+                var clock = Panel("Time", table, new Vector2(0, -row * HourHeight), new Vector2(TimeWidth - CellGap, HourHeight - CellGap), TimeColor);
                 CellLabel(clock, Vector2.zero, clock.sizeDelta, KernelRuntime.TimeOfDay(start) + " ~ " +
                     KernelRuntime.TimeOfDay(start + ClinicHours.MinutesPerSlot), 24, TextAnchor.MiddleCenter);
-                var slot = Panel("Slot", table, new Vector2(TimeWidth, -row * HourHeight), new Vector2(Width - TimeWidth, HourHeight - 3), SlotColor);
-                if (start == ClinicHours.LunchStart)
-                    CellLabel(slot, new Vector2(16, 0), new Vector2(Width - TimeWidth - 32, HourHeight - 3), "점심시간", 22).color =
-                        Color.Lerp(MonitorWidgets.Foreground, SlotColor, 0.38f);
             }
-            appointmentCells = MonitorWidgets.Rect("Appointments", table, new Vector2(TimeWidth, 0), new Vector2(Width - TimeWidth, size.y));
+            Vector2 cellOrigin = new Vector2(TimeWidth, 0);
+            Vector2 cellSize = new Vector2(ContentWidth, table.sizeDelta.y);
+            emptyCells = MonitorWidgets.Rect("EmptySlots", table, cellOrigin, cellSize);
+            appointmentCells = MonitorWidgets.Rect("Appointments", table, cellOrigin, cellSize);
 
+            Vector2 origin = new Vector2(28, -152);
+            Vector2 size = new Vector2(Width, 513);
             calendar = MonitorWidgets.Rect("Calendar", transform, origin, size);
-            previousMonth = MonitorWidgets.Button(calendar, font, Vector2.zero, new Vector2(140, 44), "이전 달", () => MoveMonth(-1));
-            monthLabel = CellLabel(calendar, new Vector2(146, 0), new Vector2(772, 44), "", 26, TextAnchor.MiddleCenter);
-            nextMonth = MonitorWidgets.Button(calendar, font, new Vector2(924, 0), new Vector2(140, 44), "다음 달", () => MoveMonth(1));
+            previousMonth = MonitorWidgets.Button(calendar, font, new Vector2(390, 0), arrowSize, "<<", () => MoveMonth(-1));
+            monthLabel = CellLabel(calendar, new Vector2(442, 0), new Vector2(180, 44), "", 26, TextAnchor.MiddleCenter);
+            nextMonth = MonitorWidgets.Button(calendar, font, new Vector2(626, 0), arrowSize, ">>", () => MoveMonth(1));
             for (int col = 0; col < Weekdays.Length; col++)
                 CellLabel(calendar, new Vector2(col * 152, -56), new Vector2(146, 33), Weekdays[col], 22, TextAnchor.MiddleCenter);
             calendarDays = MonitorWidgets.Rect("CalendarDays", calendar, new Vector2(0, -94), new Vector2(Width, 408));
@@ -130,8 +138,7 @@ namespace Codetective.Terminal
                 ShowTable();
             }
             DateTime date = firstDate.AddDays(selectedDay - 1);
-            dateLabel.text = date.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture) + " (" + Weekdays[(int)date.DayOfWeek] +
-                ")  ·  DAY " + selectedDay.ToString("00") + (selectedDay == runtime.Day ? "  ·  오늘" : "");
+            dateLabel.text = date.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture) + " (" + Weekdays[(int)date.DayOfWeek] + ")";
             previousDay.interactable = selectedDay > 1;
             nextDay.interactable = selectedDay < maxDay;
             if (calendar.gameObject.activeSelf && lastDay != runtime.Day) DrawCalendar();
@@ -145,45 +152,96 @@ namespace Codetective.Terminal
             var visits = runtime.ScheduleForDay(selectedDay);
             var journalProfiles = visits.Any(v => v.HasJournal) ? new HashSet<string>(runtime.VisibleProfileIds, StringComparer.Ordinal) : null;
             string signature = selectedDay + "|" + string.Join("|", visits.Select(v =>
-                $"{v.id}:{v.startMinute}:{v.endMinute}:{v.phase}:{v.outcome}:{journalProfiles?.Contains(v.profileId)}"));
+                $"{v.id}:{v.startMinute}:{v.endMinute}:{v.phase}:{v.outcome}:{v.title}:{journalProfiles?.Contains(v.profileId)}"));
             if (signature == tableSignature) return;
             tableSignature = signature;
+            MonitorWidgets.ClearRows(emptyCells);
             MonitorWidgets.ClearRows(appointmentCells);
-            const int cellWidth = Width - TimeWidth;
-            const int visitorWidth = 236;
-            const int journalWidth = 100;
-            foreach (AppointmentProgress visit in visits)
+
+            // Older saves keep their real times. Snap their visible bounds to the nearest hour and give short visits a full cell.
+            var bookings = visits.Where(visit => visit.endMinute > visit.startMinute).Select(visit =>
             {
-                float offset = (visit.startMinute - ClinicHours.Opening) * HourHeight / (float)ClinicHours.MinutesPerSlot;
-                float height = (visit.endMinute - visit.startMinute) * HourHeight / (float)ClinicHours.MinutesPerSlot;
-                if (height <= 0) continue;
-                Vector2 position = new Vector2(0, -offset);
-                Vector2 size = new Vector2(cellWidth, height - Mathf.Min(3, height / 10));
-                RectTransform cell;
-                bool canOpenJournal = visit.HasJournal && journalProfiles.Contains(visit.profileId);
-                if (canOpenJournal)
+                int first = Math.Min(Hours - 1, HourBoundary(visit.startMinute));
+                return (visit: visit, first: first, end: Math.Max(first + 1, HourBoundary(visit.endMinute)), column: 0);
+            }).OrderBy(booking => booking.first).ToArray();
+
+            int row = 0;
+            var columnEnds = new List<int>();
+            for (int i = 0; i < bookings.Length;)
+            {
+                while (row < bookings[i].first) DrawEmptySlot(row++);
+
+                // When older visits map to the same hour, show them side by side without covering either cell.
+                columnEnds.Clear();
+                int groupEnd = row;
+                int next = i;
+                do
                 {
-                    var button = MonitorWidgets.Button(appointmentCells, font, position, size, "", () => OpenJournal(visit.id));
-                    button.gameObject.name = visit.id;
-                    cell = (RectTransform)button.transform;
-                    FitCell(CellLabel(cell, new Vector2(cellWidth - journalWidth, 0), new Vector2(journalWidth - 10, size.y), "일지 ›", 20, TextAnchor.MiddleRight));
+                    var booking = bookings[next];
+                    int column = columnEnds.FindIndex(end => end <= booking.first);
+                    if (column < 0) { column = columnEnds.Count; columnEnds.Add(booking.end); }
+                    else columnEnds[column] = booking.end;
+                    bookings[next++].column = column;
+                    groupEnd = Math.Max(groupEnd, booking.end);
                 }
-                else
+                while (next < bookings.Length && bookings[next].first < groupEnd);
+
+                float columnWidth = (ContentWidth + CellGap) / (float)columnEnds.Count;
+                for (; i < next; i++)
                 {
-                    Color color = visit.phase == VisitPhase.Waiting || visit.phase == VisitPhase.Finished ?
-                        MonitorWidgets.ButtonColor : MonitorWidgets.SelectedButtonColor;
-                    cell = Panel(visit.id, appointmentCells, position, size, color);
+                    var (visit, first, end, column) = bookings[i];
+                    Vector2 position = new Vector2(column * columnWidth, -first * HourHeight);
+                    Vector2 size = new Vector2(columnWidth - CellGap, (end - first) * HourHeight - CellGap);
+                    DrawAppointmentCell(visit, visit.HasJournal && journalProfiles.Contains(visit.profileId), position, size);
                 }
-                var visitor = CellLabel(cell, new Vector2(16, 0), new Vector2(visitorWidth - 24, size.y), visit.patientName, 26);
-                visitor.fontStyle = FontStyle.Bold;
-                FitCell(visitor);
-                if (!string.IsNullOrWhiteSpace(visit.title))
-                {
-                    var title = CellLabel(cell, new Vector2(visitorWidth, 0),
-                        new Vector2(cellWidth - visitorWidth - (canOpenJournal ? journalWidth + 10 : 16), size.y), visit.title, 24);
-                    FitCell(title);
-                }
+                row = groupEnd;
             }
+            while (row < Hours) DrawEmptySlot(row++);
+        }
+
+        private static int HourBoundary(int minute)
+        {
+            int offset = Mathf.Clamp(minute, ClinicHours.Opening, ClinicHours.Closing) - ClinicHours.Opening;
+            return (offset + ClinicHours.MinutesPerSlot / 2) / ClinicHours.MinutesPerSlot;
+        }
+
+        private void DrawEmptySlot(int row)
+        {
+            var slot = Panel("Slot", emptyCells, new Vector2(0, -row * HourHeight), new Vector2(ContentWidth, HourHeight - CellGap), SlotColor);
+            if (ClinicHours.Opening + row * ClinicHours.MinutesPerSlot == ClinicHours.LunchStart)
+                CellLabel(slot, new Vector2(12, 0), new Vector2(NameWidth - 24, slot.sizeDelta.y), "점심시간", 22).color =
+                    Color.Lerp(MonitorWidgets.Foreground, SlotColor, 0.38f);
+            Panel("DescriptionDivider", slot, new Vector2(NameWidth, 0), new Vector2(2, slot.sizeDelta.y), TimeColor);
+        }
+
+        private void DrawAppointmentCell(AppointmentProgress visit, bool canOpenJournal, Vector2 position, Vector2 size)
+        {
+            RectTransform cell;
+            if (canOpenJournal)
+            {
+                Button button = MonitorWidgets.Button(appointmentCells, font, position, size, "", () => OpenJournal(visit.id));
+                button.gameObject.name = visit.id;
+                cell = (RectTransform)button.transform;
+            }
+            else
+            {
+                Color color = visit.phase == VisitPhase.Waiting || visit.phase == VisitPhase.Finished ?
+                    MonitorWidgets.ButtonColor : MonitorWidgets.SelectedButtonColor;
+                cell = Panel(visit.id, appointmentCells, position, size, color);
+            }
+            float visitorWidth = Mathf.Min(NameWidth, size.x * 0.43f);
+            float padding = Mathf.Min(12, size.x * 0.06f);
+            float journalWidth = canOpenJournal ? Mathf.Min(96, size.x * 0.24f) : 0;
+            Panel("DescriptionDivider", cell, new Vector2(visitorWidth, 0), new Vector2(2, size.y), DividerColor);
+            var visitor = CellLabel(cell, new Vector2(padding, 0), new Vector2(visitorWidth - 2 * padding, size.y), visit.patientName, 26);
+            visitor.fontStyle = FontStyle.Bold;
+            FitCell(visitor);
+            var description = CellLabel(cell, new Vector2(visitorWidth + padding, 0),
+                new Vector2(size.x - visitorWidth - journalWidth - 2 * padding, size.y), visit.title, 24);
+            description.name = "Description";
+            FitCell(description);
+            if (canOpenJournal)
+                FitCell(CellLabel(cell, new Vector2(size.x - journalWidth, 0), new Vector2(journalWidth - padding, size.y), "일지 ›", 20, TextAnchor.MiddleRight));
         }
 
         private static void FitCell(Text label)
@@ -235,13 +293,13 @@ namespace Codetective.Terminal
                 var button = MonitorWidgets.Button(calendarDays, font, new Vector2(slot % 7 * 152, -(slot / 7) * 68),
                     new Vector2(146, 62), (i + 1).ToString(), () => ShowDay(day));
                 button.interactable = day >= 1;
-                if (day == selectedDay || day == runtime.Day)
-                    button.image.color = day == selectedDay ? MonitorWidgets.SelectedButtonColor : TimeColor;
-                if (day == runtime.Day)
+                if (day == runtime.Day) button.image.color = MonitorWidgets.SelectedButtonColor;
+                if (day == selectedDay)
                 {
-                    Text label = button.GetComponentInChildren<Text>();
-                    label.text += " · 오늘";
-                    label.fontStyle = FontStyle.Bold;
+                    var outline = button.gameObject.AddComponent<Outline>();
+                    outline.effectColor = SelectionBorderColor;
+                    outline.effectDistance = new Vector2(2, -2);
+                    outline.useGraphicAlpha = false;
                 }
             }
         }

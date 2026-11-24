@@ -251,16 +251,26 @@ namespace Codetective.Tests.Operations
         }
 
         [Test]
-        public void SavedAppointmentsWithOldMinuteBasedSlotsRetainTheirTimesAndJournal()
+        public void SavedMinuteBasedAppointmentsKeepTheirTimesAndRecoverMissingDescriptions()
         {
-            KernelRuntime r = World(); KernelSnapshot snapshot = r.Capture();
-            snapshot.clinicDay.appointments[0].startMinute = 570;
-            snapshot.clinicDay.appointments[0].endMinute = 590;
+            var r = ClinicScenario.Create();
+            PatientAppointment morning = Visit("morning", "client", 600);
+            morning.title = "오전 상담 주제";
+            r.RegisterClinicDay(new ClinicDayPlan { appointments = new[] { morning } });
+            r.InitializeClinicDay();
+            KernelSnapshot snapshot = r.Capture();
+            AppointmentProgress oldVisit = snapshot.clinicDay.appointments.Single();
+            oldVisit.startMinute = 570;
+            oldVisit.endMinute = 590;
+            oldVisit.title = null;
             r.Restore(snapshot);
             Assert.That(r.ScheduleForDay(1).First().startMinute, Is.EqualTo(570));
+            Assert.That(r.ScheduleForDay(1).First().title, Is.EqualTo("오전 상담 주제"));
             r.WaitForNextAppointment(); Advance(r); r.Tick(30); Leave(r);
             r.AddConsultationNote("client", "기존 예약 일지");
-            Assert.That(r.AppointmentJournalText(1, "1:morning"), Does.Contain("09:30 ~ 09:50").And.Contain("기존 예약 일지"));
+            r.WaitUntilClosing(); r.NextDay();
+            Assert.That(r.ScheduleForDay(1).Single().title, Is.EqualTo("오전 상담 주제"));
+            Assert.That(r.AppointmentJournalText(1, "1:morning"), Does.Contain("오전 상담 주제").And.Contain("09:30 ~ 09:50").And.Contain("기존 예약 일지"));
         }
 
         [Test]

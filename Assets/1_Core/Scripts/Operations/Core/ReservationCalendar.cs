@@ -26,9 +26,18 @@ namespace Codetective.Operations
         public IReadOnlyList<AppointmentProgress> ScheduleForDay(int day)
         {
             if (day < 1) throw new CommandException("날짜는 1일부터 조회할 수 있습니다.");
-            if (day == Day) { InitializeClinicDay(); return DailyAppointments.ToArray(); }
-            if (day < Day) return DayRecord(day)?.visits.Select(v => v.Copy()).ToArray() ?? Array.Empty<AppointmentProgress>();
-            return BuildClinicDay(day).appointments.Select(v => v.Copy()).ToArray();
+            if (day > Day) return BuildClinicDay(day).appointments;
+            if (day == Day) InitializeClinicDay();
+            AppointmentProgress[] visits = day == Day ? clinicDay?.appointments :
+                dailyRecords.TryGetValue(day, out DailyRecord record) ? record.visits : null;
+            return (visits ?? Array.Empty<AppointmentProgress>()).Select(CopyScheduleEntry).ToArray();
+        }
+        private AppointmentProgress CopyScheduleEntry(AppointmentProgress visit)
+        {
+            AppointmentProgress copy = visit.Copy();
+            if (string.IsNullOrWhiteSpace(copy.title) && appointmentDefinitions.TryGetValue(copy.id, out PatientAppointment definition))
+                copy.title = definition.title;
+            return copy;
         }
         private void RegisterReservation(string mailId, ReservationRequest request)
         {

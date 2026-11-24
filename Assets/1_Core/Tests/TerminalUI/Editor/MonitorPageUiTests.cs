@@ -299,25 +299,74 @@ namespace Codetective.Terminal.Tests.UI
             RectTransform table = Field<RectTransform>(schedule, "table");
             RectTransform visits = Field<RectTransform>(schedule, "appointmentCells");
             var appointment = (RectTransform)visits.Find("1:visit");
-            var timeCell = (RectTransform)table.Find("Time");
+            RectTransform[] hours = table.GetComponentsInChildren<RectTransform>().Where(cell => cell.parent == table && cell.name == "Time").ToArray();
+            RectTransform empty = Field<RectTransform>(schedule, "emptyCells");
             Assert.That(visits.childCount, Is.EqualTo(1));
-            Assert.That(appointment.sizeDelta.y, Is.GreaterThan(2 * timeCell.sizeDelta.y));
+            Assert.That(appointment.sizeDelta.y, Is.EqualTo(hours[0].sizeDelta.y - hours[1].anchoredPosition.y));
             Assert.That(appointment.GetComponentsInChildren<Text>().Select(label => label.text), Is.EquivalentTo(new[] { "상담자", "상담 내용" }));
+            Assert.That(appointment.Find("Description").GetComponent<Text>().text, Is.EqualTo("상담 내용"));
+            Assert.That(empty.childCount, Is.EqualTo(hours.Length - 2));
             Assert.That(table.GetComponentsInChildren<Text>().Select(label => label.text), Does.Contain("점심시간"));
             Assert.That(schedule.GetComponentsInChildren<Button>().Length, Is.EqualTo(3));
             Button previous = Field<Button>(schedule, "previousDay"), next = Field<Button>(schedule, "nextDay");
             Text date = Field<Text>(schedule, "dateLabel");
+            Assert.That(previous.GetComponentInChildren<Text>().text, Is.EqualTo("<"));
+            Assert.That(next.GetComponentInChildren<Text>().text, Is.EqualTo(">"));
             Assert.That(previous.interactable, Is.False);
-            next.onClick.Invoke(); Assert.That(date.text, Does.Contain("1994.01.02"));
-            previous.onClick.Invoke(); Assert.That(date.text, Does.Contain("1994.01.01"));
+            Assert.That(date.text, Is.EqualTo("1994.01.01 (토)"));
+            next.onClick.Invoke(); Assert.That(date.text, Is.EqualTo("1994.01.02 (일)"));
             date.GetComponentInParent<Button>().onClick.Invoke();
             RectTransform calendar = Field<RectTransform>(schedule, "calendar");
             Assert.That(calendar.gameObject.activeSelf, Is.True); Assert.That(table.gameObject.activeSelf, Is.False);
-            Field<Button>(schedule, "nextMonth").onClick.Invoke();
+            Button today = calendar.GetComponentsInChildren<Button>().Single(button => button.name == "1");
+            Button selected = calendar.GetComponentsInChildren<Button>().Single(button => button.name == "2");
+            Assert.That(today.GetComponentInChildren<Text>().text, Is.EqualTo("1"));
+            Assert.That(selected.GetComponentInChildren<Text>().text, Is.EqualTo("2"));
+            Assert.That(today.image.color.g, Is.GreaterThan(selected.image.color.g));
+            Assert.That(today.GetComponent<Outline>(), Is.Null);
+            Assert.That(selected.GetComponent<Outline>(), Is.Not.Null);
+            Button previousMonth = Field<Button>(schedule, "previousMonth"), nextMonth = Field<Button>(schedule, "nextMonth");
+            Assert.That(previousMonth.GetComponentInChildren<Text>().text, Is.EqualTo("<<"));
+            Assert.That(nextMonth.GetComponentInChildren<Text>().text, Is.EqualTo(">>"));
+            nextMonth.onClick.Invoke();
             calendar.GetComponentsInChildren<Button>().Single(button => button.name == "3").onClick.Invoke();
-            Assert.That(date.text, Does.Contain("1994.02.03"));
+            Assert.That(date.text, Is.EqualTo("1994.02.03 (목)"));
             Assert.That(table.gameObject.activeSelf, Is.True); Assert.That(calendar.gameObject.activeSelf, Is.False);
             Assert.That(runtime.Day, Is.EqualTo(1)); Assert.That(runtime.Minute, Is.EqualTo(540));
+        }
+
+        [Test]
+        public void TimetableFitsOlderMinuteBasedAppointmentsToWholeCellsWithoutOverlap()
+        {
+            runtime.RegisterClinicDay(new ClinicDayPlan { appointments = new[] {
+                new PatientAppointment { id = "first", startMinute = 540 },
+                new PatientAppointment { id = "second", startMinute = 600, title = "상담 설명" },
+                new PatientAppointment { id = "third", startMinute = 660 },
+                new PatientAppointment { id = "fourth", startMinute = 780 }
+            } });
+            runtime.InitializeClinicDay();
+            KernelSnapshot snapshot = runtime.Capture();
+            AppointmentProgress[] oldVisits = snapshot.clinicDay.appointments;
+            oldVisits[0].endMinute = 560;
+            oldVisits[1].startMinute = 580; oldVisits[1].title = null;
+            oldVisits[2].endMinute = 675;
+            oldVisits[3].startMinute = 675; oldVisits[3].endMinute = 720;
+            runtime.Restore(snapshot);
+            terminal.SetInteractionEnabled(true); host.ShowPage("schedule");
+            ScheduleMonitorPage schedule = host.CurrentPage.GetComponent<ScheduleMonitorPage>();
+            RectTransform table = Field<RectTransform>(schedule, "table");
+            RectTransform[] hours = table.GetComponentsInChildren<RectTransform>().Where(cell => cell.parent == table && cell.name == "Time").ToArray();
+            RectTransform visits = Field<RectTransform>(schedule, "appointmentCells");
+            var first = (RectTransform)visits.Find("1:first");
+            var second = (RectTransform)visits.Find("1:second");
+            var third = (RectTransform)visits.Find("1:third");
+            var fourth = (RectTransform)visits.Find("1:fourth");
+            Assert.That(new[] { first.anchoredPosition.y, second.anchoredPosition.y, third.anchoredPosition.y, fourth.anchoredPosition.y },
+                Is.EqualTo(new[] { hours[0].anchoredPosition.y, hours[1].anchoredPosition.y, hours[2].anchoredPosition.y, hours[2].anchoredPosition.y }));
+            Assert.That(visits.GetComponentsInChildren<RectTransform>().Where(cell => cell.parent == visits).Select(cell => cell.sizeDelta.y),
+                Is.All.EqualTo(hours[0].sizeDelta.y));
+            Assert.That(third.anchoredPosition.x + third.sizeDelta.x, Is.LessThan(fourth.anchoredPosition.x));
+            Assert.That(second.Find("Description").GetComponent<Text>().text, Is.EqualTo("상담 설명"));
         }
 
         [Test]
