@@ -45,57 +45,44 @@ namespace Codetective.Operations
             if (request.day == Day && IsClinicTransitioning) return "손님 응대가 끝난 뒤 예약을 승인하세요.";
             if (!wanted.condition.Matches(this)) return "현재는 승인할 수 없는 예약입니다.";
             if (confirmedReservations.ContainsKey(mailId)) return "이미 등록된 예약입니다.";
-            foreach (AppointmentProgress booked in ScheduleForDay(request.day).Where(v => v.phase != VisitPhase.Finished))
-            {
-                bool fixedEnd = appointmentDefinitions[booked.id].endMinute > 0;
-                if (wanted.startMinute == booked.startMinute ||
-                    (fixedEnd && wanted.startMinute < booked.endMinute && (wanted.endMinute > 0 ? wanted.endMinute : wanted.startMinute + 1) > booked.startMinute) ||
-                    (wanted.endMinute > 0 && booked.startMinute > wanted.startMinute && booked.startMinute < wanted.endMinute))
-                    return "기존 예약 시간과 겹칩니다. 스케줄을 확인하세요.";
-            }
-            return null;
+            return ScheduleForDay(request.day).Any(booked => wanted.startMinute < booked.endMinute && booked.startMinute < wanted.BookingEndMinute)
+                ? "기존 예약 시간과 겹칩니다. 스케줄을 확인하세요." : null;
         }
         private void ConfirmReservation(string mailId, ReservationRequest request)
         {
             PatientAppointment a = request.appointment;
             var confirmed = new ConfirmedReservation { mailId = mailId, appointmentId = ReservationKey(mailId), day = request.day,
-                profileId = a.profileId, patientName = a.patientName, startMinute = a.startMinute, endMinute = a.endMinute };
+                profileId = a.profileId, patientName = a.patientName, startMinute = a.startMinute, endMinute = a.BookingEndMinute };
             confirmedReservations.Add(mailId, confirmed);
             if (request.day == Day)
             {
                 InitializeClinicDay();
                 if (!clinicDay.appointments.Any(v => v.id == confirmed.appointmentId))
                     clinicDay.appointments = clinicDay.appointments.Concat(new[] { ReservationProgress(confirmed) }).OrderBy(v => v.startMinute).ToArray();
-                RecalculateClinicDeadlines(clinicDay.appointments);
             }
         }
         private AppointmentProgress ReservationProgress(ConfirmedReservation r) => new AppointmentProgress { id = r.appointmentId, profileId = r.profileId,
-            patientName = r.patientName, title = appointmentDefinitions[r.appointmentId].title, startMinute = r.startMinute, endMinute = r.endMinute > 0 ? r.endMinute : 1080,
+            patientName = r.patientName, title = appointmentDefinitions[r.appointmentId].title, startMinute = r.startMinute,
+            endMinute = r.endMinute > 0 ? r.endMinute : ClinicHours.Closing,
             lineStart = appointmentLines[r.appointmentId], lineCount = appointmentDefinitions[r.appointmentId].dialogue.Length };
         private ClinicDayState BuildClinicDay(int day)
         {
             ClinicDayPlan plan = clinicPlans.TryGetValue(day, out ClinicDayPlan exact) ? exact : clinicPlans.TryGetValue(0, out ClinicDayPlan fallback) ? fallback : null;
             AppointmentProgress[] fixedVisits = plan?.appointments.Where(a => a.condition.Matches(this)).Select(a => new AppointmentProgress {
-                id = plan.day + ":" + a.id, profileId = a.profileId, patientName = a.patientName, title = a.title, startMinute = a.startMinute,
+                id = plan.day + ":" + a.id, profileId = a.profileId, patientName = a.patientName, title = a.title, startMinute = a.startMinute, endMinute = a.BookingEndMinute,
                 lineStart = appointmentLines[plan.day + ":" + a.id], lineCount = a.dialogue.Length }).ToArray() ?? Array.Empty<AppointmentProgress>();
             AppointmentProgress[] visits = fixedVisits.Concat(confirmedReservations.Values.Where(r => r.day == day).Select(ReservationProgress)).OrderBy(v => v.startMinute).ToArray();
-            RecalculateClinicDeadlines(visits);
+            // Older saves can contain reservations with an open end or times that overlap the current plan.
+            for (int i = 1; i < visits.Length; i++)
+                visits[i - 1].endMinute = Math.Min(visits[i - 1].endMinute, visits[i].startMinute);
             return new ClinicDayState { day = day, subtitle = plan?.subtitle ?? "상담과 작전 사이", appointments = visits };
-        }
-        private void RecalculateClinicDeadlines(AppointmentProgress[] visits)
-        {
-            for (int i = 0; i < visits.Length; i++)
-            {
-                int end = confirmedReservations.Values.FirstOrDefault(r => r.appointmentId == visits[i].id)?.endMinute ?? appointmentDefinitions[visits[i].id].endMinute;
-                visits[i].endMinute = Math.Min(end > 0 ? end : 1080, i + 1 < visits.Length ? visits[i + 1].startMinute : 1080);
-            }
         }
         private void RestoreReservations(ConfirmedReservation[] saved)
         {
             confirmedReservations.Clear();
             foreach (ConfirmedReservation r in saved ?? Array.Empty<ConfirmedReservation>())
             {
-                if (!reservationRequests.ContainsKey(r.mailId) || r.appointmentId != ReservationKey(r.mailId) || r.day < 1 || r.startMinute < 540 || r.startMinute >= 1080)
+                if (!reservationRequests.ContainsKey(r.mailId) || r.appointmentId != ReservationKey(r.mailId) || r.day < 1 || r.startMinute < ClinicHours.Opening || r.startMinute >= ClinicHours.Closing)
                     throw new CommandException("저장된 예약이 유효하지 않습니다.");
                 confirmedReservations.Add(r.mailId, r.Copy());
             }

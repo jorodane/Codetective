@@ -26,7 +26,8 @@ MonoBehaviour:
     - id: morning
       profileId: client
       patientName: 오전 상담 손님
-      startMinute: 570
+      title: 회사의 야간 소음과 출입 기록
+      startMinute: 600
       endMinute: 0
       greeting: 안녕하세요. 예약하고 왔습니다.
       farewell: 오늘 말씀해 주셔서 감사합니다. 다음 상담에서 이어가겠습니다.
@@ -65,6 +66,7 @@ MonoBehaviour:
     - id: career
       profileId: careerVisitor
       patientName: 취업 상담 손님
+      title: 취업 지원과 직장 적응
       startMinute: 780
       endMinute: 0
       greeting: 안녕하세요. 예약하고 왔습니다.
@@ -105,8 +107,8 @@ MonoBehaviour:
       profileId: regularVisitor
       patientName: 한정우
       title: 일상 스트레스 상담
-      startMinute: 550
-      endMinute: 565
+      startMinute: 540
+      endMinute: 600
       episodePoolId: regularTalk
       greeting: 안녕하세요. 지난번에 이어서 상담하러 왔습니다.
       farewell: 오늘은 여기까지 하시죠. 다음에 또 뵙겠습니다.

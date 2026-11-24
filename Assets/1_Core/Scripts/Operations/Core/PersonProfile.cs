@@ -77,6 +77,39 @@ namespace Codetective.Operations
             string visits = string.Join("\n", history);
             return session + (visits.Length == 0 ? "" : "\n\n상담 내역\n" + visits) + "\n\n기록한 단서 / 추가 정보\n" + ProfileFindings(profileId);
         }
+
+        public string AppointmentJournalText(int day, string appointmentId)
+        {
+            IReadOnlyList<AppointmentProgress> schedule = ScheduleForDay(day);
+            AppointmentProgress appointment = schedule.FirstOrDefault(visit => visit.id == appointmentId && visit.HasJournal) ??
+                throw new CommandException("상담을 마친 뒤 일지를 확인할 수 있습니다.");
+            RequireVisibleProfile(appointment.profileId);
+
+            AppointmentProgress[] sessions = schedule.Where(visit => visit.HasJournal && visit.profileId == appointment.profileId).ToArray();
+            var journal = new StringBuilder(appointment.patientName);
+            if (!string.IsNullOrWhiteSpace(appointment.title)) journal.Append('\n').Append(appointment.title);
+            journal.Append("\n\n").Append(DateAt(day, 0).Value.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture))
+                .Append("  ").Append(TimeOfDay(appointment.SessionStart)).Append(" ~ ").Append(TimeOfDay(appointment.SessionEnd));
+            journal.Append("\n\n상담 내용\n");
+
+            string[] entries = notes.Where(note => note.profileId == appointment.profileId && note.sessionDay == day &&
+                SessionForNote(note, sessions) == appointment).Select(note => note.text).ToArray();
+            journal.Append(entries.Length == 0 ? "작성된 상담 일지가 없습니다." : string.Join("\n\n", entries));
+            return journal.ToString();
+        }
+
+        private static AppointmentProgress SessionForNote(ConsultationNote note, AppointmentProgress[] sessions)
+        {
+            // The actual session may have ended early. Use the exact recorded times before considering a partial entry.
+            AppointmentProgress[] exact = sessions.Where(visit => (int)visit.SessionStart == note.startMinute &&
+                (int)visit.SessionEnd == note.endMinute).ToArray();
+            if (exact.Length != 0) return exact.Length == 1 ? exact[0] : null;
+
+            AppointmentProgress[] within = sessions.Where(visit => note.startMinute >= visit.startMinute &&
+                note.startMinute < visit.endMinute && note.endMinute <= visit.endMinute).ToArray();
+            return within.Length == 1 ? within[0] : null;
+        }
+
         public static int ParseConsultationTime(string text)
         {
             string[] parts = (text ?? "").Trim().Split(':');

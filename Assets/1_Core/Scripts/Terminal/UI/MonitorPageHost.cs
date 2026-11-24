@@ -52,9 +52,6 @@ namespace Codetective.Terminal
         public int ProfilePageRevision { get; private set; }
         public bool SystemMenuVisible { get; private set; }
         public Font DisplayFont => Font;
-        public Action WaitForAppointment { get; set; }
-        public Action FinishConsultation { get; set; }
-        public Func<bool> ClinicActionsAllowed { get; set; }
         public Func<bool> AutoReadMailAllowed { get; set; }
         public bool HasOtherOverlay(object owner) => overlays.Any(value => !ReferenceEquals(value, owner));
         public int JournalPageFor(string profileId) => profileId != null && journalPages.TryGetValue(profileId, out int page) ? page : 0;

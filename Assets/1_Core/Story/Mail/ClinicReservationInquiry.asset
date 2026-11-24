@@ -84,6 +84,7 @@ MonoBehaviour:
         id: care_followup
         profileId: careVisitor
         patientName: 보호자 상담 손님
+        title: 가족의 기억 재활 후속 상담
         startMinute: 660
         endMinute: 720
         greeting: 예약을 승인해 주셔서 감사합니다.

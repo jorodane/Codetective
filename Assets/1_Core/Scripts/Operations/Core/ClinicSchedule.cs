@@ -7,14 +7,28 @@ namespace Codetective.Operations
     public enum VisitPhase { Waiting, Arriving, Talking, Closing, Departing, Finished }
     public enum VisitOutcome { None, Completed, NextReservation, ClosingTime, Missed, ReservationEnd }
 
+    public static class ClinicHours
+    {
+        public const int MinutesPerSlot = 60;
+        public const int Opening = 9 * MinutesPerSlot;
+        public const int LunchStart = 12 * MinutesPerSlot;
+        public const int LunchEnd = 13 * MinutesPerSlot;
+        public const int Closing = 18 * MinutesPerSlot;
+
+        internal static bool ContainsBooking(int start, int end) => start < end &&
+            start % MinutesPerSlot == 0 && end % MinutesPerSlot == 0 &&
+            (start >= Opening && end <= LunchStart || start >= LunchEnd && end <= Closing);
+    }
+
     [Serializable] public sealed class PatientAppointment
     {
         public string id;
         public string profileId = "client";
         public string patientName = "상담 손님";
         public string title;
-        public int startMinute = 540;
-        public int endMinute; // 0: next reservation, or 18:00 for the last patient.
+        public int startMinute = ClinicHours.Opening;
+        public int endMinute; // 0 uses a single hour.
+        internal int BookingEndMinute => endMinute == 0 ? startMinute + ClinicHours.MinutesPerSlot : endMinute;
         public bool beforeAssignment;
         public string afterConversation;
         public string episodePoolId;
@@ -47,6 +61,7 @@ namespace Codetective.Operations
         public double SessionEnd => finishedMinute > 0 ? finishedMinute : SessionStart;
         public VisitPhase phase;
         public VisitOutcome outcome;
+        public bool HasJournal => phase == VisitPhase.Finished && outcome != VisitOutcome.Missed;
         public AppointmentProgress Copy() => (AppointmentProgress)MemberwiseClone();
     }
     [Serializable] public sealed class ClinicDayState
@@ -101,26 +116,32 @@ namespace Codetective.Operations
                 .Select(record => (day: record.day, visits: record.visits));
             if (clinicDay != null) days = days.Append((Day, clinicDay.appointments));
             return days.OrderByDescending(day => day.day).SelectMany(day => day.visits
-                .Where(visit => visit.profileId == profileId && visit.phase == VisitPhase.Finished && visit.outcome != VisitOutcome.Missed)
+                .Where(visit => visit.profileId == profileId && visit.HasJournal)
                 .OrderByDescending(visit => visit.SessionStart).Select(visit => (day.day, visit.Copy())));
         }
 
         public void RegisterClinicDay(ClinicDayPlan plan)
         {
             if (plan == null || plan.day < 0 || clinicPlans.ContainsKey(plan.day)) throw new CommandException("상담 일정의 날짜가 유효하지 않거나 중복됩니다.");
+            foreach (PatientAppointment appointment in plan.appointments) ValidateAppointment(appointment);
             ClinicDayPlan copy = plan.Copy();
-            if (copy.appointments.Select(a => a.id).Distinct().Count() != copy.appointments.Length || copy.appointments.Select(a => a.startMinute).Distinct().Count() != copy.appointments.Length)
-                throw new CommandException("상담 예약의 ID/시간/대사를 확인하세요. 같은 시간에 두 명을 예약할 수 없습니다.");
-            foreach (PatientAppointment a in copy.appointments) ValidateAppointment(a);
+            if (copy.appointments.Select(a => a.id).Distinct().Count() != copy.appointments.Length)
+                throw new CommandException("상담 예약의 ID가 중복됩니다.");
+            PatientAppointment[] byStart = copy.appointments.OrderBy(a => a.startMinute).ToArray();
+            for (int i = 1; i < byStart.Length; i++)
+                if (byStart[i].startMinute < byStart[i - 1].BookingEndMinute)
+                    throw new CommandException("상담 예약 시간이 겹칩니다.");
             clinicPlans.Add(copy.day, copy);
             foreach (PatientAppointment a in copy.appointments)
                 RegisterAppointment(copy.day + ":" + a.id, a);
         }
         private void ValidateAppointment(PatientAppointment a)
         {
-            if (a == null || !CommandParser.IsIdentifier(a.id) || string.IsNullOrWhiteSpace(a.profileId) || a.startMinute < 540 || a.startMinute >= 1080 ||
-                (a.endMinute != 0 && (a.endMinute <= a.startMinute || a.endMinute > 1080)) || a.dialogue == null || a.dialogue.Any(l => l == null || !HasValidConsultationResponses(l)))
+            if (a == null || !CommandParser.IsIdentifier(a.id) || string.IsNullOrWhiteSpace(a.profileId) ||
+                a.dialogue == null || a.dialogue.Any(l => l == null || !HasValidConsultationResponses(l)))
                 throw new CommandException("상담 예약의 ID/시간/대사를 확인하세요.");
+            if (!ClinicHours.ContainsBooking(a.startMinute, a.BookingEndMinute))
+                throw new CommandException("상담은 09:00~12:00 또는 13:00~18:00 사이에 한 시간 단위로 예약할 수 있습니다.");
             if (!string.IsNullOrEmpty(a.episodePoolId) && (a.dialogue.Length != 0 || !consultationPools.ContainsKey(a.episodePoolId)))
                 throw new CommandException("일상 상담 예약에는 등록된 에피소드 모음 하나를 지정하세요.");
             if (!string.IsNullOrEmpty(a.afterConversation) && !terminalConversations.ContainsKey(a.afterConversation))
@@ -145,7 +166,7 @@ namespace Codetective.Operations
         private ConsultationLine ScheduledConsultation => !IsDayEnded && ActiveVisit is AppointmentProgress active &&
             active.phase == VisitPhase.Talking && active.cursor < active.lineCount ?
             activeEpisodeLines?[active.cursor] ?? Consultation[active.lineStart + active.cursor] : null;
-        private double NextClinicBoundary => ActiveVisit?.endMinute ?? NextVisit?.startMinute ?? 1080;
+        private double NextClinicBoundary => ActiveVisit?.endMinute ?? NextVisit?.startMinute ?? ClinicHours.Closing;
         private void SyncClinicClock()
         {
             if (!HasClinicSchedule) return;
@@ -154,11 +175,17 @@ namespace Codetective.Operations
             if (active != null)
             {
                 if (active.phase == VisitPhase.Talking && Minute >= active.endMinute)
-                    CloseVisit(active.endMinute >= 1080 ? VisitOutcome.ClosingTime : NextVisit?.startMinute <= Minute ? VisitOutcome.NextReservation : VisitOutcome.ReservationEnd);
+                    CloseVisit(active.endMinute >= ClinicHours.Closing ? VisitOutcome.ClosingTime : NextVisit?.startMinute <= Minute ? VisitOutcome.NextReservation : VisitOutcome.ReservationEnd);
                 return;
             }
+            foreach (AppointmentProgress visit in clinicDay.appointments.Where(v => v.phase == VisitPhase.Waiting && v.endMinute <= Minute))
+            {
+                visit.phase = VisitPhase.Finished;
+                visit.outcome = VisitOutcome.Missed;
+                Revision++;
+            }
             AppointmentProgress next = NextVisit;
-            if (next == null || next.startMinute > Minute || IsDayEnded || Minute >= 1080) return;
+            if (next == null || next.startMinute > Minute || IsDayEnded || Minute >= ClinicHours.Closing) return;
             PatientAppointment definition = appointmentDefinitions[next.id];
             SelectVisitEpisode(next, definition);
             next.startedMinute = Minute;
@@ -206,7 +233,7 @@ namespace Codetective.Operations
         public void WaitUntilClosing()
         {
             if (!CanWaitUntilClosing) throw new CommandException("오늘 예약을 모두 마친 뒤 마감까지 기다릴 수 있습니다.");
-            Tick(1080 - Minute); NarrativeUpdated();
+            Tick(ClinicHours.Closing - Minute); NarrativeUpdated();
         }
         private void ReplyToAppointment()
         {

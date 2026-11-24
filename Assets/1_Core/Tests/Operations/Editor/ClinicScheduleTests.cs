@@ -10,10 +10,10 @@ namespace Codetective.Tests.Operations
         private static PatientAppointment Visit(string id, string person, int minute) => new PatientAppointment { id = id, profileId = person, patientName = person,
             startMinute = minute, dialogue = new[] { new ConsultationLine { sentence = "첫 진술", keyword = "첫 단서", fact = id + "_first", dataName = id + "First" },
                 new ConsultationLine { sentence = "두 번째 진술", keyword = "두 번째 단서", fact = id + "_second", dataName = id + "Second" } } };
-        private static KernelRuntime World()
+        private static KernelRuntime World(int secondStart = 660)
         {
             KernelRuntime r = ClinicScenario.Create(); r.CreateInstance("Person", "second", "두 번째 손님");
-            r.RegisterClinicDay(new ClinicDayPlan { day = 1, subtitle = "문이 열리는 시간", appointments = new[] { Visit("morning", "client", 600), Visit("afternoon", "second", 660) } });
+            r.RegisterClinicDay(new ClinicDayPlan { day = 1, subtitle = "문이 열리는 시간", appointments = new[] { Visit("morning", "client", 600), Visit("afternoon", "second", secondStart) } });
             r.RegisterClinicDay(new ClinicDayPlan { day = 0, subtitle = "이어지는 이야기", appointments = new[] { Visit("daily", "client", 600) } });
             r.InitializeClinicDay(); r.InitializeDailyRecord(); return r;
         }
@@ -92,8 +92,8 @@ namespace Codetective.Tests.Operations
         [Test]
         public void ClosingTimeWaitsForDepartureBeforeTheReportOrNextDay()
         {
-            KernelRuntime r = World(); r.WaitForNextAppointment(); Advance(r); r.FinishConsultation(); Leave(r);
-            r.WaitForNextAppointment(); Advance(r); r.Tick(420);
+            KernelRuntime r = World(1020); r.WaitForNextAppointment(); Advance(r); r.FinishConsultation(); Leave(r);
+            r.WaitForNextAppointment(); Advance(r); r.Tick(60);
             Assert.That(r.IsDayEnded, Is.True); Assert.That(r.CurrentAppointment.outcome, Is.EqualTo(VisitOutcome.ClosingTime));
             Assert.That(() => r.FinalizeDay(), Throws.TypeOf<CommandException>()); Assert.That(() => r.NextDay(), Throws.TypeOf<CommandException>());
             Leave(r); Assert.That(r.FinalizeDay().visits.Last().outcome, Is.EqualTo(VisitOutcome.ClosingTime));
@@ -145,8 +145,8 @@ namespace Codetective.Tests.Operations
                 lines = new[] { new ConsultationLine { sentence = topic }, new ConsultationLine { sentence = "어떻게 생각하세요?", responses = new[] { "음.", "글쎄요." } },
                     new ConsultationLine { sentence = "그렇군요." } } }).ToArray());
             var visit = new PatientAppointment { id = "regular", profileId = "regular", patientName = "한정우", title = "일상 스트레스 상담",
-                startMinute = 540, endMinute = 560, beforeAssignment = true, afterConversation = "briefing", episodePoolId = "routine" };
-            r.RegisterClinicDay(new ClinicDayPlan { appointments = new[] { visit, Visit("case", "client", 580) } });
+                startMinute = 540, endMinute = 600, beforeAssignment = true, afterConversation = "briefing", episodePoolId = "routine" };
+            r.RegisterClinicDay(new ClinicDayPlan { appointments = new[] { visit, Visit("case", "client", 660) } });
             PatientAppointment recurring = visit.Copy(); recurring.beforeAssignment = false; recurring.afterConversation = "";
             r.RegisterClinicDay(new ClinicDayPlan { day = 0, appointments = new[] { recurring } });
             r.RegisterMail(new StoryMail { id = "mission", mailbox = Mailbox.Kernel, afterAppointmentId = "1:regular",
@@ -164,16 +164,16 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Inbox(Mailbox.Kernel).Select(m => m.id), Is.EqualTo(new[] { "welcome" }));
             r.AdvanceTerminalConversation(1000); r.Tick(1); Advance(r);
             Assert.That(r.CurrentAppointment.id, Is.EqualTo("1:regular"));
-            r.Tick(25); Assert.That(r.CurrentAppointment.outcome, Is.EqualTo(VisitOutcome.ReservationEnd));
+            r.Tick(65); Assert.That(r.CurrentAppointment.outcome, Is.EqualTo(VisitOutcome.ReservationEnd));
             Advance(r); r.Tick(30);
             Assert.That(r.Inbox(Mailbox.Kernel).Any(m => m.id == "mission"), Is.False);
             Advance(r);
-            Assert.That(r.CompletedConsultationsFor("regular").Single().visit.SessionEnd, Is.EqualTo(560));
+            Assert.That(r.CompletedConsultationsFor("regular").Single().visit.SessionEnd, Is.EqualTo(600));
             r.Tick(4.5);
             KernelRuntime restored = TutorialClinic(); restored.Restore(r.Capture());
             Assert.That(restored.Inbox(Mailbox.Kernel).Any(m => m.id == "mission"), Is.False);
             restored.Tick(50);
-            Assert.That(restored.Minute, Is.EqualTo(565));
+            Assert.That(restored.Minute, Is.EqualTo(605));
             Assert.That(restored.CurrentAppointment, Is.Null);
             restored.ReadMail("mission"); restored.AcceptMail("mission");
             restored.WaitForNextAppointment();
@@ -237,6 +237,52 @@ namespace Codetective.Tests.Operations
             KernelRuntime restored = World(); restored.Restore(saved); Assert.That(restored.DailyAppointments.First().outcome, Is.EqualTo(VisitOutcome.Completed));
             Assert.That(restored.CurrentConsultation, Is.Null); Assert.That(restored.CanWaitForNextAppointment, Is.True);
         }
+
+        [Test]
+        public void DayPlansAllowLongAppointmentsButRejectOverlappingHours()
+        {
+            var r = new KernelRuntime();
+            PatientAppointment longVisit = Visit("longVisit", "person", 540);
+            longVisit.endMinute = 660;
+            Assert.That(() => r.RegisterClinicDay(new ClinicDayPlan { appointments = new[] { longVisit, Visit("overlap", "person", 600) } }),
+                Throws.TypeOf<CommandException>());
+            r.RegisterClinicDay(new ClinicDayPlan { appointments = new[] { longVisit, Visit("adjacent", "person", 660), Visit("closing", "person", 1020) } });
+            Assert.That(r.ScheduleForDay(1).Select(v => (v.startMinute, v.endMinute)), Is.EqualTo(new[] { (540, 660), (660, 720), (1020, 1080) }));
+        }
+
+        [Test]
+        public void SavedAppointmentsWithOldMinuteBasedSlotsRetainTheirTimesAndJournal()
+        {
+            KernelRuntime r = World(); KernelSnapshot snapshot = r.Capture();
+            snapshot.clinicDay.appointments[0].startMinute = 570;
+            snapshot.clinicDay.appointments[0].endMinute = 590;
+            r.Restore(snapshot);
+            Assert.That(r.ScheduleForDay(1).First().startMinute, Is.EqualTo(570));
+            r.WaitForNextAppointment(); Advance(r); r.Tick(30); Leave(r);
+            r.AddConsultationNote("client", "기존 예약 일지");
+            Assert.That(r.AppointmentJournalText(1, "1:morning"), Does.Contain("09:30 ~ 09:50").And.Contain("기존 예약 일지"));
+        }
+
+        [Test]
+        public void AppointmentJournalMatchesOnlyTheSelectedCompletedConsultation()
+        {
+            KernelRuntime r = ClinicScenario.Create();
+            r.RegisterClinicDay(new ClinicDayPlan { day = 0, appointments = new[] { Visit("first", "client", 540), Visit("second", "client", 600) } });
+            r.Tick(1); Advance(r); r.Tick(5);
+            r.AddConsultationNote("client", "첫 상담 기록");
+            r.Tick(5); r.FinishConsultation(); Leave(r);
+            Assert.That(r.AppointmentJournalText(1, "0:first"), Does.Contain("09:00 ~ 09:10").And.Contain("첫 상담 기록"));
+            Assert.That(() => r.AppointmentJournalText(1, "0:second"), Throws.TypeOf<CommandException>());
+            r.WaitForNextAppointment(); Advance(r); r.Tick(4); r.FinishConsultation(); Leave(r);
+            Assert.That(r.AppointmentJournalText(1, "0:second"), Does.Contain("작성된 상담 일지가 없습니다").And.Not.Contain("첫 상담 기록"));
+            r.AddConsultationNote("client", "두 번째 상담 기록");
+            r.WaitUntilClosing(); r.NextDay();
+            r.WaitForNextAppointment(); Advance(r); r.AddConsultationNote("client", "다음 날 기록");
+            KernelSnapshot saved = r.Capture(); r.Restore(saved);
+            Assert.That(r.AppointmentJournalText(1, "0:first"), Does.Contain("첫 상담 기록").And.Not.Contain("두 번째 상담 기록").And.Not.Contain("다음 날 기록"));
+            Assert.That(r.AppointmentJournalText(1, "0:second"), Does.Contain("두 번째 상담 기록").And.Not.Contain("첫 상담 기록"));
+        }
+
         [Test]
         public void FreedReferenceIdsAreNotReusedAndWorkingAliasesDoNotCountAsNewFindings()
         {

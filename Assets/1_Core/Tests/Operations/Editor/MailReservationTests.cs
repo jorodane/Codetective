@@ -44,7 +44,7 @@ namespace Codetective.Tests.Operations
         private static KernelRuntime World(StoryMail inquiry = null)
         {
             KernelRuntime r = ClinicScenario.Create();
-            r.RegisterClinicDay(new ClinicDayPlan { day = 0, appointments = new[] { Appointment("morning", 570), Appointment("afternoon", 780) } });
+            r.RegisterClinicDay(new ClinicDayPlan { day = 0, appointments = new[] { Appointment("morning", 600), Appointment("afternoon", 780) } });
             r.RegisterMail(inquiry ?? Inquiry()); r.InitializeClinicDay(); r.InitializeDailyRecord(); return r;
         }
         private static void Advance(KernelRuntime r) { var v = r.CurrentAppointment; r.AdvanceVisitPresentation(v.id, v.phase); }
@@ -79,7 +79,7 @@ namespace Codetective.Tests.Operations
             KernelRuntime r = World(); r.ReadMail("inquiry"); r.ChooseMail("inquiry", "approve");
             Assert.That(r.IsMailAccepted("inquiry"), Is.True); Assert.That(r.SelectedMailChoiceLabel("inquiry"), Is.EqualTo("예약 승인"));
             Assert.That(r.ScheduleForDay(1).Count, Is.EqualTo(2));
-            Assert.That(r.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 570, 660, 780 }));
+            Assert.That(r.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 600, 660, 780 }));
             r.SetTrigger("approved", false); r.ChooseMail("inquiry", "approve");
             Assert.That(r.GetTrigger("approved"), Is.False); Assert.That(r.ScheduleForDay(2).Count, Is.EqualTo(3));
             Assert.That(() => r.ChooseMail("inquiry", "decline"), Throws.TypeOf<CommandException>());
@@ -93,7 +93,7 @@ namespace Codetective.Tests.Operations
             Advance(r); Assert.That(r.CurrentConsultation.sentence, Is.EqualTo("예약하고 왔어요."));
         }
         [Test]
-        public void SameDayApprovalPreservesAnOngoingConversationAndMovesItsNextDeadline()
+        public void SameDayApprovalPreservesAnOngoingConversationAndItsBookedEnd()
         {
             KernelRuntime r = World(Inquiry(day: 1)); r.WaitForNextAppointment(); Advance(r);
             int cursor = r.ConsultationIndex; r.Tick(10); r.ReadMail("inquiry"); r.ChooseMail("inquiry", "approve");
@@ -112,13 +112,31 @@ namespace Codetective.Tests.Operations
             Assert.That(r.SelectedMailChoice("inquiry"), Is.Null.Or.Empty); Assert.That(r.PendingReservationCount, Is.EqualTo(1));
             r.ChooseMail("inquiry", "decline"); Assert.That(r.IsMailDeclined("inquiry"), Is.True);
         }
-        [TestCase(630, 700)] [TestCase(540, 630)] [TestCase(630, 0)]
-        public void FixedDurationSlotsAreProtectedAgainstPartialOverlap(int start, int end)
+        [TestCase(540, 660)] [TestCase(600, 0)] [TestCase(600, 720)]
+        public void HourlyBookingsAreProtectedAgainstMultiHourOverlap(int start, int end)
         {
             var r = new KernelRuntime(); r.RegisterClinicDay(new ClinicDayPlan { day = 2, appointments = new[] { Appointment("fixed", 600, 660) } });
             r.RegisterMail(Inquiry(minute: start, end: end)); r.ReadMail("inquiry");
             Assert.That(() => r.ChooseMail("inquiry", "approve"), Throws.TypeOf<CommandException>());
             Assert.That(r.ScheduleForDay(2).Count, Is.EqualTo(1));
+        }
+
+        [TestCase(570, 660)] [TestCase(600, 630)] [TestCase(660, 780)] [TestCase(720, 780)] [TestCase(1080, 0)]
+        public void AppointmentRequestsMustUseWholeHoursWithinOneOpenPeriod(int start, int end)
+        {
+            var r = new KernelRuntime();
+            Assert.That(() => r.RegisterMail(Inquiry(minute: start, end: end)), Throws.TypeOf<CommandException>());
+            Assert.That(r.PendingReservationCount, Is.Zero);
+        }
+
+        [Test]
+        public void ApprovedMultiHourRequestKeepsItsEndThroughReload()
+        {
+            KernelRuntime r = World(Inquiry(minute: 840, end: 960));
+            r.ReadMail("inquiry"); r.ChooseMail("inquiry", "approve");
+            KernelRuntime restored = World(Inquiry(minute: 840, end: 960)); restored.Restore(r.Capture());
+            AppointmentProgress visit = restored.ScheduleForDay(2).Single(v => v.id == "mail:inquiry");
+            Assert.That((visit.startMinute, visit.endMinute), Is.EqualTo((840, 960)));
         }
         [Test]
         public void TwoInquiriesForTheSameTimeCannotBothBeApproved()
@@ -131,7 +149,7 @@ namespace Codetective.Tests.Operations
         public void ExpiredInquiriesRemainAnswerableButCannotBeApprovedRetroactively()
         {
             KernelRuntime r = World(Inquiry(day: 1, minute: 600, end: 660)); r.ReadMail("inquiry"); r.WaitForNextAppointment(); Advance(r); r.Tick(30);
-            Assert.That(r.Minute, Is.EqualTo(600)); Assert.That(r.MailChoiceDenial("inquiry", "approve"), Does.Contain("지난"));
+            Assert.That(r.Minute, Is.EqualTo(630)); Assert.That(r.MailChoiceDenial("inquiry", "approve"), Does.Contain("지난"));
             Assert.That(() => r.ChooseMail("inquiry", "approve"), Throws.TypeOf<CommandException>()); r.ChooseMail("inquiry", "decline");
             Assert.That(r.IsMailDeclined("inquiry"), Is.True);
         }

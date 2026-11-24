@@ -376,7 +376,8 @@ namespace Codetective.Tests.Operations
             var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
             KernelRuntime runtime = scenario.CreateRuntime();
             Assert.That(runtime.DaySubtitle, Is.EqualTo("Kernel 프로젝트의 시작"));
-            Assert.That(runtime.DailyAppointments.Select(a => a.startMinute), Is.EqualTo(new[] { 540, 580, 660, 840 }));
+            Assert.That(runtime.DailyAppointments.Select(a => (a.startMinute, a.endMinute)),
+                Is.EqualTo(new[] { (540, 600), (600, 660), (780, 900), (900, 1080) }));
             FinishTutorialAndAcceptFirstMission(runtime); runtime.MarkDayIntroSeen();
             runtime.WaitForNextAppointment(); AppointmentProgress visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase);
             runtime.RecordClue(runtime.ConsultationIndex); runtime.Tick(120);
@@ -385,6 +386,8 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing)); Assert.That(restored.Minute, Is.EqualTo(660));
             Assert.That(restored.DayIntroSeen, Is.True);
             while (restored.IsClinicTransitioning) { visit = restored.CurrentAppointment; restored.AdvanceVisitPresentation(visit.id, visit.phase); }
+            Assert.That(restored.CurrentAppointment, Is.Null);
+            restored.WaitForNextAppointment();
             Assert.That(restored.CurrentAppointment.profileId, Is.EqualTo("careerVisitor"));
             Assert.That(restored.VisibleProfileIds, Does.Contain("careerVisitor"));
             Assert.That(restored.VisibleProfileIds, Does.Not.Contain("careVisitor"));
@@ -397,7 +400,7 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(3)); runtime.ReadMail("clinic-reservation-followup"); runtime.ChooseMail("clinic-reservation-followup", "approve");
             var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
             Assert.That(restored.SelectedMailChoice("clinic-reservation-followup"), Is.EqualTo("approve"));
-            Assert.That(restored.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 550, 570, 660, 780 }));
+            Assert.That(restored.ScheduleForDay(2).Select(v => v.startMinute), Is.EqualTo(new[] { 540, 600, 660, 780 }));
             Assert.That(restored.GetTrigger("clinic.request.care_followup.approved"), Is.True);
             restored.ChooseMail("clinic-reservation-followup", "approve"); Assert.That(restored.ScheduleForDay(2).Count, Is.EqualTo(4));
         }

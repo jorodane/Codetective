@@ -139,13 +139,6 @@ namespace Codetective.Gameplay
             Carry.ManipulationAllowed = () => !IsDateTransitioning && !IsVisitPresenting && !IsViewTransitioning &&
                 inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !inspection.TextInputFocused;
             Carry.PickedUp += PickedUpItem; Carry.Placed += StoredItem;
-            if (Monitor != null)
-            {
-                Monitor.WaitForAppointment = WaitForNextAppointment;
-                Monitor.FinishConsultation = FinishConsultation;
-                Monitor.ClinicActionsAllowed = () => IsSessionActive && !changingScene && !IsDateTransitioning && !IsVisitPresenting &&
-                    inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && (Carry == null || Carry.HeldItem == null) && !ui.SummaryVisible;
-            }
             // Bind and build the overlay before optional desk/paper presentation can fail or emit view events.
             ui.Initialize(this, inspection, font, views.ControlledCamera, terminalBody);
             gameObject.AddComponent<TitleBrandingView>().Initialize(inspection, views.ControlledCamera, terminalBody, font);
@@ -340,26 +333,6 @@ namespace Codetective.Gameplay
                 yield return visits.Play(Runtime, visit); AutoSave();
             }
             inspection.NavigationBlocked = inspection.PresentingOnTerminal; IsVisitPresenting = false;
-        }
-        public void WaitForNextAppointment()
-        {
-            if (IsSessionActive && (Monitor?.ClinicActionsAllowed?.Invoke() ?? false) && (Runtime.CanWaitForNextAppointment || Runtime.CanWaitUntilClosing)) StartCoroutine(WaitForReservation());
-        }
-        public void FinishConsultation()
-        {
-            if (IsSessionActive && (Monitor?.ClinicActionsAllowed?.Invoke() ?? false) && Runtime.CurrentAppointment?.phase == VisitPhase.Talking) Runtime.FinishConsultation();
-        }
-        private IEnumerator WaitForReservation()
-        {
-            IsDateTransitioning = true; inspection.NavigationBlocked = true; ui.HideContext();
-            inspection.BeginTerminalPresentation(false);
-            bool closing = Runtime.NextAppointment == null;
-            string subtitle = KernelRuntime.TimeOfDay(Runtime.NextAppointment?.startMinute ?? 1080) + (closing ? " 업무 마감" : " 다음 예약");
-            ui.ShowDayIntro("기다리는 중", subtitle);
-            yield return Transitions.Play(Transitions.Settings?.day, TransitionStyle.TerminalFade, () =>
-            { if (closing) Runtime.WaitUntilClosing(); else Runtime.WaitForNextAppointment(); AutoSave(); });
-            if (Runtime.IsClinicTransitioning) yield return PresentVisits();
-            ui.HideDay(); inspection.EndTerminalPresentation(); inspection.NavigationBlocked = false; IsDateTransitioning = false;
         }
         private IEnumerator IntroduceDay()
         {
@@ -574,8 +547,6 @@ namespace Codetective.Gameplay
             if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;
             if (Carry != null) { Carry.PickedUp -= PickedUpItem; Carry.Placed -= StoredItem; Carry.ManipulationAllowed = null; Carry.EndSession(); }
             if (inspection != null) { inspection.AngleEntered -= EnterView; inspection.OverviewEntered -= LeaveView; inspection.BackHandler = null; inspection.QuickSaveRequested = null; inspection.PointerBlocked = null; inspection.Carry = null; inspection.Transitions = null; inspection.NavigationBlocked = false; }
-            MonitorPageHost host = Monitor;
-            if (host != null) { host.WaitForAppointment = null; host.FinishConsultation = null; host.ClinicActionsAllowed = null; }
             if (Runtime != null)
             {
                 Runtime.SceneActionRequested -= SceneAction;
