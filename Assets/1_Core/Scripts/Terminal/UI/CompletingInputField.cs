@@ -12,6 +12,7 @@ namespace Codetective.Terminal
     public class CompletingInputField : InputField
     {
         public Func<TerminalCompletionInput, InlineCompletion?> CompletionQuery { get; set; }
+        public Func<bool> CanSubmitEmptyLine { get; set; }
         public event Action CompletionApplied;
         public event Action CompletionListRequested;
         public event Action<string> LineSubmitted;
@@ -110,7 +111,8 @@ namespace Codetective.Terminal
                 ApplyPendingCompletion();
                 return;
             }
-            if (isFocused && submission.TryTake(CompletionInput, out string line, out bool hadComposition))
+            if (isFocused && submission.TryTake(CompletionInput, out string line, out bool hadComposition,
+                allowEmpty: !protectedComposition && CanSubmitEmptyLine?.Invoke() == true))
             {
                 // Ordinary submission can keep the selected field and its caret alive.
                 // A composed command must drain its IME session before being cleared.
@@ -288,10 +290,12 @@ namespace Codetective.Terminal
             if (key == CompletionKey.Enter && ignoredEnterFrame == Time.frameCount) return true;
             if (handledFrame == Time.frameCount) return true;
             TerminalCompletionInput current = CompletionInput;
-            InlineCompletion? suggestion = CompletionQuery?.Invoke(current);
+            bool submitOnEnter = lineType != LineType.MultiLineNewline;
+            bool advanceDialogue = key == CompletionKey.Enter && submitOnEnter && current.Text.Length == 0 &&
+                !IsCompositionProtected && CanSubmitEmptyLine?.Invoke() == true;
+            InlineCompletion? suggestion = advanceDialogue ? null : CompletionQuery?.Invoke(current);
             if (key == CompletionKey.Space && suggestion.HasValue) suggestion = suggestion.Value.ForSpaceKey();
             if (suggestion.HasValue && !Fits(suggestion.Value)) suggestion = null;
-            bool submitOnEnter = lineType != LineType.MultiLineNewline;
             switch (InlineCompletion.Resolve(key, current, suggestion, submitOnEnter))
             {
                 case CompletionKeyAction.Accept:

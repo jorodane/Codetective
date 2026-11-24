@@ -117,7 +117,7 @@ namespace Codetective.Operations
         public string NameFor(CommandLocale language) => CommandVocabulary.Name(Code, Names, language);
         public string LabelFor(CommandLocale language) => CommandVocabulary.Description(Label, Names, language);
         public string SignatureFor(CommandLocale language, string name = null) => Property ? name ?? NameFor(language) : (name ?? NameFor(language)) + "(" +
-            string.Join(", ", Parameters.Select(p => p.TypeName(language) + " " + CommandVocabulary.ParameterName(p.Name, language))) + (Variadic ? ", ..." : "") + ")";
+            string.Join(", ", Parameters.Select(p => CommandVocabulary.KindName(p.Kind, language) + " " + CommandVocabulary.ParameterName(p.Name, language))) + (Variadic ? ", ..." : "") + ")";
         public IEnumerable<string> AllNames => CommandVocabulary.Names(Code, Aliases, Names);
         public bool Matches(string name) => AllNames.Contains(name);
     }

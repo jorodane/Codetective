@@ -83,12 +83,10 @@ MonoBehaviour:
     text: Field Support here. You have read the mail. Let's check the basics of the operations network.
   - key: onboarding.listen
     language: ko
-    text: 'Enter로 안내를 한 줄씩 넘기십시오. 안내가 끝나면 다음 명령을 입력해 보십시오:
-
-      {command}'
+    text: "입력창이 비어 있을 때 Enter를 누르면 다음 안내로 넘어갑니다. 다음 명령을 실행해 보십시오.\n{command}"
   - key: onboarding.listen
     language: en
-    text: Press Enter to read the briefing one line at a time. When it finishes, enter {command}.
+    text: Press Enter with an empty input to continue the briefing. Try entering {command}.
   - key: onboarding.permissions
     language: ko
     text: 잘하셨습니다. 권한 목록은 현재 사용할 수 있는 정보와 행동을 보여줍니다.

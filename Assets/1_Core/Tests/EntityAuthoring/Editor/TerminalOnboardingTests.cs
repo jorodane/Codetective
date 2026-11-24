@@ -14,10 +14,10 @@ namespace Codetective.Tests.Operations
         { foreach (ContentTextTableAsset table in asset.textTables) UnityEngine.Object.DestroyImmediate(table); UnityEngine.Object.DestroyImmediate(asset); }
         internal static void ReadBriefing(KernelRuntime runtime)
         {
-            while (runtime.TerminalInputLocked)
+            while (runtime.TerminalLineInProgress)
             {
                 runtime.AdvanceTerminalConversation(1000);
-                if (runtime.TerminalInputLocked) Assert.That(runtime.ContinueTerminalLine(), Is.True);
+                if (runtime.TerminalLineInProgress) Assert.That(runtime.ContinueTerminalLine(), Is.True);
             }
         }
         private KernelRuntime World(CommandLocale commands = CommandLocale.Korean, string display = "ko")

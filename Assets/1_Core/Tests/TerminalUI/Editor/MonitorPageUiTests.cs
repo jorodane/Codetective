@@ -38,12 +38,13 @@ namespace Codetective.Terminal.Tests.UI
         }
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
         [Test]
-        public void ReturningFromAssignmentMailStartsDialogueAndBlocksOnlyTheCommandInput()
+        public void ReturningFromAssignmentMailStartsDialogueWithAnEditableCommandField()
         {
             var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
             Assert.That(scenario, Is.Not.Null); KernelRuntime r = scenario.CreateRuntime(); terminal.AttachRuntime(r); terminal.SetInteractionEnabled(true);
             r.ReadMail("government-intro"); host.ShowPage("kernel");
-            Assert.That(r.TerminalInputLocked, Is.True); Assert.That(input.interactable, Is.False); Assert.That(input.readOnly, Is.True);
+            Assert.That(r.TerminalLineInProgress, Is.True); Assert.That(input.interactable, Is.True); Assert.That(input.readOnly, Is.False);
+            Assert.That(input.isFocused, Is.False);
             Assert.That(terminal.InteractionEnabled, Is.True); Assert.That(host.TryNavigate("mail"), Is.True);
             host.ShowPage("kernel"); r.AdvanceTerminalConversation(1000);
             typeof(TerminalController).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(terminal, null);
@@ -135,7 +136,7 @@ namespace Codetective.Terminal.Tests.UI
             MenuButton(menu, "저장하기").onClick.Invoke(); Assert.That(saves, Is.EqualTo(1));
             MenuButton(menu, "불러오기").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text == "DAY 3\n10:00"), Is.True);
             menu.SelectSave("earlier"); MenuButton(menu, "이 기록 불러오기").onClick.Invoke(); Assert.That(loaded, Is.EqualTo("earlier")); Assert.That(menu.HandleEscape(), Is.True);
-            MenuButton(menu, "가이드").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("Q 전체 보기")), Is.True);
+            MenuButton(menu, "가이드").onClick.Invoke(); Assert.That(menu.GetComponentsInChildren<Text>().Any(t => t.text.Contains("ESC 물건 내려놓기 → 전체 보기 → 메뉴")), Is.True);
             Assert.That(menu.HandleEscape(), Is.True); Assert.That(menu.HandleEscape(), Is.False);
             MenuButton(menu, "계속하기").onClick.Invoke(); Assert.That(resumes, Is.EqualTo(1));
             Button title = MenuButton(menu, "타이틀 화면"); menu.Hide(); title.onClick.Invoke(); Assert.That(titles, Is.Zero);

@@ -124,9 +124,9 @@ namespace Codetective.Terminal.Tests
             Assert.That(session.Count, Is.EqualTo(1));
         }
 
-        [TestCase(CommandLocale.Korean, "연습", "지휘소")]
-        [TestCase(CommandLocale.English, "practice", "headquarters")]
-        public void LessonAcceptsAnObjectReferenceInTheFirstAssignment(CommandLocale language, string name, string label)
+        [TestCase(CommandLocale.Korean, "연습", "지휘소", "장소")]
+        [TestCase(CommandLocale.English, "practice", "headquarters", "Place")]
+        public void LessonAcceptsAnObjectReferenceInTheFirstAssignment(CommandLocale language, string name, string label, string category)
         {
             KernelRuntime runtime = ClinicScenario.Create(); runtime.Language = language;
             runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "practice", koreanVariableBase = "연습", unlockCommandsByStep = true,
@@ -142,6 +142,7 @@ namespace Codetective.Terminal.Tests
             Assert.That(session.ExecuteLinkedInput(prefix + CommandObjectReference.Write("hq"), prefix + label).Success, Is.True);
             Assert.That(runtime.Data[name].value.id, Is.EqualTo("hq"));
             Assert.That(runtime.TerminalConversationActive, Is.False);
+            Assert.That(session.Complete(name.Substring(0, 1)).Single().DisplayText, Is.EqualTo(name + " : " + category));
         }
 
         [Test]

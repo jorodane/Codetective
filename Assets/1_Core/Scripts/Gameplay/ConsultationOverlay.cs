@@ -15,24 +15,25 @@ namespace Codetective.Gameplay
         private DialoguePresentationDefinition presentation;
         private Camera cameraView;
         private Renderer[] terminalParts;
-        private RectTransform bubble;
+        private RectTransform viewport, bubble;
         private Text speaker, sentence, feedback;
         private ObjectReferenceTextView sentenceLinks;
         private Button main, clue, firstResponse, secondResponse;
         private AudioSource audioSource;
-        private bool reservedCameraSpace;
         private const float Margin = 16f;
         private int nextAcknowledgement;
         private float readyAt;
         private bool showingSequence;
-        public float TopInset => bubble != null && bubble.gameObject.activeSelf ? bubble.sizeDelta.y + 2f * Margin : 0f;
+        public float TopInset => bubble != null && bubble.gameObject.activeSelf && viewport.sizeDelta.y > 0f ? viewport.sizeDelta.y + 2f * Margin : 0f;
 
         public void Initialize(KernelGameController game, InspectionController inspection, Transform parent, Font font,
             DialoguePresentationDefinition presentation, Camera cameraView, Transform terminalBody)
         {
             this.game = game; this.inspection = inspection; this.presentation = presentation; this.cameraView = cameraView;
             terminalParts = terminalBody != null ? terminalBody.GetComponentsInChildren<Renderer>(true) : new Renderer[0];
-            bubble = OverlayWidgets.Rect("PatientSpeechBubble", parent, new Vector2(-Margin, -Margin), new Vector2(560, 216), Vector2.one);
+            viewport = OverlayWidgets.Rect("PatientSpeechViewport", parent, new Vector2(-Margin, -Margin), new Vector2(560, 216), Vector2.one);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            bubble = OverlayWidgets.Rect("PatientSpeechBubble", viewport, Vector2.zero, viewport.sizeDelta, Vector2.one);
             Image image = bubble.gameObject.AddComponent<Image>(); image.color = new Color(0.08f, 0.1f, 0.085f);
             main = bubble.gameObject.AddComponent<Button>(); main.targetGraphic = image;
             main.transition = Selectable.Transition.None;
@@ -68,25 +69,13 @@ namespace Codetective.Gameplay
         {
             DialoguePlacement placement = presentation != null ? presentation.placements.FirstOrDefault(p => p.angleId == game.CurrentView) : null;
             Vector2 preferred = placement != null ? placement.size : new Vector2(560, 216);
-            Rect screen = ((RectTransform)bubble.parent).rect;
+            Rect screen = ((RectTransform)viewport.parent).rect;
             if (screen.width <= Margin * 2f || screen.height <= Margin * 2f) return;
             float width = Mathf.Min(preferred.x, screen.width - Margin * 2f);
             float height = Mathf.Min(preferred.y, screen.height - Margin * 2f);
-            float minimum = Mathf.Min(height, 196f);
             float terminalTop = TerminalTop(1f - (width + Margin) / screen.width);
             float available = (1f - terminalTop) * screen.height - Margin * 2f;
-            height = Mathf.Clamp(available, minimum, height);
-            if (available < minimum && terminalTop > 0f)
-            {
-                // Keep the authored camera pose/FOV. Open up the rendered view from the
-                // bottom edge so the whole CRT stays clickable under the reserved space.
-                float scale = (1f - (height + Margin * 2f) / screen.height) / terminalTop;
-                Matrix4x4 framing = Matrix4x4.identity;
-                framing.m00 = framing.m11 = Mathf.Clamp(scale, 0.1f, 1f);
-                framing.m13 = framing.m11 - 1f;
-                cameraView.projectionMatrix = framing * cameraView.projectionMatrix;
-                reservedCameraSpace = true;
-            }
+            viewport.sizeDelta = new Vector2(width, Mathf.Clamp(available, 0f, height));
             bubble.sizeDelta = new Vector2(width, height);
             width -= 32f;
             speaker.rectTransform.sizeDelta = new Vector2(width, 26);
@@ -118,13 +107,7 @@ namespace Codetective.Gameplay
             return top;
         }
 
-        private void RestoreCameraFraming()
-        {
-            if (reservedCameraSpace && cameraView != null) cameraView.ResetProjectionMatrix();
-            reservedCameraSpace = false;
-        }
-
-        private void OnDisable() { RestoreCameraFraming(); if (bubble != null) bubble.gameObject.SetActive(false); }
+        private void OnDisable() { if (bubble != null) bubble.gameObject.SetActive(false); }
         private static void Place(Button button, Vector2 position, Vector2 size)
         {
             RectTransform rect = (RectTransform)button.transform; rect.anchoredPosition = position; rect.sizeDelta = size;
@@ -137,7 +120,6 @@ namespace Codetective.Gameplay
             bool sequence = game.Runtime.IsClinicTransitioning;
             bool visible = (line != null || sequence) && !game.IsDateTransitioning && !inspection.PresentingOnTerminal && inspection.Mode != InspectionMode.Menu &&
                 !inspection.ModalInputBlocked && (game.Carry == null || game.Carry.HeldItem == null);
-            RestoreCameraFraming();
             bubble.gameObject.SetActive(visible); if (!visible) return;
             Position();
             bool hasClue = !sequence && !string.IsNullOrWhiteSpace(line.keyword);

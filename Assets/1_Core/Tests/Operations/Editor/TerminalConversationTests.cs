@@ -36,8 +36,9 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.ContinueTerminalLine(), Is.True, "Enter during typing reveals the current line.");
             Assert.That(runtime.TerminalConversationTranscript(), Does.Contain("First message").And.Not.Contain("Second message"));
             runtime.AdvanceTerminalConversation(1000);
-            Assert.That(runtime.TerminalInputLocked, Is.True);
-            Assert.That(runtime.Execute("help").Success, Is.False);
+            Assert.That(runtime.TerminalLineInProgress, Is.True);
+            Assert.That(runtime.Execute("note = 1").Success, Is.True);
+            Assert.That(runtime.ConversationProgress("tutorial").deviations, Is.Zero);
 
             KernelRuntime restored = World(definition, false);
             restored.Restore(runtime.Capture());
@@ -46,9 +47,34 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.TerminalLineUsesEnter, Is.False);
             restored.AdvanceTerminalConversation(7);
             Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Second message"));
-            Assert.That(restored.TerminalInputLocked, Is.False);
+            Assert.That(restored.TerminalLineInProgress, Is.False);
             Assert.That(restored.ContinueTerminalLine(), Is.False);
             Assert.That(restored.Execute("help").Success, Is.True);
+        }
+
+        [Test]
+        public void AnEarlyTutorialCommandCountsAfterTheAuthoredLinesAreReadEvenAfterLoading()
+        {
+            TerminalConversationDefinition definition = Definition();
+            definition.advanceWithEnter = true;
+            definition.steps[0].lines = new[] { Line("First message", 2), Line("Second message", 2) };
+            KernelRuntime runtime = World(definition);
+            runtime.AdvanceTerminalConversation(1);
+
+            Assert.That(runtime.Execute("help").Success, Is.True);
+            Assert.That(runtime.ConversationProgress("tutorial").stepId, Is.EqualTo("first"));
+            Assert.That(runtime.TerminalConversationTranscript(), Does.Contain("Fi▌").And.Not.Contain("Second message"));
+            KernelRuntime restored = World(definition, false);
+            restored.Restore(runtime.Capture());
+
+            Assert.That(restored.ContinueTerminalLine(), Is.True);
+            Assert.That(restored.ContinueTerminalLine(), Is.True);
+            Listen(restored);
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Second message").And.Not.Contain("Done."));
+            Assert.That(restored.ContinueTerminalLine(), Is.True);
+            Listen(restored);
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Done."));
+            Assert.That(restored.GetTrigger("tutorial.complete"), Is.True);
         }
 
         private static TerminalConversationDefinition QuestionDefinition()
@@ -78,7 +104,7 @@ namespace Codetective.Tests.Operations
             definition.steps[0].lines[0].pauseAfter = 10;
             KernelRuntime runtime = World(definition);
 
-            Assert.That(runtime.TerminalInputLocked, Is.True);
+            Assert.That(runtime.TerminalLineInProgress, Is.True);
             Assert.That(runtime.TerminalLineUsesEnter, Is.False);
             runtime.AdvanceTerminalConversation(0.1);
             Assert.That(runtime.TerminalAwaitingAnswer, Is.True);
@@ -137,7 +163,7 @@ namespace Codetective.Tests.Operations
             Assert.That(waiting.TerminalConversationTranscript(), Is.EqualTo(r.TerminalConversationTranscript()));
             Assert.That(waiting.Execute(command).Success, Is.True);
             Assert.That(waiting.TerminalAwaitingAnswer, Is.False);
-            Assert.That(waiting.TerminalInputLocked, Is.True);
+            Assert.That(waiting.TerminalLineInProgress, Is.True);
 
             waiting.AdvanceTerminalConversation(0.5);
             KernelRuntime responding = World(definition, false);
@@ -155,26 +181,27 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = World(start: false); r.EnterTerminalPage("kernel"); Assert.That(r.TerminalConversationActive, Is.False);
             r.ReadMail("intro"); r.EnterTerminalPage("mail"); Assert.That(r.TerminalConversationActive, Is.False);
-            r.EnterTerminalPage("kernel"); Assert.That(r.TerminalInputLocked, Is.True);
+            r.EnterTerminalPage("kernel"); Assert.That(r.TerminalLineInProgress, Is.True);
             Listen(r); Assert.That(r.Execute("help").Success, Is.True); Listen(r);
             Assert.That(r.TerminalConversationActive, Is.False); Assert.That(r.GetTrigger("tutorial.complete"), Is.True);
             string log = r.TerminalConversationTranscript(); r.EnterTerminalPage("kernel"); Assert.That(r.TerminalConversationTranscript(), Is.EqualTo(log));
         }
-        [Test] public void TypingRevealsWholeTextElementsAndBlocksEvenDirectExecution()
+        [Test] public void TypingRevealsWholeTextElementsWhileCommandsRemainAvailable()
         {
             var definition = Definition(); definition.steps[0].lines = new[] { Line("가😀a\u0301", 1) };
             KernelRuntime r = World(definition); r.AdvanceTerminalConversation(1);
             Assert.That(r.TerminalConversationTranscript(), Does.Contain("가▌").And.Not.Contain("😀"));
-            Assert.That(r.Execute("forbidden = 1").Success, Is.False); Assert.That(r.Data.ContainsKey("forbidden"), Is.False);
+            Assert.That(r.TerminalInputLocked, Is.False);
+            Assert.That(r.Execute("note = 1").Success, Is.True); Assert.That(r.Data.ContainsKey("note"), Is.True);
             r.AdvanceTerminalConversation(1); Assert.That(r.TerminalConversationTranscript(), Does.Contain("가😀▌"));
-            r.AdvanceTerminalConversation(1); Assert.That(r.TerminalInputLocked, Is.False); Assert.That(r.TerminalConversationTranscript(), Does.Contain("가😀a\u0301"));
+            r.AdvanceTerminalConversation(1); Assert.That(r.TerminalLineInProgress, Is.False); Assert.That(r.TerminalConversationTranscript(), Does.Contain("가😀a\u0301"));
         }
         [Test] public void HiddenPagesAndPausedTicksDoNotConsumeMessages()
         {
             var definition = Definition(); definition.steps[0].lines = new[] { Line("A long message", 1) };
             KernelRuntime r = World(definition); r.AdvanceTerminalConversation(2); string before = r.TerminalConversationTranscript();
             r.AdvanceTerminalConversation(100, false); r.AdvanceTerminalConversation(0);
-            Assert.That(r.TerminalConversationTranscript(), Is.EqualTo(before)); Assert.That(r.TerminalInputLocked, Is.True);
+            Assert.That(r.TerminalConversationTranscript(), Is.EqualTo(before)); Assert.That(r.TerminalLineInProgress, Is.True);
         }
         [Test] public void OnlySuccessfulOffScriptActionsCountAndFirstTwoAreForgiven()
         {
@@ -186,7 +213,7 @@ namespace Codetective.Tests.Operations
             Assert.That(r.TerminalConversationTranscript(), Does.Contain("Forgiven twice"));
             r.Execute("other = 1"); Assert.That(r.TerminalDisturbance, Is.EqualTo(1));
             Assert.That(r.ConversationProgress("tutorial").deviations, Is.EqualTo(3));
-            r.AdvanceTerminalConversation(0.6); Assert.That(r.TerminalDisturbance, Is.Zero); Assert.That(r.TerminalInputLocked, Is.True);
+            r.AdvanceTerminalConversation(0.6); Assert.That(r.TerminalDisturbance, Is.Zero); Assert.That(r.TerminalLineInProgress, Is.True);
             Listen(r); Assert.That(r.TerminalConversationTranscript(), Does.Contain("Kernel. Follow"));
             Assert.That(r.ConversationProgress("tutorial").stepId, Is.EqualTo("first"));
         }
@@ -196,7 +223,7 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Execute("nonsense.notHere()").Success, Is.False);
             Assert.That(r.Execute("hq.checkComms(1)").Success, Is.False);
             Assert.That(r.Execute("help").Success, Is.True);
-            Assert.That(r.ConversationProgress("tutorial").deviations, Is.Zero); Assert.That(r.TerminalInputLocked, Is.False);
+            Assert.That(r.ConversationProgress("tutorial").deviations, Is.Zero); Assert.That(r.TerminalLineInProgress, Is.False);
         }
         [Test] public void EquivalentAliasesAndReferenceReceiversSatisfyTheActualActionGoal()
         {
@@ -248,7 +275,7 @@ namespace Codetective.Tests.Operations
             KernelRuntime r = World(); Listen(r); r.Execute("a = 1"); Listen(r); r.Execute("free a"); Listen(r); r.Execute("a = 1"); r.AdvanceTerminalConversation(0.2);
             string before = r.TerminalConversationTranscript(); KernelSnapshot saved = r.Capture();
             KernelRuntime restored = World(start: false); restored.Restore(saved);
-            Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(before)); Assert.That(restored.TerminalInputLocked, Is.True);
+            Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(before)); Assert.That(restored.TerminalLineInProgress, Is.True);
             Assert.That(restored.ConversationProgress("tutorial").deviations, Is.EqualTo(3));
             Assert.That(restored.TerminalDisturbance, Is.EqualTo(r.TerminalDisturbance).Within(0.00001));
             Listen(restored); restored.Execute("help"); Listen(restored); Assert.That(restored.GetTrigger("tutorial.complete"), Is.True);
@@ -269,7 +296,7 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = World(start: false); KernelSnapshot saved = r.Capture();
             KernelRuntime loaded = World(start: false); loaded.Restore(saved); loaded.ReadMail("intro"); loaded.EnterTerminalPage("kernel");
-            Assert.That(loaded.TerminalInputLocked, Is.True);
+            Assert.That(loaded.TerminalLineInProgress, Is.True);
         }
         [Test] public void StoryTriggeredGoalsUseTheSameQuestAndTriggerState()
         {

@@ -131,7 +131,7 @@ namespace Codetective.Terminal
                     BuildSaveList(); break;
                 case "guide":
                     MonitorWidgets.ScrollText(content, font, Vector2.zero, new Vector2(1000, 344)).text =
-                        "화면 이동\n1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기\nESC 물건 내려놓기 → 전체 보기 → 메뉴 · Q 전체 보기 · F5 빠른 저장\n입력 중에는 화면 이동과 빠른 저장 단축키가 작동하지 않습니다.\n\n" +
+                        "화면 이동\n1 터미널 · 2 상담 · 3 프로필 · 4 서랍 · 5 축음기\nESC 물건 내려놓기 → 전체 보기 → 메뉴 · F5 빠른 저장\n입력 중에는 화면 이동과 빠른 저장 단축키가 작동하지 않습니다.\n\n" +
                         "터미널\n입력창을 클릭하거나 Enter로 명령창에 돌아올 수 있습니다.\n대상 뒤에 '.'을 입력하면 권한 목록을 볼 수 있습니다.\nTab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정\n다음 Enter로 명령 실행 · 입력하지 않을 때 Tab / Shift+Tab 메뉴 이동\nhelp / 도움말: 사용 가능한 명령 확인\n\n" +
                         "상담\n상담소에서 프로필과 상담 일지를 기록할 수 있습니다.\n스케줄에서 날짜를 선택해 시간표를 보고, 끝난 상담의 일지를 열 수 있습니다.\n\n" +
                         "물건 확인\n물건을 클릭해서 확인하고 '내려놓기'로 배치하세요.\n배치 중 서랍 클릭 / 4 서랍 앵글 · 서랍 앞면 클릭: 열기 / 닫기\n우클릭: 배치 취소 · 종이의 인쇄 영역 클릭: 내용 읽기";
@@ -265,7 +265,7 @@ namespace Codetective.Terminal
                     break;
                 case 2: BuildVolume(page); break;
                 case 3:
-                    string[,] bindings = { { "뒤로 / 메뉴", "ESC" }, { "전체 보기", "Q" }, { "화면 이동", "1 / 2 / 3 / 4 / 5" },
+                    string[,] bindings = { { "뒤로 / 메뉴", "ESC" }, { "화면 이동", "1 / 2 / 3 / 4 / 5" },
                         { "권한 확정", "Tab / Enter · 후보 이름 입력 중 Space" }, { "페이지 이동", "Tab / Shift+Tab (입력 중 제외)" }, { "빠른 저장", "F5" },
                         { "물건 확인 / 배치", "마우스 왼쪽 버튼 / 내려놓기" }, { "배치 취소", "마우스 오른쪽 버튼" } };
                     for (int i = 0; i < bindings.GetLength(0); i++)

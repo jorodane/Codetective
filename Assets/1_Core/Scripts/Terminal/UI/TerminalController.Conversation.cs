@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Codetective.Operations;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -19,8 +20,9 @@ namespace Codetective.Terminal
         private ObjectReferenceTextView transcriptLinks;
         private const float AnswerInset = 40f;
         private static readonly Vector2 QuestionPadding = new Vector2(12, 9);
-        private RectTransform answerRow, questionPanel;
+        private RectTransform answerRow, answerChoices, questionPanel;
         private Text answerOptions, answerQuestion;
+        private string[] visibleAnswerKeys = Array.Empty<string>();
         private Vector2 logBottom, scrollbarBottom, completionPosition;
 
         private void ResetConversationPresentation()
@@ -84,15 +86,17 @@ namespace Codetective.Terminal
             if (!(input.placeholder is Text placeholder)) return;
             bool english = session.Runtime.DisplayLanguage == "en";
             KernelRuntime runtime = session.Runtime;
-            placeholder.text = runtime.TerminalLineUsesEnter ? (english ? "Press Enter to continue.." : "Enter를 눌러 넘기기..") :
+            placeholder.text = runtime.TerminalLineUsesEnter ? (english ? "Press Enter on an empty line.." : "빈 입력창에서 Enter로 넘기기..") :
                 runtime.TerminalInputLocked ? (english ? "Receiving.." : "수신중..") :
                 (english ? "Awaiting input.." : "입력 대기중..");
         }
 
+        private bool CanContinueConversation() => AcceptsInput && isActiveAndEnabled && Time.timeScale > 0f && Runtime.TerminalCanContinueLine;
+
         public bool TryContinueConversation()
         {
-            if (!interactionEnabled || !pageVisible || !isActiveAndEnabled || Time.timeScale <= 0 ||
-                !session.Runtime.ContinueTerminalLine()) return false;
+            if (!CanContinueConversation() || input.IsCompositionProtected || input.CompletionInput.Text.Length != 0 ||
+                !Runtime.ContinueTerminalLine()) return false;
             QueueTranscriptScroll(toLatest: true);
             // The Enter that advances the dialogue must not also reach the selected button or input.
             if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject != input.gameObject)
@@ -121,9 +125,40 @@ namespace Codetective.Terminal
             }
             if (waiting)
             {
-                answerOptions.text = runtime.TerminalAnswerPrompt;
+                answerOptions.text = runtime.TerminalAnswerLabel;
+                RefreshAnswerChoices(runtime.TerminalAnswerKeys.ToArray());
                 LayoutQuestion(runtime.TerminalQuestion);
             }
+        }
+
+        private void RefreshAnswerChoices(string[] keys)
+        {
+            if (visibleAnswerKeys.SequenceEqual(keys)) return;
+            visibleAnswerKeys = keys;
+            MonitorWidgets.ClearRows(answerChoices);
+            float maxWidth = answerChoices.rect.width / keys.Length;
+            float offset = 0f;
+            foreach (string key in keys)
+            {
+                float width = Mathf.Min(maxWidth, Mathf.Max(48f, 28f + key.Length * 11f));
+                Button choice = MonitorWidgets.Button(answerChoices, answerOptions.font, new Vector2(offset, 0),
+                    new Vector2(width - 4f, 30f), "[" + key + "]", () => PickAnswer(key));
+                Text label = choice.GetComponentInChildren<Text>();
+                label.resizeTextForBestFit = true;
+                label.resizeTextMinSize = 12;
+                label.resizeTextMaxSize = label.fontSize;
+                offset += width;
+            }
+        }
+
+        private void PickAnswer(string key)
+        {
+            if (!AcceptsInput || !Runtime.IsTerminalAnswerKey(key) || (input.characterLimit > 0 && key.Length > input.characterLimit)) return;
+            input.ReleaseFocus();
+            input.ClearDraft();
+            input.SetTextWithoutNotify(key);
+            input.FocusDraft();
+            InputChanged(key);
         }
 
         private void LayoutQuestion(string text)
@@ -153,7 +188,8 @@ namespace Codetective.Terminal
             answerRow = MonitorWidgets.Rect("TerminalAnswerOptions", field, new Vector2(0, AnswerInset), new Vector2(width, AnswerInset - 4));
             answerRow.gameObject.AddComponent<Image>().color = answerColor;
             answerRow.gameObject.AddComponent<CrtMeshEffect>();
-            answerOptions = MonitorWidgets.Label(answerRow, font, new Vector2(12, -4), new Vector2(width - 24, 28), "", 22);
+            answerOptions = MonitorWidgets.Label(answerRow, font, new Vector2(12, -4), new Vector2(88, 28), "", 22);
+            answerChoices = MonitorWidgets.Rect("AnswerChoices", answerRow, new Vector2(102, -3), new Vector2(width - 114, 30));
 
             questionPanel = MonitorWidgets.Rect("TerminalQuestion", answerRow, Vector2.zero, new Vector2(width, 44));
             questionPanel.pivot = Vector2.zero;

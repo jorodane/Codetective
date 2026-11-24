@@ -147,6 +147,7 @@ namespace Codetective.Terminal
         private void OnEnable()
         {
             input.LineSubmitted += Submit;
+            input.CanSubmitEmptyLine = CanContinueConversation;
             input.CompletionQuery = QueryCompletion;
             input.CompletionApplied += CompletionApplied;
             input.CompletionListRequested += RequestCompletions;
@@ -181,6 +182,7 @@ namespace Codetective.Terminal
             restoreCommandFocus = false;
             ClearConversationDisturbance();
             input.LineSubmitted -= Submit;
+            input.CanSubmitEmptyLine = null;
             input.CompletionQuery = null;
             input.CompletionApplied -= CompletionApplied;
             input.CompletionListRequested -= RequestCompletions;
@@ -238,8 +240,9 @@ namespace Codetective.Terminal
 
         private void Submit(string line)
         {
-            if (!AcceptsInput || string.IsNullOrWhiteSpace(line))
-                return;
+            if (!AcceptsInput) return;
+            if (line == "") { TryContinueConversation(); return; }
+            if (string.IsNullOrWhiteSpace(line)) return;
 
             restoreCommandFocus = true;
             bool conversation = session.Runtime.TerminalConversationActive;

@@ -424,7 +424,7 @@ namespace Codetective.Operations
                 }
                 catch (CommandException) { }
                 return AvailableValues(locals, prefix, composing).Where(v => expected.Any(p => Accepts(p, v.Value)) && Prefix(v.Key, prefix, composing))
-                    .Select(v => new Completion(v.Key + " : " + TypeName(v.Value), before + CompletionSpelling(v, linkObjects))).ToArray();
+                    .Select(v => new Completion(v.Key + " : " + KindName(v.Value.kind), before + CompletionSpelling(v, linkObjects))).ToArray();
             }
             int dot = input.LastIndexOf('.');
             if (dot >= 0)
@@ -450,7 +450,7 @@ namespace Codetective.Operations
                     {
                         string name = CommandVocabulary.Match(field.NameFor(Language), field.AllNames, prefix, composing);
                         if (name != null && VariableDenial(entity, field, locals) == null)
-                            output.Add(new Completion(name + " : " + (string.IsNullOrEmpty(field.SchemaId) ? KindName(field.Kind) : DataTypes.IsArray(field.SchemaId) || DataTypes.DictionaryTypes(field.SchemaId) != null ? field.SchemaId : Schemas.Require(field.SchemaId).NameFor(Language)) +
+                            output.Add(new Completion(name + " : " + KindName(field.Kind) +
                                 " · " + Text(field.LabelKey, field.LabelFor(Language)), leading + objectPath + "." + name));
                     }
                     foreach (Operation op in entity.EffectiveOperations)
@@ -471,7 +471,7 @@ namespace Codetective.Operations
             {
                 Entity target = equal < 0 ? ReferenceTarget(v.Value) : null;
                 bool memberAccess = target != null && (tutorial == null || tutorial.Any(goal => goal.kind == TerminalGoalKind.Invoke && goal.targetId == target.Id));
-                return new Completion(v.Key + " : " + TypeName(v.Value), leading + CompletionSpelling(v, linkObjects) + (memberAccess ? "." : ""));
+                return new Completion(v.Key + " : " + KindName(v.Value.kind), leading + CompletionSpelling(v, linkObjects) + (memberAccess ? "." : ""));
             }).ToArray();
         }
 

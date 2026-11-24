@@ -54,9 +54,7 @@ MonoBehaviour:
         pauseAfter: 0.7
         effectSeconds: 0.55
         emotion: 0
-      - text: 'Enter로 안내를 한 줄씩 넘기십시오. 안내가 끝나면 다음 명령을 입력해 보십시오:
-
-          {command}'
+      - text: "입력창이 비어 있을 때 Enter를 누르면 다음 안내로 넘어갑니다. 다음 명령을 실행해 보십시오.\n{command}"
         textKey: onboarding.listen
         charactersPerSecond: 32
         pauseAfter: 0.7

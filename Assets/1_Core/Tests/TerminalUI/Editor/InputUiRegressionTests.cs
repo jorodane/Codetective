@@ -281,18 +281,48 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
-        public void ADialogueReplyRestoresTheSubmittedCommandFocusAfterUnlocking()
+        public void ADialogueReplyKeepsTheSubmittedCommandFieldFocused()
         {
             KernelRuntime runtime = Dialogue(); var controller = Controller(runtime, out _);
             Submit("help");
-            Assert.That(runtime.TerminalInputLocked, Is.True);
-            Assert.That(field.isFocused, Is.False);
+            Assert.That(runtime.TerminalLineInProgress, Is.True);
+            Assert.That(field.isFocused, Is.True);
+            Assert.That(field.readOnly, Is.False);
             runtime.AdvanceTerminalConversation(1000);
             Invoke(typeof(TerminalController), controller, "LateUpdate");
             Invoke(typeof(CompletingInputField), field, "LateUpdate");
             Assert.That(field.interactable, Is.True);
             Assert.That(events.currentSelectedGameObject, Is.EqualTo(field.gameObject));
             Assert.That(field.isFocused, Is.True);
+        }
+
+        [TestCase("")]
+        [TestCase("note = 1")]
+        [TestCase(" ")]
+        public void EnterOnlyAdvancesDialogueWhenTheCommandDraftIsEmpty(string draft)
+        {
+            var runtime = new KernelRuntime();
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition
+            {
+                id = "briefing", advanceWithEnter = true, steps = new[] { new TerminalConversationStep
+                {
+                    id = "lines", lines = new[] { new TerminalDialogueLine { text = "First briefing." }, new TerminalDialogueLine { text = "Second briefing." } }
+                } }
+            });
+            runtime.EnterTerminalPage("kernel");
+            TerminalController controller = Controller(runtime, out _);
+            field.SetTextWithoutNotify(draft);
+            field.FocusAtEnd();
+            // A candidate offered at the start of the line must not take the dialogue's Enter.
+            field.CompletionQuery = current => current.Text.Length == 0 ? new InlineCompletion("help", 4) : (InlineCompletion?)null;
+            if (draft.Length > 0) Assert.That(controller.TryContinueConversation(), Is.False);
+
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
+
+            Assert.That(runtime.TerminalConversationTranscript().Contains("First briefing."), Is.EqualTo(draft.Length == 0));
+            Assert.That(runtime.Data.ContainsKey("note"), Is.EqualTo(draft == "note = 1"));
+            Assert.That(field.text, Is.EqualTo(draft == " " ? " " : ""));
+            Assert.That(runtime.TerminalLineInProgress, Is.True);
         }
 
         [Test]
@@ -324,7 +354,7 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
-        public void ADialogueAnswerIsSentWithEnterFromTheOrdinaryTerminalField()
+        public void ClickingAnAnswerFillsTheOrdinaryTerminalFieldAndEnterSendsIt()
         {
             var runtime = new KernelRuntime { Language = CommandLocale.Korean };
             runtime.RegisterTerminalConversation(new TerminalConversationDefinition
@@ -347,7 +377,7 @@ namespace Codetective.Terminal.Tests.UI
             Invoke(typeof(TerminalController), controller, "LateUpdate");
             Assert.That(placeholder.text, Is.EqualTo("입력 대기중.."));
             Transform options = field.transform.Find("TerminalAnswerOptions");
-            Assert.That(options.GetComponentInChildren<Text>().text, Is.EqualTo("대답> [y][n]"));
+            Assert.That(options.GetComponentInChildren<Text>().text, Is.EqualTo("대답>"));
             Assert.That(runtime.Execute("도움말").Success, Is.True);
             Invoke(typeof(TerminalController), controller, "LateUpdate");
             Assert.That(options.gameObject.activeSelf, Is.True);
@@ -370,8 +400,14 @@ namespace Codetective.Terminal.Tests.UI
             pointer.pointerCurrentRaycast = new RaycastResult { gameObject = field.gameObject };
             ExecuteEvents.Execute(options.gameObject, pointer, ExecuteEvents.pointerExitHandler);
             Assert.That(tooltip.activeSelf, Is.False);
-            field.SetTextWithoutNotify("n");
-            field.FocusAtEnd();
+            field.SetTextWithoutNotify("previous draft");
+            options.Find("AnswerChoices/[n]").GetComponent<Button>().onClick.Invoke();
+            Assert.That(field.text, Is.EqualTo("n"));
+            Assert.That(runtime.TerminalAwaitingAnswer, Is.True);
+            Assert.That(runtime.GetTrigger("declined"), Is.False);
+            Assert.That(field.isFocused, Is.True);
+            // The next physical Enter occurs after the button click's focus guard.
+            typeof(CompletingInputField).GetField("ignoredEnterFrame", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(field, -1);
             PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
             Assert.That(runtime.GetTrigger("declined"), Is.True);
             Assert.That(runtime.TerminalAwaitingAnswer, Is.False);
@@ -383,11 +419,11 @@ namespace Codetective.Terminal.Tests.UI
         [TestCase("page")]
         [TestCase("interaction")]
         [TestCase("selection")]
-        public void LeavingDuringADialogueReplyCancelsCommandFocusRestoration(string destination)
+        public void LeavingDuringADialogueReplyDoesNotRefocusTheCommandField(string destination)
         {
             KernelRuntime runtime = Dialogue(); var controller = Controller(runtime, out _);
             Submit("help");
-            Assert.That(runtime.TerminalInputLocked, Is.True);
+            Assert.That(runtime.TerminalLineInProgress, Is.True);
             if (destination == "page") { controller.SetPageVisible(false); controller.SetPageVisible(true); }
             else if (destination == "interaction") { controller.SetInteractionEnabled(false); controller.SetInteractionEnabled(true); }
             else

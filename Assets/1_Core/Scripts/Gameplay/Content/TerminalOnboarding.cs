@@ -34,7 +34,7 @@ namespace Codetective.Gameplay
                 new TerminalConversationStep { id = "help", lines = new[] {
                     Line("welcome", "Kernel을 찾으셨군요.", "You found Kernel."),
                     Line("connection", "현장지원과입니다. 메일은 확인하셨겠지요. 먼저 작전망의 기본 사용법부터 확인하겠습니다.", "Field Support here. You have read the mail. Let's check the basics of the operations network."),
-                    Line("listen", "Enter로 안내를 한 줄씩 넘기십시오. 안내가 끝나면 다음 명령을 입력해 보십시오:\n{command}", "Press Enter to read the briefing one line at a time. When it finishes, enter {command}.") },
+                    Line("listen", "입력창이 비어 있을 때 Enter를 누르면 다음 안내로 넘어갑니다. 다음 명령을 실행해 보십시오.\n{command}", "Press Enter with an empty input to continue the briefing. Try entering {command}.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
                 new TerminalConversationStep { id = "reference", previousIds = new[] { "allocate" }, lines = new[] {
                     Line("permissions", "잘하셨습니다. 권한 목록은 현재 사용할 수 있는 정보와 행동을 보여줍니다.", "Good. The permissions list shows the information and actions currently available to you."),

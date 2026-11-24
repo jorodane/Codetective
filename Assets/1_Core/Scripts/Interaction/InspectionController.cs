@@ -165,12 +165,6 @@ namespace Codetective.Interaction
             { QuickSaveRequested?.Invoke(); return; }
             if (flow.Mode == InspectionMode.Menu)
                 return;
-            if (keyboard != null && keyboard.qKey.wasPressedThisFrame && !TextInputFocused)
-            {
-                BackHandler?.Invoke();
-                if (!ModalInputBlocked) ReturnToOverview();
-                return;
-            }
             if (ModalInputBlocked) return;
 
             if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame) && !TextInputFocused)

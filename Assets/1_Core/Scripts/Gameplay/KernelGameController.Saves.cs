@@ -37,7 +37,7 @@ namespace Codetective.Gameplay
         {
             AppointmentProgress visit = runtime.CurrentAppointment;
             string state;
-            if (runtime.TerminalInputLocked) state = "작전망 안내 수신 중";
+            if (runtime.TerminalInputLocked || runtime.TerminalLineInProgress) state = "작전망 안내 수신 중";
             else if (runtime.TerminalAwaitingAnswer) state = "작전망 응답 대기";
             else if (runtime.TerminalConversationActive) state = "작전망 명령 연습";
             else if (visit != null) state = visit.patientName + (visit.phase == VisitPhase.Arriving ? " 입실 중" : visit.phase == VisitPhase.Talking ? " 상담 중" : " 상담 마무리");

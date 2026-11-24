@@ -150,13 +150,14 @@ namespace Codetective.Operations
         public string id = "", stepId = "", slotName = "", answerKey = "";
         public TerminalConversationPhase phase;
         public int deviations, pendingIndex, activeLog = -1;
-        public bool reply;
+        public bool reply, goalMetWhileSpeaking;
         public double elapsed;
         public List<TerminalDialogueLine> pending = new List<TerminalDialogueLine>();
         public List<TerminalConversationLog> log = new List<TerminalConversationLog>();
         public List<TerminalActionProof> performed = new List<TerminalActionProof>();
         public TerminalConversationProgress Copy() => new TerminalConversationProgress { id = id, stepId = stepId, slotName = slotName, answerKey = answerKey, phase = phase, deviations = deviations,
-            pendingIndex = pendingIndex, activeLog = activeLog, reply = reply, elapsed = elapsed, pending = pending.Select(l => l.Copy()).ToList(), log = log.Select(l => l.Copy()).ToList(), performed = performed.Select(p => p.Copy()).ToList() };
+            pendingIndex = pendingIndex, activeLog = activeLog, reply = reply, goalMetWhileSpeaking = goalMetWhileSpeaking, elapsed = elapsed,
+            pending = pending.Select(l => l.Copy()).ToList(), log = log.Select(l => l.Copy()).ToList(), performed = performed.Select(p => p.Copy()).ToList() };
     }
     internal sealed class TerminalCommandTrace
     {
@@ -181,21 +182,22 @@ namespace Codetective.Operations
         private static bool IsActiveConversation(TerminalConversationProgress progress) => progress != null &&
             (progress.phase == TerminalConversationPhase.Introducing || progress.phase == TerminalConversationPhase.Speaking ||
                 progress.phase == TerminalConversationPhase.AwaitingCommand);
-        private bool TerminalSpeaking => Conversation?.phase == TerminalConversationPhase.Speaking;
+        public bool TerminalLineInProgress => Conversation?.phase == TerminalConversationPhase.Speaking;
         private bool TerminalIntroducing => Conversation?.phase == TerminalConversationPhase.Introducing;
         public bool TerminalConversationActive => IsActiveConversation(Conversation);
-        public bool TerminalInputLocked => TerminalSpeaking || TerminalIntroducing;
+        public bool TerminalInputLocked => TerminalIntroducing;
+        public bool TerminalCanContinueLine => TerminalLineInProgress && ConversationDefinition.advanceWithEnter;
         public string TerminalIntroductionTitle => TerminalIntroducing ? ConversationDefinition.introductionTitle : null;
         public string TerminalIntroductionSubtitle => TerminalIntroducing ? ConversationDefinition.introductionSubtitle : null;
         public bool TerminalLineUsesEnter
         {
             get
             {
-                if (!TerminalSpeaking || !ConversationDefinition.advanceWithEnter) return false;
+                if (!TerminalCanContinueLine) return false;
                 TerminalConversationProgress progress = Conversation;
                 if (progress.pendingIndex + 1 < progress.pending.Count) return true;
                 TerminalConversationStep step = ConversationStep;
-                if (progress.reply || IsUnanswered(step) || GoalRequiresInput(step.goal)) return false;
+                if (progress.reply || IsUnanswered(step) || (!progress.goalMetWhileSpeaking && GoalRequiresInput(step.goal))) return false;
                 TerminalConversationStep[] steps = ConversationDefinition.steps;
                 for (int i = Array.IndexOf(steps, step) + 1; i < steps.Length; i++)
                 {
@@ -217,7 +219,8 @@ namespace Codetective.Operations
         public IEnumerable<string> TerminalAnswerKeys => WaitingAnswers.Select(answer => answer.key);
         public string TerminalAnswerUsage => string.Join(" / ", TerminalAnswerKeys);
         private string AnswerPromptChoices => " " + string.Concat(TerminalAnswerKeys.Select(key => "[" + key + "]"));
-        public string TerminalAnswerPrompt => TerminalAwaitingAnswer ? Text(AnswerPromptKey, "대답>") + AnswerPromptChoices : "";
+        public string TerminalAnswerLabel => Text(AnswerPromptKey, "대답>");
+        public string TerminalAnswerPrompt => TerminalAwaitingAnswer ? TerminalAnswerLabel + AnswerPromptChoices : "";
         public string TerminalQuestion => TerminalAwaitingAnswer ? string.Join("\n\n", ConversationStep.lines.Select(line =>
             ObjectReferenceText.PlainText(Texts.Resolve(line.textKey, line.text, DisplayLanguage)).Replace("{slot}", Conversation.slotName).Replace("{command}", TerminalExpectedCommand))) : "";
         public bool IsTerminalAnswerKey(string key) => FindWaitingAnswer(key) != null;
@@ -292,7 +295,7 @@ namespace Codetective.Operations
             get
             {
                 TerminalConversationProgress p = Conversation;
-                if (!TerminalSpeaking || p.pendingIndex >= p.pending.Count || p.log[p.activeLog].complete) return 0;
+                if (!TerminalLineInProgress || p.pendingIndex >= p.pending.Count || p.log[p.activeLog].complete) return 0;
                 TerminalDialogueLine line = p.pending[p.pendingIndex];
                 return line.emotion != TerminalEmotion.Angry || line.effectSeconds <= 0 ? 0 : Math.Max(0, 1 - p.elapsed / line.effectSeconds);
             }
@@ -419,7 +422,7 @@ namespace Codetective.Operations
             if (!visible || seconds < 0 || double.IsNaN(seconds) || double.IsInfinity(seconds)) return;
             if (Conversation?.phase == TerminalConversationPhase.AwaitingCommand && ConversationStep.goal.kind == TerminalGoalKind.StoryCondition && ConversationStep.goal.condition.Matches(this)) CompleteConversationStep();
             int budget = 4096;
-            while (TerminalSpeaking && seconds > 0 && budget-- > 0)
+            while (TerminalLineInProgress && seconds > 0 && budget-- > 0)
             {
                 var p = Conversation; var line = p.pending[p.pendingIndex]; var entry = p.log[p.activeLog];
                 if (entry.complete)
@@ -432,7 +435,7 @@ namespace Codetective.Operations
                 string text = ConversationText(entry, p).Text; int length = StringInfo.ParseCombiningCharacters(text).Length;
                 bool waitForEnter = TerminalLineUsesEnter;
                 bool handsOffToInput = ConversationDefinition.advanceWithEnter && !waitForEnter &&
-                    (p.reply || IsUnanswered(ConversationStep) || GoalRequiresInput(ConversationStep.goal));
+                    (p.reply || IsUnanswered(ConversationStep) || (!p.goalMetWhileSpeaking && GoalRequiresInput(ConversationStep.goal)));
                 double duration = length / line.charactersPerSecond + (handsOffToInput ? 0 : line.pauseAfter);
                 double used = Math.Min(seconds, Math.Max(0, duration - p.elapsed)); p.elapsed += used; seconds -= used;
                 int visibleElements = Math.Min(length, (int)Math.Min(int.MaxValue, Math.Floor(p.elapsed * line.charactersPerSecond)));
@@ -445,7 +448,7 @@ namespace Codetective.Operations
         }
         public bool ContinueTerminalLine()
         {
-            if (!TerminalSpeaking || !ConversationDefinition.advanceWithEnter) return false;
+            if (!TerminalCanContinueLine) return false;
             TerminalConversationLog line = Conversation.log[Conversation.activeLog];
             if (line.complete || !TerminalLineUsesEnter)
             {
@@ -480,7 +483,11 @@ namespace Codetective.Operations
         private void ReadyForConversationCommand()
         {
             var p = Conversation; p.pending.Clear(); p.pendingIndex = 0; p.activeLog = -1; p.elapsed = 0;
-            if (p.reply) { p.reply = false; p.phase = TerminalConversationPhase.AwaitingCommand; return; }
+            if (p.reply)
+            {
+                p.reply = false;
+                if (!p.goalMetWhileSpeaking) { p.phase = TerminalConversationPhase.AwaitingCommand; return; }
+            }
             TerminalConversationStep step = ConversationStep;
             if (IsUnanswered(step))
             {
@@ -495,7 +502,7 @@ namespace Codetective.Operations
                 ConversationChanged(true);
                 return;
             }
-            if (!GoalRequiresInput(step.goal)) CompleteConversationStep();
+            if (p.goalMetWhileSpeaking || !GoalRequiresInput(step.goal)) CompleteConversationStep();
             else p.phase = TerminalConversationPhase.AwaitingCommand;
         }
         private void CompleteConversationStep()
@@ -504,6 +511,7 @@ namespace Codetective.Operations
             if (!string.IsNullOrEmpty(p.answerKey))
                 ApplyStoryEffects(step.answers.FirstOrDefault(answer => answer.key == p.answerKey)?.effects);
             p.answerKey = "";
+            p.goalMetWhileSpeaking = false;
             string source = ObjectReferenceText.PlainText(Texts.Resolve(definition.speakerKey, definition.speaker, DisplayLanguage));
             foreach (string id in step.discoveries) Discover(id, source);
             foreach (ObservationDefinition report in step.reports) Observe(report);
@@ -549,8 +557,18 @@ namespace Codetective.Operations
                 goal.kind == TerminalGoalKind.Free && trace.keyword == "free" && trace.argument == name || goal.kind == TerminalGoalKind.BindReference && trace.assigned == name && result.Value.CanReferenceEntity && result.Value.id == goal.targetId ||
                 goal.kind == TerminalGoalKind.Invoke && trace.actions.Any(a => a.targetId == goal.targetId && a.operation == goal.operation && (goal.argumentCount < 0 || a.arguments == goal.argumentCount)) ||
                 goal.kind == TerminalGoalKind.StoryCondition && goal.condition.Matches(this);
-            if (matched) { CompleteConversationStep(); return; }
-            if (trace.keyword == "help") return; // Asking for help is always permitted.
+            if (matched)
+            {
+                if (TerminalLineInProgress)
+                {
+                    // The command counts once the player has finished receiving this step's lines.
+                    p.goalMetWhileSpeaking = true;
+                    ConversationChanged(true);
+                }
+                else CompleteConversationStep();
+                return;
+            }
+            if (TerminalLineInProgress || trace.keyword == "help") return;
             p.deviations = Math.Min(int.MaxValue - 1, p.deviations) + 1; var definition = ConversationDefinition;
             bool angry = p.deviations >= definition.angryAfter;
             TerminalDialogueLine[] replies = angry ? definition.angryReplies : definition.forgivingReplies;

@@ -703,6 +703,36 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void ConsultationClipsTheSpeechBubbleWithoutReframingTheCamera()
+        {
+            var system = new GameObject("Consultation"); system.SetActive(false);
+            var navigation = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); navigation.SetActive(false);
+            var canvas = new GameObject("Overlay", typeof(RectTransform));
+            var terminal = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                Camera camera = navigation.GetComponent<Camera>();
+                Matrix4x4 projection = Matrix4x4.Perspective(60f, 16f / 9f, camera.nearClipPlane, camera.farClipPlane);
+                camera.projectionMatrix = projection;
+                terminal.transform.position = new Vector3(1f, 0.7f, 4f);
+                terminal.transform.localScale = new Vector3(4f, 1.8f, 1f);
+                ((RectTransform)canvas.transform).sizeDelta = new Vector2(1280f, 720f);
+                Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                Component game = system.AddComponent(FindType("Codetective.Gameplay.KernelGameController"));
+                Set(game, "<Runtime>k__BackingField", ClinicScenario.Create());
+                Component overlay = system.AddComponent(FindType("Codetective.Gameplay.ConsultationOverlay"));
+                Call(overlay, "Initialize", game, inspection, canvas.transform, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), null, camera, terminal.transform);
+
+                RectMask2D mask = canvas.GetComponentInChildren<RectMask2D>();
+                RectTransform bubble = (RectTransform)mask.transform.Find("PatientSpeechBubble");
+                Assert.That(bubble.gameObject.activeSelf, Is.True);
+                Assert.That(((RectTransform)mask.transform).rect.height, Is.GreaterThan(0f).And.LessThan(bubble.rect.height));
+                Assert.That(camera.projectionMatrix, Is.EqualTo(projection));
+            }
+            finally { Object.DestroyImmediate(system); Object.DestroyImmediate(navigation); Object.DestroyImmediate(canvas); Object.DestroyImmediate(terminal); }
+        }
+
+        [Test]
         public void EvidenceReaderPreservesThePrintLayoutAndHasOnlyACloseButton()
         {
             var system = new GameObject("Game"); system.SetActive(false);
@@ -718,7 +748,7 @@ namespace Codetective.Terminal.Tests.UI
                 ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(navigation.transform);
                 Set(game, "<Carry>k__BackingField", carry);
                 ui = system.GetComponent(FindType("Codetective.Gameplay.KernelGameUI"));
-                Call(ui, "Initialize", game, inspection, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+                Call(ui, "Initialize", game, inspection, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), navigation.GetComponent<Camera>(), null);
                 Call(ui, "ShowSaveStatus", "빠른 저장 중...", 2f);
                 GameObject notice = (GameObject)ui.GetType().GetField("saveNoticeRoot", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ui);
                 Assert.That(notice.activeSelf, Is.True); Assert.That(notice.GetComponentsInChildren<GraphicRaycaster>(), Is.Empty);

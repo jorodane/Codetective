@@ -76,5 +76,24 @@ namespace Codetective.Terminal.Tests
             submit.Request(3, input);
             Assert.That(submit.TryTake(input, out _), Is.True);
         }
+
+        [Test]
+        public void DialogueTakesOnlyAnActuallyEmptyDraftAndStillCoalescesEnterEvents()
+        {
+            var submit = new TerminalSubmission();
+            var empty = new TerminalCompletionInput("", "", 0, 0);
+            submit.Request(1, empty);
+            Assert.That(submit.TryTake(empty, out string line, out _, allowEmpty: true), Is.True);
+            Assert.That(line, Is.Empty);
+            submit.Request(1, empty);
+            Assert.That(submit.TryTake(empty, out _, out _, allowEmpty: true), Is.False);
+
+            var space = new TerminalCompletionInput(" ", "", 1, 1);
+            submit.Request(2, space);
+            Assert.That(submit.TryTake(space, out _, out _, allowEmpty: true), Is.False);
+            submit.Request(3, empty);
+            Assert.That(submit.TryTake(new TerminalCompletionInput("도움말", "", 3, 3), out line, out _, allowEmpty: true), Is.True);
+            Assert.That(line, Is.EqualTo("도움말"));
+        }
     }
 }

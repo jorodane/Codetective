@@ -20,7 +20,7 @@ namespace Codetective.Terminal
 
         public bool TryTake(TerminalCompletionInput current, out string line) => TryTake(current, out line, out _);
 
-        public bool TryTake(TerminalCompletionInput current, out string line, out bool hadComposition)
+        public bool TryTake(TerminalCompletionInput current, out string line, out bool hadComposition, bool allowEmpty = false)
         {
             line = string.Empty;
             hadComposition = false;
@@ -33,7 +33,7 @@ namespace Codetective.Terminal
             // The OS may deliver committed characters after its Enter event. If a
             // composition was visible at the keypress, its snapshot is already complete.
             line = requested.IsComposing ? requested.Text : current.Text;
-            return !string.IsNullOrWhiteSpace(line);
+            return !string.IsNullOrWhiteSpace(line) || (allowEmpty && !hadComposition && line.Length == 0 && requested.Text.Length == 0);
         }
 
         public void Cancel() => pending = false;
