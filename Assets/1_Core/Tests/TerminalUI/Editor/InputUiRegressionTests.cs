@@ -134,6 +134,21 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void SpaceCompletesACommandWithOneSeparatorEvenWhenTheTextEventArrivesLate()
+        {
+            field.SetTextWithoutNotify("암"); field.FocusAtEnd();
+            field.CompletionQuery = current => current.Text == "암" ? new InlineCompletion("암호  ", 4) : (InlineCompletion?)null;
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space });
+            Assert.That(field.text, Is.EqualTo("암호 "));
+            // Simulate uGUI delivering the text after the per-frame acceptance guard expires.
+            Type completing = typeof(CompletingInputField);
+            completing.GetField("handledFrame", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(field, -1);
+            Invoke(completing, field, "ProcessSpaceKey", new Event { type = EventType.KeyDown, character = ' ' }, Time.frameCount + 1);
+            PumpInput(new Event { type = EventType.KeyDown, character = 'x' });
+            Assert.That(field.text, Is.EqualTo("암호 x"));
+        }
+
+        [Test]
         public void SpaceConfirmsLiveKoreanCompletionWithoutAppendingADelimiterEcho()
         {
             Compose("ㅇ"); field.CompletionQuery = _ => new InlineCompletion("암호 ", 3);
@@ -243,6 +258,34 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void RevealingDialogueWithEnterScrollsToTheLatestLine()
+        {
+            var runtime = new KernelRuntime();
+            string dialogue = new string('A', 500) + "\nThis is the last line.";
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition
+            {
+                id = "scroll", advanceWithEnter = true, steps = new[] { new TerminalConversationStep
+                {
+                    id = "instructions", lines = new[] { new TerminalDialogueLine { text = dialogue, charactersPerSecond = 1 } }
+                } }
+            });
+            runtime.EnterTerminalPage("kernel");
+            TerminalController controller = Controller(runtime, out _);
+            ScrollRect scroll = controller.GetComponentInChildren<ScrollRect>();
+            ((RectTransform)scroll.transform).sizeDelta = new Vector2(600, 100);
+            scroll.content.anchorMin = scroll.content.anchorMax = scroll.content.pivot = new Vector2(0, 1);
+            scroll.content.sizeDelta = new Vector2(580, 400);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            scroll.verticalNormalizedPosition = 1;
+            Assert.That(scroll.verticalNormalizedPosition, Is.EqualTo(1).Within(0.001f));
+
+            Assert.That(controller.TryContinueConversation(), Is.True);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Assert.That(scroll.content.GetComponent<Text>().text, Does.Contain("This is the last line."));
+            Assert.That(scroll.verticalNormalizedPosition, Is.EqualTo(0).Within(0.001f));
+        }
+
+        [Test]
         public void ADialogueAnswerIsSentWithEnterFromTheOrdinaryTerminalField()
         {
             var runtime = new KernelRuntime { Language = CommandLocale.Korean };
@@ -272,9 +315,22 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(options.gameObject.activeSelf, Is.True);
             GameObject tooltip = options.Find("TerminalQuestion").gameObject;
             Assert.That(tooltip.activeSelf, Is.False);
-            ExecuteEvents.Execute(options.gameObject, new PointerEventData(events), ExecuteEvents.pointerEnterHandler);
+            var pointer = new PointerEventData(events);
+            ExecuteEvents.Execute(options.gameObject, pointer, ExecuteEvents.pointerEnterHandler);
             Assert.That(tooltip.GetComponentInChildren<Text>().text, Is.EqualTo("맹세할 수 있습니까?"));
-            ExecuteEvents.Execute(options.gameObject, new PointerEventData(events), ExecuteEvents.pointerExitHandler);
+            Assert.That(tooltip.GetComponent<Image>().raycastTarget, Is.True);
+            Assert.That(tooltip.GetComponent<Image>().color.grayscale, Is.GreaterThan(options.GetComponent<Image>().color.grayscale));
+            var panel = (RectTransform)tooltip.transform;
+            float shortHeight = panel.rect.height;
+            Assert.That(shortHeight, Is.LessThan(80));
+            Invoke(typeof(TerminalController), controller, "LayoutQuestion", "첫째 줄\n둘째 줄\n셋째 줄");
+            Assert.That(panel.rect.height, Is.GreaterThan(shortHeight));
+
+            pointer.pointerCurrentRaycast = new RaycastResult { gameObject = tooltip };
+            ExecuteEvents.Execute(options.gameObject, pointer, ExecuteEvents.pointerExitHandler);
+            Assert.That(tooltip.activeSelf, Is.True);
+            pointer.pointerCurrentRaycast = new RaycastResult { gameObject = field.gameObject };
+            ExecuteEvents.Execute(options.gameObject, pointer, ExecuteEvents.pointerExitHandler);
             Assert.That(tooltip.activeSelf, Is.False);
             field.SetTextWithoutNotify("n");
             field.FocusAtEnd();

@@ -24,7 +24,9 @@ namespace Codetective.Interaction
         private Quaternion restingRotation;
         private Quaternion restingWorldRotation;
         private ItemPlacementSurface pickupSurface;
-        private Vector3 pickupPosition;
+        private Transform pickupParent;
+        private Vector3 pickupPosition, pickupScale;
+        private Quaternion pickupRotation;
         private int pickupDrawerSlot;
         private Vector3 placementOffset;
         private Vector3 measuredSize;
@@ -90,7 +92,10 @@ namespace Codetective.Interaction
         internal void PickUp(Transform hand)
         {
             pickupSurface = Storage;
+            pickupParent = transform.parent;
             pickupPosition = transform.localPosition;
+            pickupRotation = transform.localRotation;
+            pickupScale = transform.localScale;
             pickupDrawerSlot = DrawerSlot;
             ReleaseStorage();
             colliders = GetComponentsInChildren<Collider>(true); colliderEnabled = new bool[colliders.Length];
@@ -142,15 +147,21 @@ namespace Codetective.Interaction
         }
         internal void PutDown()
         {
-            if (pickupSurface != null && pickupSurface.RestorePlacement(this, pickupPosition, pickupDrawerSlot)) return;
-            ReturnHome();
+            if (pickupSurface != null)
+            {
+                if (!pickupSurface.RestorePlacement(this, pickupPosition, pickupDrawerSlot)) ReturnHome();
+            }
+            else RestorePose(pickupParent, pickupPosition, pickupRotation, pickupScale);
         }
-        internal void ReturnHome()
+        internal void ReturnHome() => RestorePose(restingParent, restingPosition, restingRotation, restingScale);
+
+        private void RestorePose(Transform parent, Vector3 position, Quaternion rotation, Vector3 scale)
         {
             pickupSurface = null;
+            pickupParent = null;
             ReleaseStorage();
-            transform.SetParent(restingParent, false); transform.localPosition = restingPosition;
-            transform.localRotation = restingRotation; transform.localScale = restingScale;
+            transform.SetParent(parent, false); transform.localPosition = position;
+            transform.localRotation = rotation; transform.localScale = scale;
             if (colliders != null) for (int i = 0; i < colliders.Length; i++) if (colliders[i] != null) colliders[i].enabled = colliderEnabled[i];
             if (bodies != null) for (int i = 0; i < bodies.Length; i++) if (bodies[i] != null) bodies[i].isKinematic = kinematic[i];
             SetPresentationVisible(true);
@@ -159,6 +170,7 @@ namespace Codetective.Interaction
         internal void Store(ItemPlacementSurface surface, Vector3 position, int drawerSlot)
         {
             pickupSurface = null;
+            pickupParent = null;
             if (Storage != surface) ReleaseStorage();
             transform.SetParent(surface.transform, false); transform.localPosition = position;
             transform.localRotation = PlacementRotation;

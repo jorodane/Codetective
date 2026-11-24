@@ -17,6 +17,20 @@ namespace Codetective.Terminal
             Caret = Math.Max(0, Math.Min(caret, Text.Length));
         }
         public bool Changes(TerminalCompletionInput input) => input.Anchor == input.Caret && Text != input.Text;
+
+        public InlineCompletion ForSpaceKey()
+        {
+            int separator = Caret;
+            while (separator > 0 && Text[separator - 1] == ' ') separator--;
+            if (separator == Caret) return this;
+
+            // The key supplies the separator; discard the suggestion's automatic padding.
+            string completed = Text.Remove(separator, Caret - separator);
+            if (separator == completed.Length || completed[separator] != ' ')
+                completed = completed.Insert(separator, " ");
+            return new InlineCompletion(completed, separator + 1);
+        }
+
         public string SuffixFor(TerminalCompletionInput input)
         {
             if (!Changes(input)) return "";

@@ -4,6 +4,7 @@ using Codetective.Gameplay;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -31,6 +32,8 @@ namespace Codetective.Interaction
         private static readonly IComparer<RaycastHit> NearestFirst =
             Comparer<RaycastHit>.Create((a, b) => a.distance.CompareTo(b.distance));
         private InspectionHoverView hover;
+        private HoldableItem pressedItem;
+        private Vector2 pressPosition;
 
         private readonly InspectionFlow flow = new InspectionFlow();
         private CameraAngleController views;
@@ -60,6 +63,8 @@ namespace Codetective.Interaction
         public bool PresentingOnTerminal { get; private set; }
         public bool AllowPresentationMenu { get; private set; }
         private bool ViewBusy => views.IsTransitioning || (Transitions != null && Transitions.IsBusy);
+        private bool CanInteractWithWorld => flow.Mode != InspectionMode.Menu && !NavigationBlocked &&
+            !ViewBusy && !ModalInputBlocked && !PresentingOnTerminal;
 
         public InspectionMode Mode => flow.Mode;
         public bool IsTitleMenu => flow.Mode == InspectionMode.Menu && showingTitle;
@@ -118,6 +123,7 @@ namespace Codetective.Interaction
 
         private void OnDisable()
         {
+            pressedItem = null;
             if (menu != null)
             {
                 menu.ResumeRequested -= Resume;
@@ -126,7 +132,8 @@ namespace Codetective.Interaction
             RestorePause();
             if (Transitions != null) { Transitions.SetTerminalFocus("menu", false); Transitions.SetTerminalFocus("day", false); }
             PresentingOnTerminal = false; AllowPresentationMenu = false;
-            Carry?.SetPresentationVisible(true);
+            if (Carry != null && Carry.IsDragging) Carry.DeferDragCancellation();
+            else Carry?.SetPresentationVisible(true);
             hover?.Hide();
             DisableTerminal();
             flow.Resume();
@@ -134,6 +141,7 @@ namespace Codetective.Interaction
             inspectedAngle = null; returningToOverview = false; hasInformationReturn = false;
         }
         private void OnDestroy() => hover?.Dispose();
+        private void OnApplicationFocus(bool focused) { if (!focused) CancelPointerDrag(); }
 
         private void Update()
         {
@@ -142,6 +150,13 @@ namespace Codetective.Interaction
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && (!NavigationBlocked || PresentingOnTerminal && AllowPresentationMenu))
             {
                 HandleEscape();
+                return;
+            }
+            Mouse mouse = Mouse.current;
+            if (pressedItem != null || (Carry != null && Carry.IsDragging))
+            {
+                if (mouse == null || mouse.rightButton.wasPressedThisFrame) CancelPointerDrag();
+                else UpdateWorldPointer(mouse.position.ReadValue(), false, mouse.leftButton.isPressed);
                 return;
             }
             if (NavigationBlocked || (Transitions != null && Transitions.IsBusy)) return;
@@ -184,8 +199,8 @@ namespace Codetective.Interaction
                 }
             }
 
-            Mouse mouse = Mouse.current;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame) InteractAtScreenPoint(mouse.position.ReadValue());
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                UpdateWorldPointer(mouse.position.ReadValue(), true, mouse.leftButton.isPressed);
 #endif
         }
 
@@ -219,7 +234,7 @@ namespace Codetective.Interaction
             bool blocked = PointerBlocked?.Invoke(point) ?? false;
             Component target = blocked ? null : ResolvePointerTarget(point, out _);
             if (Carry != null && Carry.IsPlacing)
-                Carry.UpdatePlacement(point, blocked || target is InspectionTarget || target is InspectionActionTarget, target as ItemPlacementSurface);
+                Carry.UpdatePlacement(point, BlocksPlacement(blocked, target), target as ItemPlacementSurface);
             DrawPointerFeedback(target);
 #endif
         }
@@ -230,13 +245,58 @@ namespace Codetective.Interaction
                 InspectAngle(target.Angle, target.Terminal ?? (target.Angle != null ? FindTerminalFor(target.Angle) : null));
         }
 
-        public bool InteractAtScreenPoint(Vector2 point)
+        private void UpdateWorldPointer(Vector2 point, bool pressed, bool held)
         {
-            if (flow.Mode == InspectionMode.Menu || NavigationBlocked || ViewBusy || ModalInputBlocked ||
-                PresentingOnTerminal || (PointerBlocked?.Invoke(point) ?? false)) return false;
+            if (!CanInteractWithWorld) { CancelPointerDrag(); return; }
+            if (pressed) InteractAtScreenPoint(point, deferItemClick: true, expectedItem: null);
+            if (pressedItem != null)
+            {
+                int threshold = EventSystem.current != null ? Mathf.Max(1, EventSystem.current.pixelDragThreshold) : 5;
+                if ((point - pressPosition).sqrMagnitude >= threshold * threshold)
+                {
+                    HoldableItem item = pressedItem;
+                    pressedItem = null;
+                    if (Carry != null && item.CanInteract(views.ActiveAngle?.Id)) Carry.BeginDrag(item);
+                }
+                else if (!held)
+                {
+                    HoldableItem item = pressedItem;
+                    pressedItem = null;
+                    InteractAtScreenPoint(point, deferItemClick: false, expectedItem: item);
+                }
+            }
+            if (!held && Carry != null && Carry.IsDragging)
+            {
+                bool blocked = PointerBlocked?.Invoke(point) ?? false;
+                Component target = blocked ? null : ResolvePointerTarget(point, out _);
+                Carry.FinishDrag(point, BlocksPlacement(blocked, target), target as ItemPlacementSurface);
+            }
+        }
+
+        private static bool BlocksPlacement(bool pointerBlocked, Component target) =>
+            pointerBlocked || target is InspectionTarget || target is InspectionActionTarget;
+
+        private void CancelPointerDrag()
+        {
+            pressedItem = null;
+            Carry?.CancelDrag();
+        }
+
+        public bool InteractAtScreenPoint(Vector2 point) => InteractAtScreenPoint(point, deferItemClick: false, expectedItem: null);
+
+        private bool InteractAtScreenPoint(Vector2 point, bool deferItemClick, HoldableItem expectedItem)
+        {
+            if (!CanInteractWithWorld || (PointerBlocked?.Invoke(point) ?? false)) return false;
             if (Carry != null && Carry.IsExamining) return true;
             if (TextInputFocused) TextInputFocus.ReleaseAll();
             Component target = ResolvePointerTarget(point, out RaycastHit? obstruction);
+            if (expectedItem != null && target != expectedItem) return false;
+            if (deferItemClick && target is HoldableItem item)
+            {
+                pressedItem = item;
+                pressPosition = point;
+                return true;
+            }
             bool insideMonitorView = views.ActiveAngle?.Id == "monitor";
             if (insideMonitorView && CanReturnByPointer(point, obstruction))
             { ReturnToOverview(); return true; }
@@ -508,6 +568,7 @@ namespace Codetective.Interaction
 
         public void HandleEscape()
         {
+            pressedItem = null;
             if (NavigationBlocked && !(PresentingOnTerminal && AllowPresentationMenu)) return;
             if (flow.Mode == InspectionMode.Menu)
             { if (!menu.HandleEscape()) Resume(); return; }
@@ -540,7 +601,7 @@ namespace Codetective.Interaction
             menuReturnAngle = views.ActiveAngle;
             TextInputFocus.ReleaseAll();
             activeTerminal?.SetInteractionEnabled(false);
-            Carry?.CancelPlacement(); Carry?.SetPresentationVisible(false);
+            CancelPointerDrag(); Carry?.CancelPlacement(); Carry?.SetPresentationVisible(false);
             previousTimeScale = Time.timeScale; previousBlendPause = views.PauseTransitions;
             previousAudioPause = AudioListener.pause; ownsPause = true;
             Time.timeScale = 0f; AudioListener.pause = true; views.PauseTransitions = true;
@@ -564,7 +625,8 @@ namespace Codetective.Interaction
         public void BeginTerminalPresentation(bool allowMenu)
         {
             if (PresentingOnTerminal) { AllowPresentationMenu = allowMenu; return; }
-            Transitions?.CancelAngle(); TextInputFocus.ReleaseAll(); Carry?.CancelPlacement(); Carry?.SetPresentationVisible(false);
+            Transitions?.CancelAngle(); TextInputFocus.ReleaseAll(); CancelPointerDrag();
+            Carry?.CancelPlacement(); Carry?.SetPresentationVisible(false);
             presentationReturnPose = views.CapturePose(); presentationReturnFov = views.ControlledCamera.fieldOfView; presentationReturnAngle = views.ActiveAngle;
             presentationNavigationBlocked = NavigationBlocked; PresentingOnTerminal = true; AllowPresentationMenu = allowMenu; NavigationBlocked = true;
             if (views.AngleSet != null) views.TryGoToIndex(views.AngleSet.FindId("monitor"), true);

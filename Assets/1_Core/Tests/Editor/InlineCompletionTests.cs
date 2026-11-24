@@ -79,6 +79,17 @@ namespace Codetective.Terminal.Tests
             Assert.That(InlineCompletion.Resolve(CompletionKey.Tab, input, null, true), Is.EqualTo(CompletionKeyAction.None));
         }
 
+        [TestCase("암호  ", 4, "암호 ", 3)]
+        [TestCase("practice =    hq", 12, "practice =  hq", 11)]
+        [TestCase("target.inspect(", 15, "target.inspect(", 15)]
+        public void SpaceSuppliesTheSeparatorWithoutKeepingAutomaticPaddingOrChangingTheSuffix(
+            string replacement, int caret, string expected, int expectedCaret)
+        {
+            InlineCompletion accepted = new InlineCompletion(replacement, caret).ForSpaceKey();
+            Assert.That(accepted.Text, Is.EqualTo(expected));
+            Assert.That(accepted.Caret, Is.EqualTo(expectedCaret));
+        }
+
         [TestCase("", "암호 ")]
         [TestCase("   ", "암호 ")]
         [TestCase("암호 대상 =", "암호 대상 =지휘소")]

@@ -209,7 +209,10 @@ namespace Codetective.Terminal
             {
                 Canvas.ForceUpdateCanvases();
                 if (followTranscript)
+                {
+                    transcriptScroll.StopMovement();
                     transcriptScroll.verticalNormalizedPosition = 0f;
+                }
                 else
                 {
                     float maximum = Mathf.Max(0f, transcriptScroll.content.rect.height - TranscriptViewport.rect.height);
@@ -241,13 +244,7 @@ namespace Codetective.Terminal
 
         private void AppendHistory(string entry)
         {
-            RectTransform content = transcriptScroll.content;
-            if (!scrollTranscript)
-            {
-                followTranscript = TerminalHistory.ShouldFollowLatest(content.rect.height,
-                    TranscriptViewport.rect.height, content.anchoredPosition.y);
-                preservedTranscriptPosition = content.anchoredPosition;
-            }
+            QueueTranscriptScroll();
             string before = history.Text;
             string removed = history.Append(entry);
             if (!followTranscript && removed.Length > 0)
@@ -256,6 +253,17 @@ namespace Codetective.Terminal
                 preservedTranscriptPosition.y -= MeasureHistory(before) - MeasureHistory(remaining);
             }
             transcript.text = ConversationTranscript();
+        }
+
+        private void QueueTranscriptScroll(bool toLatest = false)
+        {
+            if (toLatest) followTranscript = true;
+            else if (!scrollTranscript)
+            {
+                RectTransform content = transcriptScroll.content;
+                preservedTranscriptPosition = content.anchoredPosition;
+                followTranscript = TerminalHistory.ShouldFollowLatest(content.rect.height, TranscriptViewport.rect.height, preservedTranscriptPosition.y);
+            }
             scrollTranscript = true;
         }
 

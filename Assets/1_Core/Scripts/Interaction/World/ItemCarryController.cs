@@ -17,6 +17,7 @@ namespace Codetective.Interaction
         public event Action<HoldableItem> PickedUp;
         public event Action<HoldableItem> Placed;
         public bool IsPlacing { get; private set; }
+        public bool IsDragging { get; private set; }
         public bool IsExamining => isActiveAndEnabled && !sessionEnded && HeldItem != null && !IsPlacing;
         public Camera ViewCamera => hand != null ? hand.GetComponent<Camera>() : null;
         public bool PlacementValid { get; private set; }
@@ -28,6 +29,7 @@ namespace Codetective.Interaction
         private ItemPlacementSurface destination;
         private ItemPlacementSurface.Placement destinationPlacement;
         private bool sessionEnded;
+        private bool returnDragOnUpdate;
         public void Initialize(Transform camera)
         {
             hand = camera;
@@ -49,11 +51,24 @@ namespace Codetective.Interaction
         }
         public void SetPresentationVisible(bool visible) { if (HeldItem != null) HeldItem.SetPresentationVisible(visible && isActiveAndEnabled && !sessionEnded); }
         private void LateUpdate()
-        { if (IsExamining) HeldItem.FrameForInspection(ViewCamera); }
+        {
+            if (returnDragOnUpdate)
+            {
+                returnDragOnUpdate = false;
+                PutDown();
+            }
+            else if (IsExamining) HeldItem.FrameForInspection(ViewCamera);
+        }
         public bool TryPickup(HoldableItem item)
         {
+            if (!PickUp(item)) return false;
+            PickedUp?.Invoke(item);
+            return true;
+        }
+        private bool PickUp(HoldableItem item)
+        {
             if (!CanManipulate || hand == null || HeldItem != null || item == null || !item.isActiveAndEnabled || (item.IsStored && !item.Storage.CanRetrieve)) return false;
-            Register(item); HeldItem = item; item.PickUp(hand); PickedUp?.Invoke(item); return true;
+            Register(item); HeldItem = item; item.PickUp(hand); return true;
         }
         public bool TryUse(bool textInputFocused)
         {
@@ -101,6 +116,27 @@ namespace Codetective.Interaction
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows = false;
             }
             preview.SetActive(false); return true;
+        }
+        public bool BeginDrag(HoldableItem item)
+        {
+            if (!PickUp(item)) return false;
+            if (!BeginPlacement()) { PutDown(); return false; }
+            IsDragging = true;
+            return true;
+        }
+        public void FinishDrag(Vector2 point, bool pointerBlocked, ItemPlacementSurface tray)
+        {
+            if (IsDragging && (pointerBlocked || !TryPlaceAtScreenPoint(point, tray))) PutDown();
+        }
+        public void CancelDrag()
+        {
+            if (IsDragging) PutDown();
+        }
+        public void DeferDragCancellation()
+        {
+            if (!IsDragging) return;
+            returnDragOnUpdate = true;
+            HidePlacementPreview();
         }
         public void UpdatePlacement(Vector2 point, bool pointerBlocked = false, ItemPlacementSurface tray = null)
         {
@@ -163,7 +199,7 @@ namespace Codetective.Interaction
         public void HidePlacementPreview() { if (preview != null) preview.SetActive(false); PlacementValid = false; destination = null; }
         public void CancelPlacement()
         {
-            IsPlacing = false; PlacementValid = false; destination = null;
+            IsPlacing = false; IsDragging = false; PlacementValid = false; destination = null;
             Discard(preview); Discard(previewMaterial);
             preview = null; previewMaterial = null; SetPresentationVisible(true);
         }
@@ -185,11 +221,11 @@ namespace Codetective.Interaction
         { if (value == null) return; if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
         // Disabling suspends the held object. Reparenting here is illegal while the
         // camera (or the item's resting parent) is itself changing activation state.
-        private void OnDisable() { CancelPlacement(); SetPresentationVisible(false); }
-        private void OnEnable() { if (!sessionEnded) SetPresentationVisible(true); }
+        private void OnDisable() { DeferDragCancellation(); CancelPlacement(); SetPresentationVisible(false); }
+        private void OnEnable() { if (!sessionEnded && !returnDragOnUpdate) SetPresentationVisible(true); }
         public void EndSession()
         {
-            sessionEnded = true; CancelPlacement(); SetPresentationVisible(false); HeldItem = null;
+            sessionEnded = true; returnDragOnUpdate = false; CancelPlacement(); SetPresentationVisible(false); HeldItem = null;
         }
         private void OnDestroy() => EndSession();
     }

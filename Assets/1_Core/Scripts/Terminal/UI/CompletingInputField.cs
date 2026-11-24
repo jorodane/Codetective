@@ -115,7 +115,7 @@ namespace Codetective.Terminal
             if (keyboard.spaceKey.wasPressedThisFrame && keyEventFrames[(int)CompletionKey.Space] != Time.frameCount &&
                 !keyboard.ctrlKey.isPressed && !keyboard.altKey.isPressed && !keyboard.leftMetaKey.isPressed && !keyboard.rightMetaKey.isPressed)
             {
-                if (allowSpaceText) ProcessSpaceKey(typedSpace);
+                if (allowSpaceText) ProcessSpaceKey(typedSpace, Time.frameCount);
                 else Poll(CompletionKey.Space);
             }
 #endif
@@ -123,7 +123,9 @@ namespace Codetective.Terminal
 
         private void Poll(CompletionKey key)
         {
-            if (keyEventFrames[(int)key] != Time.frameCount) HandleCompletionKey(key);
+            int frame = Time.frameCount;
+            if (keyEventFrames[(int)key] == frame) return;
+            if (HandleCompletionKey(key) && key == CompletionKey.Space) spaceKeyFrame = frame;
         }
 
         public override void OnUpdateSelected(BaseEventData eventData)
@@ -149,7 +151,7 @@ namespace Codetective.Terminal
             bool handled;
             if (completionKey)
             {
-                if (key == CompletionKey.Space) { ProcessSpaceKey(inputEvent); UpdateLabel(); return; }
+                if (key == CompletionKey.Space) { ProcessSpaceKey(inputEvent, Time.frameCount); UpdateLabel(); return; }
                 keyEventFrames[(int)key] = Time.frameCount;
                 handled = IsHeldRepeat(key) || HandleCompletionKey(key);
             }
@@ -158,29 +160,31 @@ namespace Codetective.Terminal
             UpdateLabel();
         }
 
-        private void ProcessSpaceKey(Event inputEvent)
+        private void ProcessSpaceKey(Event inputEvent, int frame)
         {
-            int frame = Time.frameCount;
             keyEventFrames[(int)CompletionKey.Space] = frame;
             if (inputEvent.control || inputEvent.command || inputEvent.alt) { ProcessEditingKey(inputEvent); return; }
-            if (!IsHeldRepeat(CompletionKey.Space) && HandleCompletionKey(CompletionKey.Space)) return;
-            if (handledFrame == frame) return;
-            string composition = CompositionText;
-            bool committingHangul = ContainsHangul(composition);
-
             // Some backends emit only a keycode and some emit a second character event.
-            // Pair the two once while still accepting consecutive character-only spaces.
+            // Pair these before completion can consume the first event. The other
+            // event may arrive one frame later unless a new physical press was seen.
             if (inputEvent.keyCode == KeyCode.None)
             {
-                if (spaceKeyFrame == frame) { spaceKeyFrame = -1; return; }
+                if (IsSpaceEcho(spaceKeyFrame, frame)) { spaceKeyFrame = -1; return; }
                 spaceTextFrame = frame;
             }
             else
             {
-                if (spaceTextFrame == frame) { spaceTextFrame = -1; return; }
-                if (composition.Length != 0 && !committingHangul && (inputEvent.character == '\0' || ReferenceEquals(inputEvent, typedSpace))) return;
+                if (IsSpaceEcho(spaceTextFrame, frame)) { spaceTextFrame = -1; return; }
                 spaceKeyFrame = frame;
             }
+            if (!IsHeldRepeat(CompletionKey.Space) && HandleCompletionKey(CompletionKey.Space)) return;
+            if (handledFrame == frame) return;
+
+            string composition = CompositionText;
+            bool committingHangul = ContainsHangul(composition);
+            if (inputEvent.keyCode != KeyCode.None && composition.Length != 0 && !committingHangul &&
+                (inputEvent.character == '\0' || ReferenceEquals(inputEvent, typedSpace)))
+            { spaceKeyFrame = -1; return; }
             if (committingHangul)
             {
                 // Keep the native commit echo protection armed for the syllable we just inserted.
@@ -188,6 +192,17 @@ namespace Codetective.Terminal
                 KeyPressed(typedSpace);
             }
             else ProcessEditingKey(inputEvent.character == ' ' ? inputEvent : typedSpace);
+        }
+
+        private static bool IsSpaceEcho(int otherEventFrame, int frame)
+        {
+            if (otherEventFrame == frame) return true;
+            if (otherEventFrame < 0 || otherEventFrame != frame - 1) return false;
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current == null || !Keyboard.current.spaceKey.wasPressedThisFrame;
+#else
+            return true;
+#endif
         }
 
         private static bool ContainsHangul(string value)
@@ -222,6 +237,7 @@ namespace Codetective.Terminal
             if (handledFrame == Time.frameCount) return true;
             TerminalCompletionInput current = CompletionInput;
             InlineCompletion? suggestion = CompletionQuery?.Invoke(current);
+            if (key == CompletionKey.Space && suggestion.HasValue) suggestion = suggestion.Value.ForSpaceKey();
             if (suggestion.HasValue && !Fits(suggestion.Value)) suggestion = null;
             bool submitOnEnter = lineType != LineType.MultiLineNewline;
             switch (InlineCompletion.Resolve(key, current, suggestion, submitOnEnter))

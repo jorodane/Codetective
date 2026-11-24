@@ -17,7 +17,8 @@ namespace Codetective.Terminal
         private bool conversationInputLocked;
         private CrtScreen conversationScreen;
         private const float AnswerInset = 40f;
-        private RectTransform answerRow;
+        private static readonly Vector2 QuestionPadding = new Vector2(12, 9);
+        private RectTransform answerRow, questionPanel;
         private Text answerOptions, answerQuestion;
         private Vector2 logBottom, scrollbarBottom, completionPosition;
 
@@ -52,7 +53,7 @@ namespace Codetective.Terminal
             bool visible = pageVisible && interactionEnabled && isActiveAndEnabled && Time.timeScale > 0;
             runtime.AdvanceTerminalConversation(Time.deltaTime, visible);
             if (runtime.TerminalConversationActive && renderedConversationId != runtime.TerminalConversationId)
-            { renderedConversationId = runtime.TerminalConversationId; followTranscript = true; scrollTranscript = true; }
+            { renderedConversationId = runtime.TerminalConversationId; QueueTranscriptScroll(toLatest: true); }
             if (conversationInputLocked != runtime.TerminalInputLocked)
             {
                 if (visible && !runtime.TerminalInputLocked && runtime.TerminalConversationActive)
@@ -69,12 +70,8 @@ namespace Codetective.Terminal
             RefreshAnswerPrompt();
             string text = ConversationTranscript();
             if (transcript.text == text) return;
-            if (!scrollTranscript)
-            {
-                followTranscript = TerminalHistory.ShouldFollowLatest(transcriptScroll.content.rect.height, TranscriptViewport.rect.height, transcriptScroll.content.anchoredPosition.y);
-                preservedTranscriptPosition = transcriptScroll.content.anchoredPosition;
-            }
-            transcript.text = text; scrollTranscript = true;
+            QueueTranscriptScroll();
+            transcript.text = text;
         }
 
         private void RefreshCommandPrompt()
@@ -91,6 +88,7 @@ namespace Codetective.Terminal
         {
             if (!interactionEnabled || !pageVisible || !isActiveAndEnabled || Time.timeScale <= 0 ||
                 !session.Runtime.ContinueTerminalLine()) return false;
+            QueueTranscriptScroll(toLatest: true);
             // The Enter that advances the dialogue must not also reach the selected button or input.
             if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject != input.gameObject)
                 EventSystem.current.SetSelectedGameObject(null);
@@ -108,6 +106,7 @@ namespace Codetective.Terminal
             }
             if (answerRow.gameObject.activeSelf != waiting)
             {
+                QueueTranscriptScroll();
                 answerRow.gameObject.SetActive(waiting);
                 Vector2 inset = waiting ? Vector2.up * AnswerInset : Vector2.zero;
                 TranscriptViewport.offsetMin = logBottom + inset;
@@ -118,8 +117,21 @@ namespace Codetective.Terminal
             if (waiting)
             {
                 answerOptions.text = runtime.TerminalAnswerPrompt;
-                answerQuestion.text = runtime.TerminalQuestion;
+                LayoutQuestion(runtime.TerminalQuestion);
             }
+        }
+
+        private void LayoutQuestion(string text)
+        {
+            if (answerQuestion.text == text) return;
+            answerQuestion.text = text;
+            float width = answerRow.rect.width - QuestionPadding.x * 2;
+            var settings = answerQuestion.GetGenerationSettings(new Vector2(width, 0));
+            float height = answerQuestion.cachedTextGeneratorForLayout.GetPreferredHeight(text, settings) / answerQuestion.pixelsPerUnit;
+            // Long authored questions can scroll within the terminal's visible log area.
+            float maxHeight = Mathf.Max(44f, TranscriptViewport.rect.height);
+            questionPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Clamp(Mathf.Ceil(height) + QuestionPadding.y * 2, 44f, maxHeight));
+            answerQuestion.rectTransform.anchoredPosition = Vector2.zero;
         }
 
         private void BuildAnswerPrompt()
@@ -132,19 +144,26 @@ namespace Codetective.Terminal
             field.SetAsLastSibling();
             Font font = input.textComponent.font;
             float width = field.rect.width;
+            Color answerColor = new Color(0.075f, 0.15f, 0.115f);
             answerRow = MonitorWidgets.Rect("TerminalAnswerOptions", field, new Vector2(0, AnswerInset), new Vector2(width, AnswerInset - 4));
-            answerRow.gameObject.AddComponent<Image>().color = new Color(0.075f, 0.15f, 0.115f);
+            answerRow.gameObject.AddComponent<Image>().color = answerColor;
             answerRow.gameObject.AddComponent<CrtMeshEffect>();
             answerOptions = MonitorWidgets.Label(answerRow, font, new Vector2(12, -4), new Vector2(width - 24, 28), "", 22);
 
-            const float questionHeight = 168f;
-            RectTransform question = MonitorWidgets.Rect("TerminalQuestion", answerRow, new Vector2(0, questionHeight + 4), new Vector2(width, questionHeight));
-            Image box = question.gameObject.AddComponent<Image>(); box.color = new Color(0.025f, 0.065f, 0.045f); box.raycastTarget = false;
-            question.gameObject.AddComponent<CrtMeshEffect>();
-            answerQuestion = MonitorWidgets.Label(question, font, new Vector2(12, -9), new Vector2(width - 24, questionHeight - 18), "", 22);
-            answerQuestion.resizeTextForBestFit = true; answerQuestion.resizeTextMinSize = 16; answerQuestion.resizeTextMaxSize = 22;
-            answerRow.gameObject.AddComponent<TerminalQuestionHover>().Question = question.gameObject;
-            question.gameObject.SetActive(false);
+            questionPanel = MonitorWidgets.Rect("TerminalQuestion", answerRow, Vector2.zero, new Vector2(width, 44));
+            questionPanel.pivot = Vector2.zero;
+            questionPanel.anchoredPosition = Vector2.zero;
+            questionPanel.gameObject.AddComponent<Image>().color = Color.Lerp(answerColor, Color.white, 0.085f);
+            questionPanel.gameObject.AddComponent<CrtMeshEffect>();
+            answerQuestion = MonitorWidgets.ScrollText(questionPanel, font, Vector2.zero, new Vector2(width, 44));
+            answerQuestion.fontSize = 22;
+            answerQuestion.rectTransform.sizeDelta = Vector2.zero;
+            RectTransform viewport = (RectTransform)answerQuestion.transform.parent;
+            viewport.anchorMin = Vector2.zero; viewport.anchorMax = Vector2.one;
+            viewport.offsetMin = QuestionPadding; viewport.offsetMax = -QuestionPadding;
+            viewport.GetComponent<Image>().color = Color.clear;
+            answerRow.gameObject.AddComponent<TerminalQuestionHover>().Question = questionPanel.gameObject;
+            questionPanel.gameObject.SetActive(false);
             answerRow.gameObject.SetActive(false);
         }
     }
@@ -153,7 +172,11 @@ namespace Codetective.Terminal
     {
         public GameObject Question { get; set; }
         public void OnPointerEnter(PointerEventData eventData) => Question.SetActive(true);
-        public void OnPointerExit(PointerEventData eventData) => Question.SetActive(false);
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            GameObject next = eventData.pointerCurrentRaycast.gameObject;
+            if (next == null || !next.transform.IsChildOf(transform)) Question.SetActive(false);
+        }
         private void OnDisable() { if (Question != null) Question.SetActive(false); }
     }
 }

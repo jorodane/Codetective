@@ -130,8 +130,10 @@ namespace Codetective.Gameplay
                 else { documentSection = Mathf.Clamp(documentSection, 0, openedDocument.Sections.Count - 1); BuildDocumentReader(); }
             }
             HoldableItem held = game.Carry.HeldItem;
-            heldBar.gameObject.SetActive(held != null && modal == null && inspection.Mode != InspectionMode.Menu && !game.IsDateTransitioning);
-            if (held != null)
+            bool showHeldControls = held != null && !game.Carry.IsDragging && modal == null &&
+                inspection.Mode != InspectionMode.Menu && !game.IsDateTransitioning;
+            heldBar.gameObject.SetActive(showHeldControls);
+            if (showHeldControls)
             {
                 heldLabel.text = game.Carry.IsPlacing ? game.Carry.PlacementHint : held.DisplayName;
                 placeItem.gameObject.SetActive(!game.Carry.IsPlacing);

@@ -482,6 +482,81 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void WorldItemDragPlacesOnReleaseAndReturnsToItsLastPositionOnInvalidDrop()
+        {
+            var navigation = new GameObject("Drag view", typeof(Camera), typeof(CameraAngleController)); navigation.SetActive(false);
+            var desk = new GameObject("Desk", typeof(BoxCollider));
+            var carryRoot = new GameObject("Carry");
+            var set = ScriptableObject.CreateInstance<CameraAngleSet>();
+            var overview = ScriptableObject.CreateInstance<CameraAnglePreset>();
+            GameObject prop = null;
+            try
+            {
+                var origin = new Vector3(83, 83, 83);
+                Set(overview, "angleId", "overview"); Set(overview, "position", origin);
+                Set(overview, "eulerAngles", new Vector3(27.5f, 0, 0));
+                Set(set, "angles", new List<CameraAnglePreset> { overview });
+                var views = navigation.GetComponent<CameraAngleController>(); Set(views, "angleSet", set);
+                Camera camera = navigation.GetComponent<Camera>(); camera.pixelRect = new Rect(0, 0, 640, 480);
+                Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController"));
+                Set(inspection, "overviewAngle", overview); Call(inspection, "Awake");
+                Assert.That(views.TryGoToIndex(0, true), Is.True);
+                ItemCarryController carry = carryRoot.AddComponent<ItemCarryController>(); carry.Initialize(navigation.transform);
+                inspection.GetType().GetProperty("Carry").SetValue(inspection, carry);
+
+                desk.transform.position = origin + new Vector3(0, -0.65f, 2);
+                BoxCollider deskBody = desk.GetComponent<BoxCollider>();
+                deskBody.center = new Vector3(0, -0.15f, 0); deskBody.size = new Vector3(2, 0.3f, 1.4f);
+                var desktop = new GameObject("Desktop"); desktop.transform.SetParent(desk.transform, false);
+                ItemPlacementSurface surface = desktop.AddComponent<ItemPlacementSurface>();
+                surface.Initialize("desk.top", null, new Bounds(new Vector3(0, 0.125f, 0), new Vector3(2, 0.25f, 1.4f)));
+                inspection.GetType().GetProperty("Desktop").SetValue(inspection, surface);
+                prop = new GameObject("Evidence", typeof(BoxCollider)); prop.transform.SetParent(desk.transform, false);
+                prop.GetComponent<BoxCollider>().size = new Vector3(0.2f, 0.06f, 0.2f);
+                var item = prop.AddComponent<HoldableItem>(); item.Configure("evidence", "증거물", HeldItemUse.Custom); carry.Register(item);
+                prop.transform.localPosition = new Vector3(-0.4f, 0.03f, 0);
+                Vector3 original = prop.transform.localPosition;
+                int examined = 0, placed = 0;
+                carry.PickedUp += _ => examined++;
+                carry.Placed += _ => placed++;
+                Physics.SyncTransforms();
+
+                Vector2 from = camera.WorldToScreenPoint(prop.transform.position);
+                Vector2 to = camera.WorldToScreenPoint(desktop.transform.TransformPoint(new Vector3(0.48f, 0, 0)));
+                void Mouse(Vector2 point, bool pressed, bool held) => Call(inspection, "UpdateWorldPointer", point, pressed, held);
+                Mouse(from, true, true);
+                Assert.That(carry.HeldItem, Is.Null);
+                Mouse(from, false, false);
+                Assert.That(carry.IsExamining, Is.True);
+                Assert.That(examined, Is.EqualTo(1));
+                carry.PutDown(); Physics.SyncTransforms();
+                Assert.That(prop.transform.localPosition, Is.EqualTo(original));
+
+                Mouse(from, true, true); Mouse(to, false, true);
+                Assert.That(carry.IsDragging, Is.True);
+                Assert.That(examined, Is.EqualTo(1));
+                Mouse(to, false, false);
+                Assert.That(carry.HeldItem, Is.Null);
+                Assert.That(item.Storage, Is.SameAs(surface));
+                Assert.That(prop.transform.localPosition.x, Is.EqualTo(0.48f).Within(0.005f));
+                Assert.That(placed, Is.EqualTo(1));
+                Physics.SyncTransforms();
+
+                Vector3 previous = prop.transform.localPosition;
+                Vector2 stored = camera.WorldToScreenPoint(prop.transform.position);
+                Mouse(stored, true, true); Mouse(to + Vector2.right * 1200, false, false);
+                Assert.That(carry.HeldItem, Is.Null);
+                Assert.That(item.Storage, Is.SameAs(surface));
+                Assert.That(prop.transform.localPosition, Is.EqualTo(previous));
+                Assert.That(placed, Is.EqualTo(1));
+            }
+            finally
+            {
+                foreach (Object value in new Object[] { prop, carryRoot, navigation, desk, overview, set }) Object.DestroyImmediate(value);
+            }
+        }
+
+        [Test]
         public void NewspaperRollsOnTheDeskAndInDrawersAndOpensOnlyWhenExamined()
         {
             var system = new GameObject("Carry"); var camera = new GameObject("Camera", typeof(Camera)); var paper = new GameObject("Paper"); var drawer = new GameObject("Drawer");
