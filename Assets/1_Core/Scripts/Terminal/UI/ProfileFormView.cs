@@ -19,6 +19,10 @@ namespace Codetective.Terminal
         private Image photo;
         private Text missingPhoto;
         private AspectRatioFitter photoFit;
+        internal static string ListName(PersonProfile profile) =>
+            profile.Id == "kernel" || string.IsNullOrEmpty(profile.Name) || profile.Name.StartsWith("[", StringComparison.Ordinal)
+                ? profile.DisplayName : profile.Name;
+
         public static ProfileFormView CreateHeader(Transform parent, Font font, float width, bool crt, bool largePrint = false)
         {
             RectTransform root = MonitorWidgets.Rect("ProfileForm", parent, Vector2.zero, new Vector2(900, largePrint ? 264 : 190));

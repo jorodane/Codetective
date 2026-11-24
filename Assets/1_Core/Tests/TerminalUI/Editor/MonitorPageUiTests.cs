@@ -373,6 +373,31 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(values, Does.Contain("직업: 심리상담가"));
         }
         [Test]
+        public void ClinicPersonRowsSwitchProfilesAndKeepEachPersonsDraft()
+        {
+            terminal.SetInteractionEnabled(true);
+            runtime.CreateInstance("Person", "unseen", "미확인 인물", false);
+            host.ShowPage("clinic");
+            ClinicMonitorPage clinic = host.CurrentPage.GetComponent<ClinicMonitorPage>();
+            var choices = Field<Dictionary<string, Button>>(clinic, "profileChoices");
+            Assert.That(choices.Keys, Is.EquivalentTo(runtime.VisibleProfileIds));
+            Assert.That(choices.ContainsKey("unseen"), Is.False);
+            choices["kernel"].onClick.Invoke();
+            Assert.That(host.SelectedProfileId, Is.EqualTo("kernel"));
+            Assert.That(choices["client"].image.color, Is.Not.EqualTo(choices["kernel"].image.color));
+            Assert.That(Field<Text>(clinic, "status").text, Does.Contain("Kernel"));
+
+            host.ShowPage("clinic-records");
+            ClinicMonitorPage editor = host.CurrentPage.GetComponent<ClinicMonitorPage>();
+            var editorChoices = Field<Dictionary<string, Button>>(editor, "profileChoices");
+            MonitorNoteInput journal = Field<MonitorNoteInput>(editor, "noteInput");
+            journal.text = "작성 중인 Kernel 기록";
+            editorChoices["client"].onClick.Invoke();
+            Assert.That(journal.text, Is.Empty);
+            editorChoices["kernel"].onClick.Invoke();
+            Assert.That(journal.text, Is.EqualTo("작성 중인 Kernel 기록"));
+        }
+        [Test]
         public void PortraitsFollowStoryUnlocksAndHiddenPeopleDoNotExposePhotos()
         {
             var texture = new Texture2D(4, 4); Sprite photo = Sprite.Create(texture, new Rect(0, 0, 4, 4), Vector2.zero);
@@ -600,19 +625,47 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(canvas.GetComponentsInChildren<Canvas>(true).Length, Is.EqualTo(1));
         }
         [Test]
-        public void InquiryApprovalNavigatesToItsDateAndBackToTheOriginalMessage()
+        public void InquiryApprovalIsAvailableThroughTheScheduleTabAndLinksBackToTheOriginalMessage()
         {
             runtime.RegisterMail(new StoryMail { id = "booking", mailbox = Mailbox.Clinic, subject = "예약 문의", reservation = new ReservationRequest { day = 2,
                 appointment = new PatientAppointment { id = "visit", startMinute = 660, endMinute = 720 } }, choices = new[] {
                 new MailChoice { id = "yes", label = "예약 승인", result = MailChoiceResult.Approved, approvesReservation = true },
                 new MailChoice { id = "no", label = "예약 거절", result = MailChoiceResult.Declined } } });
             terminal.SetInteractionEnabled(true); host.ShowPage("mail"); MailMonitorPage mail = host.CurrentPage.GetComponent<MailMonitorPage>();
-            mail.ShowMessage("booking"); Invoke(mail, "Choose", "yes"); Invoke(mail, "OpenSchedule");
+            mail.ShowMessage("booking"); Invoke(mail, "Choose", "yes");
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
+            Field<Dictionary<string, Button>>(host, "tabs")["schedule"].onClick.Invoke();
             Assert.That(host.CurrentPage.Id, Is.EqualTo("schedule")); Assert.That(host.SelectedScheduleDay, Is.EqualTo(2));
             ScheduleMonitorPage schedule = host.CurrentPage.GetComponent<ScheduleMonitorPage>();
             Assert.That(Field<Text>(schedule, "detail").text, Does.Contain("11:00")); Assert.That(Field<Text>(schedule, "detail").text, Does.Contain("메일 승인"));
             Invoke(schedule, "OpenSourceMail"); Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
             Assert.That(Field<Text>(mail, "detail").text, Does.Contain("답변: 예약 승인")); Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(1));
+        }
+        [Test]
+        public void MailFieldsStayAboveTheScrollableBodyAndUseTheDestinationMailboxByDefault()
+        {
+            string longBody = string.Join("\n", Enumerable.Repeat("본문 내용", 60));
+            runtime.RegisterMail(new StoryMail { id = "long-mail", mailbox = Mailbox.Kernel,
+                sender = "작전지원팀", recipient = "Kernel / 작전실", subject = "현장 보고", body = longBody });
+            runtime.RegisterMail(new StoryMail { id = "clinic-mail", mailbox = Mailbox.Clinic, sender = "상담 예약자", subject = "예약 문의", body = "예약하고 싶습니다." });
+            terminal.SetInteractionEnabled(true); host.ShowPage("mail");
+            MailMonitorPage mail = host.CurrentPage.GetComponent<MailMonitorPage>();
+            mail.ShowMessage("long-mail");
+            Text sender = Field<Text>(mail, "sender"), recipient = Field<Text>(mail, "recipient"), title = Field<Text>(mail, "title");
+            Text detail = Field<Text>(mail, "detail"); ScrollRect bodyScroll = Field<ScrollRect>(mail, "bodyScroll");
+            Assert.That(mail.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text),
+                Does.Not.Contain("스케줄"));
+            Assert.That(new[] { sender.text, recipient.text, title.text }, Is.EqualTo(new[] { "작전지원팀", "Kernel / 작전실", "현장 보고" }));
+            Assert.That(new[] { sender, recipient, title }.All(field => !field.transform.IsChildOf(bodyScroll.transform)), Is.True);
+            Assert.That(detail.text, Does.Contain("본문 내용").And.Not.Contain("작전지원팀"));
+            Canvas.ForceUpdateCanvases();
+            bodyScroll.verticalNormalizedPosition = 0;
+            Assert.That(detail.rectTransform.anchoredPosition.y, Is.GreaterThan(0));
+            Assert.That(sender.text, Is.EqualTo("작전지원팀"));
+            mail.ShowMessage("clinic-mail");
+            Assert.That(recipient.text, Is.EqualTo("상담소"));
+            Assert.That(title.text, Is.EqualTo("예약 문의"));
+            Assert.That(detail.rectTransform.anchoredPosition.y, Is.Zero.Within(0.01f));
         }
         [Test]
         public void AHiddenOrInactiveMonitorCannotSubmitAMailChoice()

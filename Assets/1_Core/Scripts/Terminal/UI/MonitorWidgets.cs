@@ -49,18 +49,38 @@ namespace Codetective.Terminal
             input.textComponent = text; input.lineType = InputField.LineType.MultiLineNewline; input.characterLimit = 8000;
             return input;
         }
-        public static Text ScrollText(Transform parent, Font font, Vector2 position, Vector2 size)
+        private static CrtScrollRect ScrollViewport(string name, Transform parent, Vector2 position, Vector2 size)
         {
-            RectTransform viewport = Rect("Records", parent, position, size);
+            RectTransform viewport = Rect(name, parent, position, size);
             Image background = viewport.gameObject.AddComponent<Image>(); background.color = new Color(0.02f, 0.04f, 0.03f);
             viewport.gameObject.AddComponent<CrtMeshEffect>(); viewport.gameObject.AddComponent<RectMask2D>();
             var scroll = viewport.gameObject.AddComponent<CrtScrollRect>();
-            Text text = Label(viewport, font, Vector2.zero, new Vector2(size.x - 14, 0), "", 26);
+            scroll.viewport = viewport; scroll.horizontal = false; scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 30;
+            return scroll;
+        }
+        public static RectTransform ScrollList(string name, string rowsName, Transform parent, Vector2 position, Vector2 size)
+        {
+            CrtScrollRect scroll = ScrollViewport(name, parent, position, size);
+            return scroll.content = Rect(rowsName, scroll.viewport, Vector2.zero, size);
+        }
+        public static void ClearRows(RectTransform content)
+        {
+            for (int i = content.childCount - 1; i >= 0; i--)
+            {
+                GameObject row = content.GetChild(i).gameObject;
+                row.SetActive(false);
+                if (Application.isPlaying) UnityEngine.Object.Destroy(row); else UnityEngine.Object.DestroyImmediate(row);
+            }
+        }
+        public static Text ScrollText(Transform parent, Font font, Vector2 position, Vector2 size)
+        {
+            CrtScrollRect scroll = ScrollViewport("Records", parent, position, size);
+            Text text = Label(scroll.viewport, font, Vector2.zero, new Vector2(size.x - 14, 0), "", 26);
             text.rectTransform.anchorMax = new Vector2(1, 1); text.rectTransform.sizeDelta = new Vector2(-14, 0);
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            scroll.content = text.rectTransform; scroll.viewport = viewport; scroll.horizontal = false; scroll.vertical = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 30;
+            scroll.content = text.rectTransform;
             return text;
         }
     }

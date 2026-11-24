@@ -5,6 +5,10 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
+#endif
 using Object = UnityEngine.Object;
 
 namespace Codetective.Terminal.Tests.UI
@@ -32,10 +36,19 @@ namespace Codetective.Terminal.Tests.UI
         private RegressionInput backend;
         private TerminalInputField field;
         private Text placeholder;
+#if ENABLE_INPUT_SYSTEM
+        private Keyboard keyboard;
+        private InputSettings.UpdateMode previousUpdateMode;
+#endif
 
         [SetUp]
         public void SetUp()
         {
+#if ENABLE_INPUT_SYSTEM
+            previousUpdateMode = InputSystem.settings.updateMode;
+            InputSystem.settings.updateMode = InputSettings.UpdateMode.ProcessEventsManually;
+            keyboard = InputSystem.AddDevice<Keyboard>();
+#endif
             previousEvents = EventSystem.current;
             root = new GameObject("Input regression", typeof(RectTransform), typeof(Canvas));
             root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
@@ -68,6 +81,10 @@ namespace Codetective.Terminal.Tests.UI
         {
             Object.DestroyImmediate(root);
             EventSystem.current = previousEvents;
+#if ENABLE_INPUT_SYSTEM
+            if (keyboard != null) InputSystem.RemoveDevice(keyboard);
+            InputSystem.settings.updateMode = previousUpdateMode;
+#endif
         }
 
         private void Focus()
@@ -117,42 +134,46 @@ namespace Codetective.Terminal.Tests.UI
             int submissions = 0; field.LineSubmitted += _ => submissions++;
             var physical = new Event { type = EventType.KeyDown, keyCode = key };
             var text = new Event { type = EventType.KeyDown, character = character };
-            PumpInput(textFirst ? text : physical, textFirst ? physical : text);
+            if (key == KeyCode.Space) PumpSpace(textFirst ? text : physical, textFirst ? physical : text);
+            else PumpInput(textFirst ? text : physical, textFirst ? physical : text);
             Assert.That(field.text, Is.EqualTo("save "));
             Assert.That(submissions, Is.Zero);
         }
 
         [Test]
-        public void APolledSpaceAndItsTextEchoDoNotLoseTheNextTypedName()
+        public void SpaceCompletionAndItsTextEchoDoNotLoseTheNextTypedName()
         {
             field.SetTextWithoutNotify("sa"); field.FocusAtEnd();
             field.CompletionQuery = _ => new InlineCompletion("save ", 5);
-            Invoke(typeof(CompletingInputField), field, "Poll", CompletionKey.Space);
-            PumpInput(new Event { type = EventType.KeyDown, character = ' ' },
+            PumpSpace(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
+                new Event { type = EventType.KeyDown, character = ' ' },
                 new Event { type = EventType.KeyDown, character = 'x' });
             Assert.That(field.text, Is.EqualTo("save x"));
         }
 
-        [Test]
-        public void SpaceCompletesACommandWithOneSeparatorEvenWhenTheTextEventArrivesLate()
+#if ENABLE_INPUT_SYSTEM
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LateKeyAndCharacterEventsCannotInsertAnExtraSpace(bool useCompletion)
         {
             field.SetTextWithoutNotify("암"); field.FocusAtEnd();
-            field.CompletionQuery = current => current.Text == "암" ? new InlineCompletion("암호  ", 4) : (InlineCompletion?)null;
-            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space });
-            Assert.That(field.text, Is.EqualTo("암호 "));
-            // Simulate uGUI delivering the text after the per-frame acceptance guard expires.
-            Type completing = typeof(CompletingInputField);
-            completing.GetField("handledFrame", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(field, -1);
-            Invoke(completing, field, "ProcessSpaceKey", new Event { type = EventType.KeyDown, character = ' ' }, Time.frameCount + 1);
-            PumpInput(new Event { type = EventType.KeyDown, character = 'x' });
-            Assert.That(field.text, Is.EqualTo("암호 x"));
+            if (useCompletion) field.CompletionQuery = current => current.Text == "암" ? new InlineCompletion("암호  ", 4) : (InlineCompletion?)null;
+            PumpSpace(); // The physical press can arrive without an IMGUI event.
+            Assert.That(field.text, Is.EqualTo(useCompletion ? "암호 " : "암 "));
+            typeof(CompletingInputField).GetField("handledFrame", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(field, -1);
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
+                new Event { type = EventType.KeyDown, character = ' ' },
+                new Event { type = EventType.KeyDown, keyCode = KeyCode.A, character = ' ' },
+                new Event { type = EventType.KeyDown, character = 'x' });
+            Assert.That(field.text, Is.EqualTo(useCompletion ? "암호 x" : "암 x"));
         }
+#endif
 
         [Test]
         public void SpaceConfirmsLiveKoreanCompletionWithoutAppendingADelimiterEcho()
         {
             Compose("ㅇ"); field.CompletionQuery = _ => new InlineCompletion("암호 ", 3);
-            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
+            PumpSpace(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
                 new Event { type = EventType.KeyDown, character = ' ' });
             Assert.That(field.text, Is.EqualTo("암호 "));
         }
@@ -161,8 +182,7 @@ namespace Codetective.Terminal.Tests.UI
         public void SpacesWithoutASuggestionRemainAvailableForIndentation()
         {
             field.lineType = InputField.LineType.MultiLineNewline;
-            PumpInput(new Event { type = EventType.KeyDown, character = ' ' },
-                new Event { type = EventType.KeyDown, character = ' ' });
+            for (int i = 0; i < 2; i++) PumpSpace(new Event { type = EventType.KeyDown, character = ' ' });
             Assert.That(field.text, Is.EqualTo("  "));
         }
 
@@ -174,8 +194,8 @@ namespace Codetective.Terminal.Tests.UI
             field.SetTextWithoutNotify("암호"); field.FocusAtEnd();
             var physical = new Event { type = EventType.KeyDown, keyCode = KeyCode.Space };
             var text = new Event { type = EventType.KeyDown, character = ' ' };
-            if (hasText) PumpInput(textFirst ? text : physical, textFirst ? physical : text);
-            else PumpInput(physical);
+            if (hasText) PumpSpace(textFirst ? text : physical, textFirst ? physical : text);
+            else PumpSpace(physical);
             Assert.That(field.text, Is.EqualTo("암호 "));
         }
 
@@ -183,7 +203,7 @@ namespace Codetective.Terminal.Tests.UI
         public void SpaceCommitsHangulAndAddsOnlyOneSpaceWhenThereIsNoSuggestion()
         {
             Compose("호");
-            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
+            PumpSpace(new Event { type = EventType.KeyDown, keyCode = KeyCode.Space },
                 new Event { type = EventType.KeyDown, character = '호' }, new Event { type = EventType.KeyDown, character = ' ' });
             Assert.That(field.text, Is.EqualTo("호 "));
         }
@@ -391,6 +411,22 @@ namespace Codetective.Terminal.Tests.UI
         {
             foreach (Event key in keys) Invoke(typeof(CompletingInputField), field, "ProcessKeyDown", key);
             Invoke(typeof(CompletingInputField), field, "LateUpdate");
+        }
+
+        private void PumpSpace(params Event[] keys)
+        {
+#if ENABLE_INPUT_SYSTEM
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Space));
+            InputSystem.Update();
+            try { PumpInput(keys); }
+            finally
+            {
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                InputSystem.Update();
+            }
+#else
+            PumpInput(keys);
+#endif
         }
 
         private TerminalController Controller(KernelRuntime runtime, out GameObject panel)

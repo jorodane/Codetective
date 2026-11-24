@@ -96,11 +96,7 @@ namespace Codetective.Terminal
             }
             revision = runtime.Revision;
         }
-        private string ProfileLabel(string id)
-        {
-            PersonProfile card = runtime.ProfileCard(id);
-            return id == "kernel" || string.IsNullOrEmpty(card.Name) || card.Name.StartsWith("[", StringComparison.Ordinal) ? card.DisplayName : card.Name;
-        }
+        private string ProfileLabel(string id) => ProfileFormView.ListName(runtime.ProfileCard(id));
         private Text Label(Transform parent, Vector2 position, Vector2 size, string value, int fontSize)
         {
             Text label = MonitorWidgets.Rect("Label", parent, position, size).gameObject.AddComponent<Text>();

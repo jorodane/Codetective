@@ -1,6 +1,6 @@
 {
     "name": "Codetective.Terminal.UI.EditorTests",
-    "references": ["Codetective.Terminal.UI", "Codetective.Terminal.Core", "Codetective.Operations.Core", "Codetective.Operations.Authoring", "Codetective.CameraViews", "Codetective.Interaction.Core", "Codetective.Interaction.World", "Unity.ugui"],
+    "references": ["Codetective.Terminal.UI", "Codetective.Terminal.Core", "Codetective.Operations.Core", "Codetective.Operations.Authoring", "Codetective.CameraViews", "Codetective.Interaction.Core", "Codetective.Interaction.World", "Unity.ugui", "Unity.InputSystem"],
     "includePlatforms": ["Editor"],
     "optionalUnityReferences": ["TestAssemblies"]
 }

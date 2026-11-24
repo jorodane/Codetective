@@ -11,6 +11,7 @@ namespace Codetective.Operations
         public string id;
         public Mailbox mailbox;
         public string sender;
+        public string recipient;
         public string subject;
         public string body;
         public int day = 1;
@@ -31,7 +32,7 @@ namespace Codetective.Operations
         // Unity inline serialization can materialize an empty ReservationRequest for ordinary mail.
         // An approval choice also identifies pre-flag inquiry assets and programmatic definitions.
         public bool HasReservation => isReservationInquiry || (choices ?? Array.Empty<MailChoice>()).Any(c => c != null && c.approvesReservation);
-        public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, subject = subject, body = body, day = day,
+        public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, recipient = recipient, subject = subject, body = body, day = day,
             afterAppointmentId = afterAppointmentId, minutesAfterAppointment = minutesAfterAppointment,
             requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel,
             acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray(), condition = condition?.Copy() ?? new StoryCondition(),

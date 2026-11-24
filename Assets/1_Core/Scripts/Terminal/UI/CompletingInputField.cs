@@ -40,6 +40,13 @@ namespace Codetective.Terminal
         private int spaceTextFrame = -1;
         private int ignoredEnterFrame = -1;
         private int focusCaret = -1;
+#if ENABLE_INPUT_SYSTEM
+        private InputAction spaceAction;
+        private Keyboard spaceKeyboard;
+        private int pendingSpacePresses;
+        private float repeatSpaceAt;
+        private const float SpaceRepeatDelay = 0.45f, SpaceRepeatInterval = 0.05f;
+#endif
 
         private string CompositionText
         {
@@ -55,6 +62,10 @@ namespace Codetective.Terminal
         {
             base.Awake();
             typedSpace = new Event { type = EventType.KeyDown, keyCode = KeyCode.Space, character = ' ' };
+#if ENABLE_INPUT_SYSTEM
+            spaceAction = new InputAction(type: InputActionType.Button, binding: "<Keyboard>/space");
+            spaceAction.performed += QueueSpacePress;
+#endif
         }
 
         public override void OnSelect(BaseEventData eventData)
@@ -70,6 +81,9 @@ namespace Codetective.Terminal
             TextInputFocus.Register(this);
             if (textComponent != null) textComponent.canvasRenderer.SetAlpha(1f);
             Canvas.preWillRenderCanvases += DrawInlinePreview;
+#if ENABLE_INPUT_SYSTEM
+            spaceAction?.Enable();
+#endif
         }
 
         protected virtual void Update()
@@ -112,21 +126,46 @@ namespace Codetective.Terminal
             if (keyboard == null) return;
             if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame) Poll(CompletionKey.Enter);
             if (keyboard.tabKey.wasPressedThisFrame) Poll(CompletionKey.Tab);
-            if (keyboard.spaceKey.wasPressedThisFrame && keyEventFrames[(int)CompletionKey.Space] != Time.frameCount &&
-                !keyboard.ctrlKey.isPressed && !keyboard.altKey.isPressed && !keyboard.leftMetaKey.isPressed && !keyboard.rightMetaKey.isPressed)
+            if (!allowSpaceText)
             {
-                if (allowSpaceText) ProcessSpaceKey(typedSpace, Time.frameCount);
-                else Poll(CompletionKey.Space);
+                ConsumeSpacePress(allowSpaceText: false);
+                return;
+            }
+            while (pendingSpacePresses > 0) ConsumeSpacePress(allowSpaceText: true);
+            if (spaceKeyboard != null && spaceKeyboard.spaceKey.isPressed && !ModifiedSpace(spaceKeyboard) && Time.unscaledTime >= repeatSpaceAt)
+            {
+                repeatSpaceAt = Time.unscaledTime + SpaceRepeatInterval;
+                InsertSpace(typedSpace);
             }
 #endif
         }
 
         private void Poll(CompletionKey key)
         {
-            int frame = Time.frameCount;
-            if (keyEventFrames[(int)key] == frame) return;
-            if (HandleCompletionKey(key) && key == CompletionKey.Space) spaceKeyFrame = frame;
+            if (keyEventFrames[(int)key] != Time.frameCount) HandleCompletionKey(key);
         }
+
+#if ENABLE_INPUT_SYSTEM
+        private static bool ModifiedSpace(Keyboard keyboard) =>
+            keyboard.ctrlKey.isPressed || keyboard.altKey.isPressed || keyboard.leftMetaKey.isPressed || keyboard.rightMetaKey.isPressed;
+
+        private void QueueSpacePress(InputAction.CallbackContext context)
+        {
+            if (!isFocused || !IsInteractable() || EventSystem.current == null || EventSystem.current.currentSelectedGameObject != gameObject ||
+                !(context.control.device is Keyboard keyboard) || ModifiedSpace(keyboard)) return;
+            pendingSpacePresses++;
+            spaceKeyboard = keyboard;
+            repeatSpaceAt = Time.unscaledTime + SpaceRepeatDelay;
+        }
+
+        private void ConsumeSpacePress(bool allowSpaceText)
+        {
+            if (pendingSpacePresses == 0) return;
+            bool completed = HandleCompletionKey(CompletionKey.Space);
+            if (completed || allowSpaceText) pendingSpacePresses--;
+            if (!completed && allowSpaceText) InsertSpace(typedSpace);
+        }
+#endif
 
         public override void OnUpdateSelected(BaseEventData eventData)
         {
@@ -151,7 +190,7 @@ namespace Codetective.Terminal
             bool handled;
             if (completionKey)
             {
-                if (key == CompletionKey.Space) { ProcessSpaceKey(inputEvent, Time.frameCount); UpdateLabel(); return; }
+                if (key == CompletionKey.Space) { ProcessSpaceKey(inputEvent); UpdateLabel(); return; }
                 keyEventFrames[(int)key] = Time.frameCount;
                 handled = IsHeldRepeat(key) || HandleCompletionKey(key);
             }
@@ -160,31 +199,45 @@ namespace Codetective.Terminal
             UpdateLabel();
         }
 
-        private void ProcessSpaceKey(Event inputEvent, int frame)
+        private void ProcessSpaceKey(Event inputEvent)
         {
-            keyEventFrames[(int)CompletionKey.Space] = frame;
             if (inputEvent.control || inputEvent.command || inputEvent.alt) { ProcessEditingKey(inputEvent); return; }
-            // Some backends emit only a keycode and some emit a second character event.
-            // Pair these before completion can consume the first event. The other
-            // event may arrive one frame later unless a new physical press was seen.
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null)
+            {
+                // A real key press is queued once by the Input System. IMGUI can deliver
+                // several key or character events for it, even in later frames.
+                ConsumeSpacePress(allowSpaceText: true);
+                return;
+            }
+#endif
+            ProcessNativeSpace(inputEvent);
+        }
+
+        private void ProcessNativeSpace(Event inputEvent)
+        {
+            int frame = Time.frameCount;
+            // For backends without an Input System keyboard, pair the native key and its text.
             if (inputEvent.keyCode == KeyCode.None)
             {
-                if (IsSpaceEcho(spaceKeyFrame, frame)) { spaceKeyFrame = -1; return; }
+                if (spaceKeyFrame == frame) { spaceKeyFrame = -1; return; }
                 spaceTextFrame = frame;
             }
             else
             {
-                if (IsSpaceEcho(spaceTextFrame, frame)) { spaceTextFrame = -1; return; }
-                spaceKeyFrame = frame;
+                if (spaceTextFrame == frame) { spaceTextFrame = -1; return; }
             }
-            if (!IsHeldRepeat(CompletionKey.Space) && HandleCompletionKey(CompletionKey.Space)) return;
-            if (handledFrame == frame) return;
+            bool accepted = HandleCompletionKey(CompletionKey.Space) || InsertSpace(inputEvent);
+            if (inputEvent.keyCode != KeyCode.None && accepted) spaceKeyFrame = frame;
+        }
 
+        private bool InsertSpace(Event inputEvent)
+        {
             string composition = CompositionText;
             bool committingHangul = ContainsHangul(composition);
-            if (inputEvent.keyCode != KeyCode.None && composition.Length != 0 && !committingHangul &&
+            if (composition.Length != 0 && !committingHangul &&
                 (inputEvent.character == '\0' || ReferenceEquals(inputEvent, typedSpace)))
-            { spaceKeyFrame = -1; return; }
+                return false;
             if (committingHangul)
             {
                 // Keep the native commit echo protection armed for the syllable we just inserted.
@@ -192,16 +245,15 @@ namespace Codetective.Terminal
                 KeyPressed(typedSpace);
             }
             else ProcessEditingKey(inputEvent.character == ' ' ? inputEvent : typedSpace);
+            return true;
         }
 
-        private static bool IsSpaceEcho(int otherEventFrame, int frame)
+        private void ClearSpaceInput()
         {
-            if (otherEventFrame == frame) return true;
-            if (otherEventFrame < 0 || otherEventFrame != frame - 1) return false;
+            spaceKeyFrame = spaceTextFrame = -1;
 #if ENABLE_INPUT_SYSTEM
-            return Keyboard.current == null || !Keyboard.current.spaceKey.wasPressedThisFrame;
-#else
-            return true;
+            pendingSpacePresses = 0;
+            spaceKeyboard = null;
 #endif
         }
 
@@ -384,6 +436,7 @@ namespace Codetective.Terminal
 
         public void ReleaseFocus()
         {
+            ClearSpaceInput();
             submission.Cancel(); pendingCompletion = null; preview = null; focusCaret = -1;
             wasComposing = false;
             HideInlinePreview();
@@ -402,6 +455,7 @@ namespace Codetective.Terminal
 
         public override void OnDeselect(BaseEventData eventData)
         {
+            ClearSpaceInput();
             submission.Cancel(); pendingCompletion = null; preview = null;
             IsLosingFocus = true;
             try { EndImeSession(); base.OnDeselect(eventData); }
@@ -410,6 +464,10 @@ namespace Codetective.Terminal
 
         protected override void OnDisable()
         {
+#if ENABLE_INPUT_SYSTEM
+            spaceAction?.Disable();
+#endif
+            ClearSpaceInput();
             TextInputFocus.Unregister(this);
             Canvas.preWillRenderCanvases -= DrawInlinePreview;
             submission.Cancel(); pendingCompletion = null; preview = null;
@@ -420,6 +478,9 @@ namespace Codetective.Terminal
 
         protected override void OnDestroy()
         {
+#if ENABLE_INPUT_SYSTEM
+            spaceAction?.Dispose();
+#endif
             TextInputFocus.Unregister(this);
             if (ghost != null) DestroyPreview(ghost.gameObject);
             ((IDisposable)previewLayout).Dispose();
@@ -489,7 +550,7 @@ namespace Codetective.Terminal
 
         protected virtual void OnApplicationFocus(bool focused)
         {
-            if (!focused && isFocused) { EndImeSession(); DeactivateInputField(); HideInlinePreview(); }
+            if (!focused && isFocused) { ClearSpaceInput(); EndImeSession(); DeactivateInputField(); HideInlinePreview(); }
         }
 
         private static bool TryGetCompletionKey(Event inputEvent, out CompletionKey completionKey)
@@ -510,7 +571,7 @@ namespace Codetective.Terminal
             if (key == KeyCode.Return || key == KeyCode.KeypadEnter) { completionKey = CompletionKey.Enter; return true; }
             if (key == KeyCode.Tab) { completionKey = CompletionKey.Tab; return true; }
             completionKey = CompletionKey.Space;
-            return key == KeyCode.Space;
+            return key == KeyCode.Space || inputEvent.character == ' ';
         }
 
         private static bool IsHeldRepeat(CompletionKey key)
@@ -522,7 +583,6 @@ namespace Codetective.Terminal
                 if (key == CompletionKey.Enter) return (keyboard.enterKey.isPressed || keyboard.numpadEnterKey.isPressed) &&
                     !keyboard.enterKey.wasPressedThisFrame && !keyboard.numpadEnterKey.wasPressedThisFrame;
                 if (key == CompletionKey.Tab) return keyboard.tabKey.isPressed && !keyboard.tabKey.wasPressedThisFrame;
-                return keyboard.spaceKey.isPressed && !keyboard.spaceKey.wasPressedThisFrame;
             }
 #endif
             return false;

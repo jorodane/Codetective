@@ -14,15 +14,17 @@ namespace Codetective.Terminal
         private KernelRuntime runtime;
         private Font font;
         private Mailbox mailbox;
-        private string selectedId;
+        private string selectedId, displayedId;
         private RectTransform list;
-        private Text detail, title, feedback;
+        private Text detail, sender, recipient, title, feedback;
+        private ScrollRect bodyScroll;
         private Button clinicTab, kernelTab, accept;
         private string listSignature;
         private RectTransform choiceList;
         private readonly List<Button> choiceButtons = new List<Button>();
         private string choiceSignature;
         private float nextRefresh;
+        private const float DetailLeft = 382, DetailWidth = 710, BodyTop = 220;
         private bool Interactive => gameObject.activeInHierarchy && (GetComponentInParent<TerminalController>()?.InteractionEnabled ?? true);
         public void Initialize(KernelRuntime value, Font font)
         {
@@ -40,31 +42,37 @@ namespace Codetective.Terminal
         {
             clinicTab = MonitorWidgets.Button(transform, font, new Vector2(28, -90), new Vector2(156, 44), "상담소 메일", () => ChangeMailbox(Mailbox.Clinic));
             kernelTab = MonitorWidgets.Button(transform, font, new Vector2(196, -90), new Vector2(156, 44), "Kernel 메일", () => ChangeMailbox(Mailbox.Kernel));
-            title = MonitorWidgets.Label(transform, font, new Vector2(382, -90), new Vector2(532, 48), "", 26);
-            MonitorWidgets.Button(transform, font, new Vector2(930, -90), new Vector2(162, 44), "스케줄", OpenSchedule);
-            RectTransform viewport = MonitorWidgets.Rect("Inbox", transform, new Vector2(28, -154), new Vector2(324, 466));
-            viewport.gameObject.AddComponent<Image>().color = new Color(0.02f, 0.04f, 0.03f);
-            viewport.gameObject.AddComponent<CrtMeshEffect>(); viewport.gameObject.AddComponent<RectMask2D>();
-            list = MonitorWidgets.Rect("Messages", viewport, Vector2.zero, new Vector2(324, 466));
-            var scroll = viewport.gameObject.AddComponent<CrtScrollRect>(); scroll.content = list; scroll.viewport = viewport;
-            scroll.horizontal = false; scroll.vertical = true; scroll.movementType = ScrollRect.MovementType.Clamped;
-            detail = MonitorWidgets.ScrollText(transform, font, new Vector2(382, -154), new Vector2(710, 404));
-            accept = MonitorWidgets.Button(transform, font, new Vector2(382, -578), new Vector2(710, 46), "확인", Accept);
-            RectTransform choices = MonitorWidgets.Rect("MailChoices", transform, new Vector2(382, -480), new Vector2(710, 144));
-            choices.gameObject.AddComponent<Image>().color = new Color(0.02f, 0.04f, 0.03f);
-            choices.gameObject.AddComponent<CrtMeshEffect>(); choices.gameObject.AddComponent<RectMask2D>();
-            choiceList = MonitorWidgets.Rect("Responses", choices, Vector2.zero, new Vector2(710, 144));
-            var choiceScroll = choices.gameObject.AddComponent<CrtScrollRect>(); choiceScroll.content = choiceList; choiceScroll.viewport = choices;
-            choiceScroll.horizontal = false; choiceScroll.movementType = ScrollRect.MovementType.Clamped; choiceScroll.scrollSensitivity = 30;
-            feedback = MonitorWidgets.Label(transform, font, new Vector2(28, -648), new Vector2(1064, 36), "메일을 선택해 내용을 확인하세요.", 22);
+            list = MonitorWidgets.ScrollList("Inbox", "Messages", transform, new Vector2(28, -154), new Vector2(324, 466));
+            RectTransform header = MonitorWidgets.Rect("MailHeader", transform, new Vector2(DetailLeft, -90), new Vector2(DetailWidth, 118));
+            Image background = header.gameObject.AddComponent<Image>();
+            background.color = new Color(0.055f, 0.11f, 0.08f); background.raycastTarget = false;
+            header.gameObject.AddComponent<CrtMeshEffect>();
+            sender = HeaderField(header, "보낸 사람", -8, 24);
+            recipient = HeaderField(header, "받는 사람", -40, 24);
+            title = HeaderField(header, "제목", -72, 26);
+            detail = MonitorWidgets.ScrollText(transform, font, new Vector2(DetailLeft, -BodyTop), new Vector2(DetailWidth, 404));
+            bodyScroll = detail.transform.parent.GetComponent<ScrollRect>();
+            accept = MonitorWidgets.Button(transform, font, new Vector2(DetailLeft, -578), new Vector2(DetailWidth, 46), "확인", Accept);
+            choiceList = MonitorWidgets.ScrollList("MailChoices", "Responses", transform, new Vector2(DetailLeft, -480), new Vector2(DetailWidth, 144));
+            feedback = MonitorWidgets.Label(transform, font, new Vector2(28, -648), new Vector2(1064, 36), "", 22);
         }
-        private void ChangeMailbox(Mailbox value) { mailbox = value; selectedId = null; listSignature = null; Refresh(true); }
+        private Text HeaderField(Transform header, string caption, float top, int fontSize)
+        {
+            Text label = MonitorWidgets.Label(header, font, new Vector2(12, top), new Vector2(122, 34), caption, 20);
+            label.alignment = TextAnchor.MiddleLeft;
+            label.color = Color.Lerp(MonitorWidgets.Foreground, MonitorWidgets.ButtonColor, 0.25f);
+            Text value = MonitorWidgets.Label(header, font, new Vector2(138, top), new Vector2(DetailWidth - 150, 34), "", fontSize);
+            value.alignment = TextAnchor.MiddleLeft;
+            value.resizeTextForBestFit = true; value.resizeTextMinSize = 16; value.resizeTextMaxSize = fontSize;
+            return value;
+        }
+        private void ChangeMailbox(Mailbox value) { mailbox = value; selectedId = null; listSignature = null; feedback.text = ""; Refresh(true); }
         public void ShowMailbox(Mailbox value) => ChangeMailbox(value);
         public void ShowMessage(string id)
         {
             StoryMail message = runtime.Inbox(Mailbox.Clinic).Concat(runtime.Inbox(Mailbox.Kernel)).FirstOrDefault(m => m.id == id);
             if (message == null) return;
-            mailbox = message.mailbox; selectedId = id; listSignature = null; Refresh(Interactive);
+            mailbox = message.mailbox; selectedId = id; listSignature = null; feedback.text = ""; Refresh(Interactive);
         }
         private void Refresh(bool openFirst)
         {
@@ -76,14 +84,13 @@ namespace Codetective.Terminal
             if (signature != listSignature)
             {
                 listSignature = signature;
-                foreach (Transform child in list.Cast<Transform>().ToArray())
-                { child.gameObject.SetActive(false); if (Application.isPlaying) Destroy(child.gameObject); else DestroyImmediate(child.gameObject); }
+                MonitorWidgets.ClearRows(list);
                 for (int i = 0; i < messages.Length; i++)
                 {
                     StoryMail message = messages[i];
                     Button button = MonitorWidgets.Button(list, font, new Vector2(0, -i * 90), new Vector2(324, 82),
                         (runtime.IsMailRead(message.id) ? "" : "● ") + message.subject + (string.IsNullOrEmpty(runtime.SelectedMailChoice(message.id)) ? "" : " [답변 완료]"), () =>
-                        { if (!Interactive) return; selectedId = message.id; runtime.ReadMail(selectedId); feedback.text = "메일 내용을 확인하세요."; Refresh(false); });
+                        { if (!Interactive) return; selectedId = message.id; runtime.ReadMail(selectedId); feedback.text = ""; Refresh(false); });
                     button.GetComponentInChildren<Text>().fontSize = 21;
                     if (message.id == selectedId) button.image.color = new Color(0.16f, 0.32f, 0.23f);
                 }
@@ -92,16 +99,24 @@ namespace Codetective.Terminal
             clinicTab.image.color = mailbox == Mailbox.Clinic ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor;
             kernelTab.image.color = mailbox == Mailbox.Kernel ? new Color(0.16f, 0.32f, 0.23f) : MonitorWidgets.ButtonColor;
             StoryMail selected = messages.FirstOrDefault(m => m.id == selectedId);
-            title.text = selected?.subject ?? (mailbox == Mailbox.Kernel ? "Kernel 메일함" : "상담소 메일함");
-            detail.text = selected == null ? "도착한 메일이 없습니다." : "보낸 사람: " + selected.sender + "\nDAY " + selected.day + "\n\n" + selected.body;
+            sender.text = string.IsNullOrWhiteSpace(selected?.sender) ? "—" : selected.sender;
+            recipient.text = string.IsNullOrWhiteSpace(selected?.recipient) ? (mailbox == Mailbox.Kernel ? "Kernel" : "상담소") : selected.recipient;
+            title.text = string.IsNullOrWhiteSpace(selected?.subject) ? "—" : selected.subject;
+            string body = selected == null ? "도착한 메일이 없습니다." : "DAY " + selected.day + "\n\n" + selected.body;
             if (selected?.HasReservation == true)
             {
                 ReservationRequest request = selected.reservation;
-                detail.text += "\n\n예약 문의: DAY " + request.day + " / " + KernelRuntime.TimeOfDay(request.appointment.startMinute) +
+                body += "\n\n예약 문의: DAY " + request.day + " / " + KernelRuntime.TimeOfDay(request.appointment.startMinute) +
                     (request.appointment.endMinute > 0 ? " ~ " + KernelRuntime.TimeOfDay(request.appointment.endMinute) : "") + "\n" + request.appointment.patientName;
             }
-            if (selected != null && !string.IsNullOrEmpty(runtime.SelectedMailChoice(selected.id))) detail.text += "\n\n답변: " + runtime.SelectedMailChoiceLabel(selected.id);
-            RefreshChoices(selected);
+            if (selected != null && !string.IsNullOrEmpty(runtime.SelectedMailChoice(selected.id))) body += "\n\n답변: " + runtime.SelectedMailChoiceLabel(selected.id);
+            detail.text = RefreshChoices(selected, body);
+            if (displayedId != selectedId)
+            {
+                displayedId = selectedId;
+                bodyScroll.StopMovement();
+                detail.rectTransform.anchoredPosition = Vector2.zero;
+            }
             accept.gameObject.SetActive(selected != null && selected.requiresAcceptance);
             if (selected != null)
             {
@@ -115,23 +130,25 @@ namespace Codetective.Terminal
             try { runtime.AcceptMail(selectedId); feedback.text = "업무를 수락했습니다. 다음 내용을 확인하세요."; Refresh(false); }
             catch (CommandException error) { feedback.text = error.Message; }
         }
-        private void RefreshChoices(StoryMail selected)
+        private string RefreshChoices(StoryMail selected, string body)
         {
             MailChoice[] choices = selected?.choices ?? Array.Empty<MailChoice>();
             choiceList.parent.gameObject.SetActive(choices.Length > 0);
-            ((RectTransform)detail.transform.parent).sizeDelta = new Vector2(710, choices.Length > 0 ? 310 : 404);
+            float bottom = choices.Length > 0 ? 466 : selected?.requiresAcceptance == true ? 564 : 624;
+            bodyScroll.viewport.sizeDelta = new Vector2(DetailWidth, bottom - BodyTop);
             string signature = selected?.id + "|" + string.Join("|", choices.Select(c => c.id));
             if (choiceSignature != signature)
             {
                 choiceSignature = signature;
-                foreach (Transform child in choiceList) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
+                MonitorWidgets.ClearRows(choiceList);
                 choiceButtons.Clear();
                 for (int i = 0; i < choices.Length; i++)
                 {
                     string choiceId = choices[i].id;
-                    choiceButtons.Add(MonitorWidgets.Button(choiceList, font, new Vector2(0, -i * 48), new Vector2(710, 42), choices[i].label, () => Choose(choiceId)));
+                    choiceButtons.Add(MonitorWidgets.Button(choiceList, font, new Vector2(0, -i * 48), new Vector2(DetailWidth, 42), choices[i].label, () => Choose(choiceId)));
                 }
-                choiceList.sizeDelta = new Vector2(710, Math.Max(144, choices.Length * 48));
+                choiceList.sizeDelta = new Vector2(DetailWidth, Math.Max(144, choices.Length * 48));
+                choiceList.anchoredPosition = Vector2.zero;
             }
             for (int i = 0; i < choices.Length; i++)
             {
@@ -140,8 +157,9 @@ namespace Codetective.Terminal
                 bool chosen = runtime.SelectedMailChoice(selected.id) == choices[i].id;
                 choiceButtons[i].GetComponentInChildren<Text>().text = (chosen ? "✓ " : "") + choices[i].label + (chosen ? " [답변 완료]" : "");
                 if (string.IsNullOrEmpty(runtime.SelectedMailChoice(selected.id)) && choices[i].approvesReservation && denial != null && runtime.IsMailRead(selected.id))
-                    detail.text += "\n\n승인 불가: " + denial;
+                    body += "\n\n승인 불가: " + denial;
             }
+            return body;
         }
         private void Choose(string choiceId)
         {
@@ -149,17 +167,17 @@ namespace Codetective.Terminal
             try
             {
                 runtime.ChooseMail(selectedId, choiceId);
-                feedback.text = runtime.IsMailAccepted(selectedId) && runtime.Inbox(mailbox).First(m => m.id == selectedId).HasReservation ?
-                    "예약을 승인했습니다. 스케줄에서 확인하세요." : "답변을 기록했습니다: " + runtime.SelectedMailChoiceLabel(selectedId);
+                StoryMail selected = runtime.Inbox(mailbox).First(m => m.id == selectedId);
+                if (selected.HasReservation && runtime.IsMailAccepted(selectedId))
+                {
+                    MonitorPageHost host = GetComponentInParent<MonitorPageHost>();
+                    if (host != null) host.SelectedScheduleDay = selected.reservation.day;
+                    feedback.text = "예약을 승인했습니다. 스케줄에서 확인하세요.";
+                }
+                else feedback.text = "답변을 기록했습니다: " + runtime.SelectedMailChoiceLabel(selectedId);
                 Refresh(false);
             }
             catch (CommandException error) { feedback.text = error.Message; }
-        }
-        private void OpenSchedule()
-        {
-            MonitorPageHost host = GetComponentInParent<MonitorPageHost>();
-            StoryMail selected = runtime.Inbox(mailbox).FirstOrDefault(m => m.id == selectedId);
-            host.SelectedScheduleDay = selected?.HasReservation == true ? selected.reservation.day : runtime.Day; host.ShowPage("schedule");
         }
     }
 }
