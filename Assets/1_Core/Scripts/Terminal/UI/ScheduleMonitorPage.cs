@@ -12,9 +12,12 @@ namespace Codetective.Terminal
     public sealed class ScheduleMonitorPage : MonoBehaviour, IMonitorPageContent
     {
         private const int Width = 1064;
-        private const int TimeWidth = 212;
-        private const int NameWidth = 244;
-        private const int ContentWidth = Width - TimeWidth;
+        private const int TableWidth = 650;
+        private const int DetailGap = 24;
+        private const int DetailWidth = Width - TableWidth - DetailGap;
+        private const int TimeWidth = 112;
+        private const int NameWidth = 180;
+        private const int ContentWidth = TableWidth - TimeWidth;
         private const int HourHeight = 54;
         private const int CellGap = 3;
         private const int Hours = (ClinicHours.Closing - ClinicHours.Opening) / ClinicHours.MinutesPerSlot;
@@ -22,6 +25,7 @@ namespace Codetective.Terminal
         private static readonly Color SlotColor = new Color(0.038f, 0.061f, 0.045f);
         private static readonly Color TimeColor = new Color(0.065f, 0.105f, 0.077f);
         private static readonly Color LunchColor = new Color(0.082f, 0.071f, 0.047f);
+        private static readonly Color ActiveAppointmentColor = Color.Lerp(MonitorWidgets.ButtonColor, MonitorWidgets.SelectedButtonColor, 0.4f);
         private static readonly Color SelectionBorderColor = Color.Lerp(MonitorWidgets.Foreground, MonitorWidgets.SelectedButtonColor, 0.22f);
 
         private KernelRuntime runtime;
@@ -30,11 +34,15 @@ namespace Codetective.Terminal
         private Font font;
         private RectTransform table, emptyCells, appointmentCells, calendar, calendarDays, appointmentDetails;
         private Text dateLabel, monthLabel, appointmentText;
+        private CrtScrollRect appointmentScroll;
         private Button previousDay, nextDay, previousMonth, nextMonth;
+        private readonly Button[] timeCells = new Button[Hours];
+        private readonly string[] appointmentAtHour = new string[Hours];
+        private readonly Dictionary<string, (Button button, Color normalColor)> appointmentButtons = new Dictionary<string, (Button, Color)>();
         private DateTime firstDate, calendarMonth;
         private int selectedDay, lastDay, maxDay;
-        private string tableSignature, openAppointmentId;
-        private int detailsRevision;
+        private string tableSignature, selectedAppointmentId;
+        private int detailsRevision = -1;
         private float nextRefresh;
 
         public void Initialize(KernelRuntime value, Font typeface)
@@ -45,7 +53,7 @@ namespace Codetective.Terminal
             firstDate = runtime.DateAt(1, 0).Value.Date;
             maxDay = (DateTime.MaxValue.Date - firstDate).Days + 1;
             if (table == null) Build();
-            selectedDay = 0; tableSignature = null;
+            selectedDay = 0; tableSignature = null; detailsRevision = -1;
             Refresh();
         }
 
@@ -77,17 +85,22 @@ namespace Codetective.Terminal
             dateLabel = date.GetComponentInChildren<Text>(true); dateLabel.fontSize = 26;
             nextDay = MonitorWidgets.Button(transform, font, new Vector2(690, -90), arrowSize, ">", () => ShowDay(selectedDay + 1));
 
-            table = MonitorWidgets.Rect("Timetable", transform, new Vector2(28, -176), new Vector2(Width, Hours * HourHeight));
+            table = MonitorWidgets.Rect("Timetable", transform, new Vector2(28, -176), new Vector2(TableWidth, Hours * HourHeight));
             CellLabel(table, new Vector2(0, 36), new Vector2(TimeWidth - CellGap, 30), "상담 시간", 22, TextAnchor.MiddleCenter);
-            CellLabel(table, new Vector2(TimeWidth + 12, 36), new Vector2(ContentWidth - 24, 30), "예약", 22);
+            CellLabel(table, new Vector2(TimeWidth + 12, 36), new Vector2(NameWidth - 24, 30), "이름", 22);
+            CellLabel(table, new Vector2(TimeWidth + NameWidth + 12, 36), new Vector2(ContentWidth - NameWidth - 24, 30), "상담 제목", 22);
             for (int row = 0; row < Hours; row++)
             {
                 int start = ClinicHours.Opening + row * ClinicHours.MinutesPerSlot;
-                bool bookableHour = ClinicHours.IsBookableHour(start);
-                var clock = Panel("Time", table, new Vector2(0, -row * HourHeight), new Vector2(TimeWidth - CellGap, HourHeight - CellGap),
-                    bookableHour ? TimeColor : LunchColor);
-                string time = KernelRuntime.TimeOfDay(start) + " ~ " + KernelRuntime.TimeOfDay(start + ClinicHours.MinutesPerSlot);
-                FitCell(CellLabel(clock, Vector2.zero, clock.sizeDelta, bookableHour ? time : time + "\n점심시간", bookableHour ? 24 : 20, TextAnchor.MiddleCenter));
+                int hour = row;
+                Button clock = MonitorWidgets.Button(table, font, new Vector2(0, -row * HourHeight),
+                    new Vector2(TimeWidth - CellGap, HourHeight - CellGap), KernelRuntime.TimeOfDay(start),
+                    () => SelectAppointment(appointmentAtHour[hour]));
+                clock.name = "Time";
+                clock.image.color = TimeColor;
+                clock.transition = Selectable.Transition.None;
+                clock.interactable = false;
+                timeCells[row] = clock;
             }
             Vector2 cellOrigin = new Vector2(TimeWidth, 0);
             Vector2 cellSize = new Vector2(ContentWidth, table.sizeDelta.y);
@@ -105,11 +118,12 @@ namespace Codetective.Terminal
             calendarDays = MonitorWidgets.Rect("CalendarDays", calendar, new Vector2(0, -94), new Vector2(Width, 408));
             calendar.gameObject.SetActive(false);
 
-            appointmentDetails = MonitorWidgets.Rect("AppointmentDetails", transform, origin, size);
-            CellLabel(appointmentDetails, Vector2.zero, new Vector2(860, 44), "상담 내용", 28);
-            MonitorWidgets.Button(appointmentDetails, font, new Vector2(904, 0), new Vector2(160, 44), "닫기", ShowTable);
-            appointmentText = MonitorWidgets.ScrollText(appointmentDetails, font, new Vector2(0, -60), new Vector2(Width, size.y - 60));
-            appointmentDetails.gameObject.SetActive(false);
+            appointmentDetails = MonitorWidgets.Rect("AppointmentDetails", transform, new Vector2(28 + TableWidth + DetailGap, -140),
+                new Vector2(DetailWidth, table.sizeDelta.y + 36));
+            CellLabel(appointmentDetails, new Vector2(0, -2), new Vector2(DetailWidth, 30), "상담 상세", 22);
+            appointmentText = MonitorWidgets.ScrollText(appointmentDetails, font, new Vector2(0, -36), new Vector2(DetailWidth, table.sizeDelta.y));
+            appointmentScroll = appointmentText.transform.parent.GetComponent<CrtScrollRect>();
+            appointmentText.fontSize = 23;
         }
 
         private static RectTransform Panel(string name, RectTransform parent, Vector2 position, Vector2 size, Color color)
@@ -136,6 +150,7 @@ namespace Codetective.Terminal
             if (target != selectedDay)
             {
                 selectedDay = target;
+                SetSelectedAppointment(null);
                 ShowTable();
             }
             DateTime date = firstDate.AddDays(selectedDay - 1);
@@ -144,13 +159,17 @@ namespace Codetective.Terminal
             nextDay.interactable = selectedDay < maxDay;
             if (calendar.gameObject.activeSelf && lastDay != runtime.Day) DrawCalendar();
             lastDay = runtime.Day;
-            if (table.gameObject.activeSelf) DrawAppointments();
-            if (appointmentDetails.gameObject.activeSelf && detailsRevision != runtime.Revision) RefreshAppointment();
+            if (!table.gameObject.activeSelf) return;
+
+            AppointmentProgress[] visits = runtime.ScheduleForDay(selectedDay).Where(visit => visit.endMinute > visit.startMinute).ToArray();
+            if (!visits.Any(visit => visit.id == selectedAppointmentId))
+                SetSelectedAppointment(visits.FirstOrDefault()?.id);
+            DrawAppointments(visits);
+            if (detailsRevision != runtime.Revision) RefreshAppointment();
         }
 
-        private void DrawAppointments()
+        private void DrawAppointments(AppointmentProgress[] visits)
         {
-            var visits = runtime.ScheduleForDay(selectedDay);
             int latestUnavailableHour = selectedDay == runtime.Day ? (int)runtime.Minute / ClinicHours.MinutesPerSlot * ClinicHours.MinutesPerSlot :
                 selectedDay < runtime.Day ? ClinicHours.Closing : 0;
             string signature = $"{selectedDay}:{latestUnavailableHour}|" + string.Join("|", visits.Select(v =>
@@ -159,13 +178,21 @@ namespace Codetective.Terminal
             tableSignature = signature;
             MonitorWidgets.ClearRows(emptyCells);
             MonitorWidgets.ClearRows(appointmentCells);
+            appointmentButtons.Clear();
 
             // Older saves keep their real times. Snap their visible bounds to the nearest hour and give short visits a full cell.
-            var bookings = visits.Where(visit => visit.endMinute > visit.startMinute).Select(visit =>
+            var bookings = visits.Select(visit =>
             {
                 int first = Math.Min(Hours - 1, HourBoundary(visit.startMinute));
                 return (visit: visit, first: first, end: Math.Max(first + 1, HourBoundary(visit.endMinute)), column: 0);
             }).OrderBy(booking => booking.first).ToArray();
+            for (int hour = 0; hour < Hours; hour++)
+            {
+                var booked = bookings.Where(booking => booking.first <= hour && hour < booking.end).Take(2).ToArray();
+                appointmentAtHour[hour] = booked.Length == 1 ? booked[0].visit.id : null;
+                timeCells[hour].interactable = appointmentAtHour[hour] != null;
+                timeCells[hour].image.raycastTarget = timeCells[hour].interactable;
+            }
 
             int row = 0;
             var columnEnds = new List<int>();
@@ -211,39 +238,40 @@ namespace Codetective.Terminal
         {
             int start = ClinicHours.Opening + row * ClinicHours.MinutesPerSlot;
             bool bookableHour = ClinicHours.IsBookableHour(start);
+            Color color = bookableHour ? SlotColor : LunchColor;
             var slot = Panel("Slot", emptyCells, new Vector2(0, -row * HourHeight), new Vector2(ContentWidth, HourHeight - CellGap),
-                bookableHour ? SlotColor : LunchColor);
-            if (bookableHour && start > latestUnavailableHour)
-                CellLabel(slot, new Vector2(12, 0), new Vector2(ContentWidth - 24, slot.sizeDelta.y), "예약 가능", 22).color =
-                    Color.Lerp(MonitorWidgets.Foreground, SlotColor, 0.38f);
+                color);
+            string label = bookableHour ? (start > latestUnavailableHour ? "예약 가능" : "") : "점심시간";
+            if (label.Length > 0)
+                CellLabel(slot, new Vector2(12, 0), new Vector2(ContentWidth - 24, slot.sizeDelta.y), label, 22).color =
+                    Color.Lerp(MonitorWidgets.Foreground, color, 0.38f);
         }
 
         private void DrawAppointmentCell(AppointmentProgress visit, Vector2 position, Vector2 size)
         {
-            Button button = MonitorWidgets.Button(appointmentCells, font, position, size, visit.patientName, () => OpenAppointment(visit.id));
+            Button button = MonitorWidgets.Button(appointmentCells, font, position, size, visit.patientName, () => SelectAppointment(visit.id));
             button.name = visit.id;
-            if (visit.phase != VisitPhase.Waiting && visit.phase != VisitPhase.Finished)
-                button.image.color = MonitorWidgets.SelectedButtonColor;
+            Color normalColor = visit.phase == VisitPhase.Waiting || visit.phase == VisitPhase.Finished ? MonitorWidgets.ButtonColor : ActiveAppointmentColor;
+            button.image.color = visit.id == selectedAppointmentId ? MonitorWidgets.SelectedButtonColor : normalColor;
+            appointmentButtons.Add(visit.id, (button, normalColor));
             var cell = (RectTransform)button.transform;
             bool hasTitle = !string.IsNullOrWhiteSpace(visit.title);
             float padding = Mathf.Min(12, size.x * 0.06f);
-            float arrowWidth = Mathf.Min(42, size.x * 0.18f);
-            float visitorWidth = hasTitle ? Mathf.Min(NameWidth, size.x * 0.43f) : size.x - arrowWidth;
+            float visitorWidth = hasTitle ? Mathf.Min(NameWidth, size.x * 0.43f) : size.x;
             var visitor = button.GetComponentInChildren<Text>(true);
             visitor.rectTransform.anchoredPosition = new Vector2(padding, 0);
             visitor.rectTransform.sizeDelta = new Vector2(visitorWidth - 2 * padding, size.y);
             visitor.alignment = TextAnchor.MiddleLeft;
-            visitor.fontSize = 26;
+            visitor.fontSize = 24;
             visitor.fontStyle = FontStyle.Bold;
             FitCell(visitor);
             if (hasTitle)
             {
                 var title = CellLabel(cell, new Vector2(visitorWidth + padding, 0),
-                    new Vector2(size.x - visitorWidth - arrowWidth - 2 * padding, size.y), visit.title, 24);
+                    new Vector2(size.x - visitorWidth - 2 * padding, size.y), visit.title, 23);
                 title.name = "Title";
                 FitCell(title);
             }
-            FitCell(CellLabel(cell, new Vector2(size.x - arrowWidth, 0), new Vector2(arrowWidth - padding, size.y), "›", 24, TextAnchor.MiddleRight));
         }
 
         private static void FitCell(Text label)
@@ -255,19 +283,17 @@ namespace Codetective.Terminal
 
         private void ShowTable()
         {
-            openAppointmentId = null;
-            appointmentDetails.gameObject.SetActive(false);
             calendar.gameObject.SetActive(false);
             table.gameObject.SetActive(true);
-            if (selectedDay > 0) DrawAppointments();
+            appointmentDetails.gameObject.SetActive(true);
         }
 
         private void ToggleCalendar()
         {
-            if (calendar.gameObject.activeSelf) { ShowTable(); return; }
+            if (calendar.gameObject.activeSelf) { ShowTable(); Refresh(); return; }
             DateTime date = firstDate.AddDays(selectedDay - 1);
             calendarMonth = new DateTime(date.Year, date.Month, 1);
-            appointmentDetails.gameObject.SetActive(false); openAppointmentId = null;
+            appointmentDetails.gameObject.SetActive(false);
             table.gameObject.SetActive(false);
             calendar.gameObject.SetActive(true);
             DrawCalendar();
@@ -306,23 +332,35 @@ namespace Codetective.Terminal
             }
         }
 
-        private void OpenAppointment(string id)
+        private void SelectAppointment(string id)
         {
-            if (!isActiveAndEnabled || host.SystemMenuVisible || !terminal.InteractionEnabled) return;
-            openAppointmentId = id;
-            if (!RefreshAppointment()) return;
-            CrtScrollRect scroll = appointmentText.GetComponentInParent<CrtScrollRect>(true);
-            scroll.StopMovement();
-            appointmentText.rectTransform.anchoredPosition = Vector2.zero;
-            table.gameObject.SetActive(false);
-            appointmentDetails.gameObject.SetActive(true);
+            if (id == null || !isActiveAndEnabled || !table.gameObject.activeSelf || host.SystemMenuVisible || !terminal.InteractionEnabled ||
+                !appointmentButtons.ContainsKey(id)) return;
+            SetSelectedAppointment(id);
+            if (detailsRevision != runtime.Revision) RefreshAppointment();
         }
 
-        private bool RefreshAppointment()
+        private void SetSelectedAppointment(string id)
+        {
+            if (id == selectedAppointmentId) return;
+            if (selectedAppointmentId != null && appointmentButtons.TryGetValue(selectedAppointmentId, out var previous))
+                previous.button.image.color = previous.normalColor;
+            selectedAppointmentId = id;
+            if (id != null && appointmentButtons.TryGetValue(id, out var current))
+                current.button.image.color = MonitorWidgets.SelectedButtonColor;
+            detailsRevision = -1;
+            appointmentScroll.StopMovement();
+            appointmentText.rectTransform.anchoredPosition = Vector2.zero;
+        }
+
+        private void RefreshAppointment()
         {
             detailsRevision = runtime.Revision;
-            try { appointmentText.text = runtime.AppointmentDetailsText(selectedDay, openAppointmentId); return true; }
-            catch (CommandException) { ShowTable(); return false; }
+            try
+            {
+                appointmentText.text = selectedAppointmentId == null ? "예약이 없습니다." : runtime.AppointmentDetailsText(selectedDay, selectedAppointmentId);
+            }
+            catch (CommandException error) { appointmentText.text = error.Message; }
         }
     }
 }

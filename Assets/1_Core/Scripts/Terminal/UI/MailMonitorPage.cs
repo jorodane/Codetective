@@ -11,6 +11,7 @@ namespace Codetective.Terminal
     [DisallowMultipleComponent, RequireComponent(typeof(MonitorPage))]
     public sealed class MailMonitorPage : MonoBehaviour, IMonitorPageContent
     {
+        private static readonly CultureInfo KoreanDateCulture = CultureInfo.GetCultureInfo("ko-KR");
         [SerializeField] private Mailbox initialMailbox = Mailbox.Kernel;
         private KernelRuntime runtime;
         private Font font;
@@ -26,7 +27,7 @@ namespace Codetective.Terminal
         private string choiceSignature;
         private float nextRefresh;
         private const float InboxWidth = 368, InboxHeight = 458, RowHeight = 76;
-        private const float DateWidth = 112, ConfirmationWidth = 80, SubjectWidth = InboxWidth - DateWidth - ConfirmationWidth;
+        private const float DateWidth = 100, ConfirmationWidth = 44, SubjectWidth = InboxWidth - DateWidth - ConfirmationWidth;
         private const float DetailLeft = 418, DetailWidth = 674, BodyTop = 252;
         private bool Interactive => gameObject.activeInHierarchy && (GetComponentInParent<TerminalController>()?.InteractionEnabled ?? true);
         public void Initialize(KernelRuntime value, Font font)
@@ -48,7 +49,7 @@ namespace Codetective.Terminal
             RectTransform headings = MonitorWidgets.Rect("InboxHeadings", transform, new Vector2(28, -140), new Vector2(InboxWidth, 26));
             ListField(headings, 0, DateWidth, 26, "날짜", 20);
             ListField(headings, DateWidth, SubjectWidth, 26, "제목", 20);
-            ListField(headings, DateWidth + SubjectWidth, ConfirmationWidth, 26, "확인", 20);
+            ListField(headings, DateWidth + SubjectWidth, ConfirmationWidth, 26, "확인", 16);
             list = MonitorWidgets.ScrollList("Inbox", "Messages", transform, new Vector2(28, -170), new Vector2(InboxWidth, InboxHeight));
             RectTransform header = MonitorWidgets.Rect("MailHeader", transform, new Vector2(DetailLeft, -90), new Vector2(DetailWidth, 150));
             Image background = header.gameObject.AddComponent<Image>();
@@ -71,7 +72,8 @@ namespace Codetective.Terminal
             return field;
         }
 
-        private string DisplayDate(int day) => runtime.DateAt(day, 0).Value.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture);
+        private string DisplayDate(int day, bool showWeekday = false) =>
+            runtime.DateAt(day, 0).Value.ToString(showWeekday ? "yy.MM.dd (ddd)" : "yy.MM.dd", KoreanDateCulture);
 
         private Text HeaderField(Transform header, string caption, float top, int fontSize)
         {
@@ -98,7 +100,7 @@ namespace Codetective.Terminal
             if (selectedId == null && messages.Length > 0) selectedId = messages[0].id;
             if (openFirst && selectedId != null && Interactive && (GetComponentInParent<MonitorPageHost>()?.AutoReadMailAllowed?.Invoke() ?? true)) runtime.ReadMail(selectedId);
             string signature = string.Join("|", messages.Select(m =>
-                $"{m.id}:{DisplayDate(m.day)}:{runtime.IsMailRead(m.id)}:{runtime.SelectedMailChoice(m.id)}")) + selectedId;
+                $"{m.id}:{DisplayDate(m.day)}:{runtime.IsMailRead(m.id)}")) + selectedId;
             if (signature != listSignature)
             {
                 listSignature = signature;
@@ -112,7 +114,7 @@ namespace Codetective.Terminal
             sender.text = string.IsNullOrWhiteSpace(selected?.sender) ? "—" : selected.sender;
             recipient.text = string.IsNullOrWhiteSpace(selected?.recipient) ? (mailbox == Mailbox.Kernel ? "Kernel" : "상담소") : selected.recipient;
             title.text = string.IsNullOrWhiteSpace(selected?.subject) ? "—" : selected.subject;
-            date.text = selected != null ? DisplayDate(selected.day) : "—";
+            date.text = selected != null ? DisplayDate(selected.day, showWeekday: true) : "—";
             string body = selected == null ? "도착한 메일이 없습니다." : selected.body ?? "";
             if (selected?.HasReservation == true)
             {
@@ -159,12 +161,29 @@ namespace Codetective.Terminal
             sentDate.resizeTextForBestFit = true;
             sentDate.resizeTextMinSize = 16; sentDate.resizeTextMaxSize = 20;
 
-            bool read = runtime.IsMailRead(message.id);
-            string status = read ? "확인" : "미확인";
-            if (!string.IsNullOrEmpty(runtime.SelectedMailChoice(message.id))) status += "\n답변 완료";
-            Text confirmation = ListField(button.transform, DateWidth + SubjectWidth, ConfirmationWidth, height, status, 17);
-            confirmation.name = "Confirmation";
-            confirmation.color = read ? Color.Lerp(MonitorWidgets.Foreground, MonitorWidgets.ButtonColor, 0.24f) : MonitorWidgets.Foreground;
+            if (runtime.IsMailRead(message.id)) AddReadCheck(button.transform, height);
+        }
+
+        private static void AddReadCheck(Transform row, float height)
+        {
+            Vector2 size = new Vector2(16, 14);
+            var check = MonitorWidgets.Rect("ReadCheck", row,
+                new Vector2(InboxWidth - (ConfirmationWidth + size.x) * 0.5f, (size.y - height) * 0.5f), size);
+            // The terminal font does not contain a check mark glyph.
+            DrawCheckStroke(check, new Vector2(1, -7), 7, -45);
+            DrawCheckStroke(check, new Vector2(5.8f, -11.8f), 13, 49);
+        }
+
+        private static void DrawCheckStroke(Transform check, Vector2 start, float length, float angle)
+        {
+            var stroke = MonitorWidgets.Rect("Stroke", check, start, new Vector2(length, 2.5f));
+            stroke.pivot = new Vector2(0, 0.5f);
+            stroke.anchoredPosition = start;
+            stroke.localRotation = Quaternion.Euler(0, 0, angle);
+            var image = stroke.gameObject.AddComponent<Image>();
+            image.color = MonitorWidgets.Foreground;
+            image.raycastTarget = false;
+            stroke.gameObject.AddComponent<CrtMeshEffect>();
         }
         private void Accept()
         {

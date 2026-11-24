@@ -303,14 +303,18 @@ namespace Codetective.Terminal.Tests.UI
             RectTransform empty = Field<RectTransform>(schedule, "emptyCells");
             Assert.That(visits.childCount, Is.EqualTo(1));
             Assert.That(appointment.sizeDelta.y, Is.EqualTo(hours[0].sizeDelta.y - hours[1].anchoredPosition.y));
-            Assert.That(appointment.GetComponentsInChildren<Text>().Select(label => label.text), Does.Contain("상담자"));
+            Assert.That(appointment.GetComponentsInChildren<Text>().Select(label => label.text), Is.EquivalentTo(new[] { "상담자", "예약 제목" }));
             Assert.That(appointment.Find("Title").GetComponent<Text>().text, Is.EqualTo("예약 제목"));
+            Assert.That(table.GetComponentsInChildren<Text>().Select(label => label.text), Does.Contain("이름").And.Contain("상담 제목"));
             Assert.That(empty.childCount, Is.EqualTo(hours.Length - 2));
-            Assert.That(hours[2].GetComponentInChildren<Text>().text, Is.EqualTo("11:00 ~ 12:00"));
-            Assert.That(hours[3].GetComponentInChildren<Text>().text, Is.EqualTo("12:00 ~ 13:00\n점심시간"));
-            Assert.That(empty.GetComponentsInChildren<RectTransform>().Single(slot => slot.parent == empty &&
-                slot.anchoredPosition.y == hours[2].anchoredPosition.y).GetComponentInChildren<Text>().text, Is.EqualTo("예약 가능"));
-            Assert.That(schedule.GetComponentsInChildren<Button>().Length, Is.EqualTo(4));
+            Assert.That(hours.Select(cell => cell.GetComponentInChildren<Text>().text), Is.EqualTo(Enumerable.Range(9, 9).Select(hour => $"{hour:00}:00")));
+            RectTransform[] emptySlots = empty.GetComponentsInChildren<RectTransform>().Where(slot => slot.parent == empty).ToArray();
+            Assert.That(emptySlots.Single(slot => slot.anchoredPosition.y == hours[2].anchoredPosition.y).GetComponentInChildren<Text>().text,
+                Is.EqualTo("예약 가능"));
+            Assert.That(emptySlots.Single(slot => slot.anchoredPosition.y == hours[3].anchoredPosition.y).GetComponentInChildren<Text>().text,
+                Is.EqualTo("점심시간"));
+            Assert.That(hours[1].GetComponent<Button>().interactable, Is.True);
+            Assert.That(hours[3].GetComponent<Button>().interactable, Is.False);
             Button previous = Field<Button>(schedule, "previousDay"), next = Field<Button>(schedule, "nextDay");
             Text date = Field<Text>(schedule, "dateLabel");
             Assert.That(previous.GetComponentInChildren<Text>().text, Is.EqualTo("<"));
@@ -321,6 +325,7 @@ namespace Codetective.Terminal.Tests.UI
             date.GetComponentInParent<Button>().onClick.Invoke();
             RectTransform calendar = Field<RectTransform>(schedule, "calendar");
             Assert.That(calendar.gameObject.activeSelf, Is.True); Assert.That(table.gameObject.activeSelf, Is.False);
+            Assert.That(Field<RectTransform>(schedule, "appointmentDetails").gameObject.activeSelf, Is.False);
             Button today = calendar.GetComponentsInChildren<Button>().Single(button => button.name == "1");
             Button selected = calendar.GetComponentsInChildren<Button>().Single(button => button.name == "2");
             Assert.That(today.GetComponentInChildren<Text>().text, Is.EqualTo("1"));
@@ -335,6 +340,7 @@ namespace Codetective.Terminal.Tests.UI
             calendar.GetComponentsInChildren<Button>().Single(button => button.name == "3").onClick.Invoke();
             Assert.That(date.text, Is.EqualTo("1994.02.03 (목)"));
             Assert.That(table.gameObject.activeSelf, Is.True); Assert.That(calendar.gameObject.activeSelf, Is.False);
+            Assert.That(Field<Text>(schedule, "appointmentText").text, Is.EqualTo("예약이 없습니다."));
             Assert.That(runtime.Day, Is.EqualTo(1)); Assert.That(runtime.Minute, Is.EqualTo(540));
         }
 
@@ -373,7 +379,7 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
-        public void ReservationsOpenTheirDescriptionAndFinishedVisitsIncludeTheirJournal()
+        public void SelectingAReservationUpdatesTheRightHandDetailsAndLeavesTheTimetableVisible()
         {
             runtime.RegisterClinicDay(new ClinicDayPlan { appointments = new[] {
                 new PatientAppointment { id = "morning", profileId = "client", title = "오전" },
@@ -388,19 +394,25 @@ namespace Codetective.Terminal.Tests.UI
             terminal.SetInteractionEnabled(true); host.ShowPage("schedule");
             ScheduleMonitorPage schedule = host.CurrentPage.GetComponent<ScheduleMonitorPage>();
             RectTransform visits = Field<RectTransform>(schedule, "appointmentCells");
-            Assert.That(visits.Find("1:later").GetComponentsInChildren<Text>().Select(label => label.text), Does.Not.Contain("예약할 때 전달한 자세한 이야기"));
-            visits.Find("1:later").GetComponent<Button>().onClick.Invoke();
+            RectTransform table = Field<RectTransform>(schedule, "table");
+            Button morning = visits.Find("1:morning").GetComponent<Button>();
+            Button later = visits.Find("1:later").GetComponent<Button>();
             Text contents = Field<Text>(schedule, "appointmentText");
             RectTransform details = Field<RectTransform>(schedule, "appointmentDetails");
-            Assert.That(details.gameObject.activeSelf, Is.True);
-            Assert.That(contents.text, Does.Contain("예약할 때 전달한 자세한 이야기").And.Not.Contain("오전에 남긴 기록"));
-            details.GetComponentInChildren<Button>().onClick.Invoke();
-            visits.Find("1:morning").GetComponent<Button>().onClick.Invoke();
+            Assert.That(details.anchoredPosition.x, Is.GreaterThan(table.anchoredPosition.x + table.sizeDelta.x));
             Assert.That(contents.text, Does.Contain("오전에 남긴 기록").And.Not.Contain("두 번째 상담"));
-            Assert.That(Field<RectTransform>(schedule, "table").gameObject.activeSelf, Is.False);
+            Assert.That(later.GetComponentsInChildren<Text>().Select(label => label.text), Does.Not.Contain("예약할 때 전달한 자세한 이야기"));
+            Color selectedColor = morning.image.color;
+            contents.rectTransform.anchoredPosition = new Vector2(0, 48);
+            later.onClick.Invoke();
+            Assert.That(contents.text, Does.Contain("예약할 때 전달한 자세한 이야기").And.Not.Contain("오전에 남긴 기록"));
+            Assert.That(contents.rectTransform.anchoredPosition, Is.EqualTo(Vector2.zero));
+            Assert.That(later.image.color, Is.EqualTo(selectedColor));
+            Assert.That(morning.image.color, Is.Not.EqualTo(selectedColor));
+            Field<Button[]>(schedule, "timeCells")[0].onClick.Invoke();
+            Assert.That(contents.text, Does.Contain("오전에 남긴 기록").And.Not.Contain("두 번째 상담"));
+            Assert.That(table.gameObject.activeSelf, Is.True);
             Assert.That(details.gameObject.activeSelf, Is.True);
-            details.GetComponentInChildren<Button>().onClick.Invoke();
-            Assert.That(details.gameObject.activeSelf, Is.False);
             Assert.That(Field<Text>(schedule, "dateLabel").text, Does.Contain("1994.01.01"));
         }
 
@@ -729,14 +741,14 @@ namespace Codetective.Terminal.Tests.UI
                 new MailChoice { id = "no", label = "예약 거절", result = MailChoiceResult.Declined } } });
             terminal.SetInteractionEnabled(true); host.ShowPage("mail"); MailMonitorPage mail = host.CurrentPage.GetComponent<MailMonitorPage>();
             mail.ShowMessage("booking"); Invoke(mail, "Choose", "yes");
-            Assert.That(Field<Text>(mail, "detail").text, Does.Contain("1994.01.02 / 11:00 ~ 12:00"));
+            Assert.That(Field<Text>(mail, "detail").text, Does.Contain("94.01.02 / 11:00 ~ 12:00"));
             Assert.That(host.CurrentPage.Id, Is.EqualTo("mail"));
             Field<Dictionary<string, Button>>(host, "tabs")["schedule"].onClick.Invoke();
             Assert.That(host.CurrentPage.Id, Is.EqualTo("schedule")); Assert.That(host.SelectedScheduleDay, Is.EqualTo(2));
             ScheduleMonitorPage schedule = host.CurrentPage.GetComponent<ScheduleMonitorPage>();
             Transform appointment = Field<RectTransform>(schedule, "appointmentCells").Find("mail:booking");
             Assert.That(appointment.GetComponentsInChildren<Text>().Select(label => label.text), Does.Contain("예약 손님").And.Contain("후속 상담"));
-            Assert.That(schedule.GetComponentsInChildren<Button>().Length, Is.EqualTo(4));
+            Assert.That(schedule.GetComponentsInChildren<Button>().Count(button => button.transform.parent == schedule.transform), Is.EqualTo(3));
             appointment.GetComponent<Button>().onClick.Invoke();
             Assert.That(Field<Text>(schedule, "appointmentText").text, Does.Contain("가족 돌봄에 대해 상담하고 싶습니다."));
             Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(1));
@@ -755,17 +767,17 @@ namespace Codetective.Terminal.Tests.UI
             MailMonitorPage mail = host.CurrentPage.GetComponent<MailMonitorPage>();
             RectTransform inbox = Field<RectTransform>(mail, "list");
             Transform olderMail = inbox.Find("Mail_long-mail");
-            Assert.That(olderMail.Find("Confirmation").GetComponent<Text>().text, Is.EqualTo("미확인"));
-            Assert.That(olderMail.Find("Date").GetComponent<Text>().text, Is.EqualTo("1994.01.31"));
-            Assert.That(inbox.Find("Mail_latest-mail").Find("Date").GetComponent<Text>().text, Is.EqualTo("1994.02.01"));
+            Assert.That(olderMail.Find("ReadCheck"), Is.Null);
+            Assert.That(olderMail.Find("Date").GetComponent<Text>().text, Is.EqualTo("94.01.31"));
+            Assert.That(inbox.Find("Mail_latest-mail").Find("Date").GetComponent<Text>().text, Is.EqualTo("94.02.01"));
             olderMail.GetComponent<Button>().onClick.Invoke();
-            Assert.That(inbox.Find("Mail_long-mail").Find("Confirmation").GetComponent<Text>().text, Is.EqualTo("확인"));
+            Assert.That(inbox.Find("Mail_long-mail").Find("ReadCheck"), Is.Not.Null);
             Text sender = Field<Text>(mail, "sender"), recipient = Field<Text>(mail, "recipient"),
                 title = Field<Text>(mail, "title"), date = Field<Text>(mail, "date");
             Text detail = Field<Text>(mail, "detail"); ScrollRect bodyScroll = Field<ScrollRect>(mail, "bodyScroll");
             Assert.That(mail.GetComponentsInChildren<Button>().Select(b => b.GetComponentInChildren<Text>().text),
                 Does.Not.Contain("스케줄"));
-            Assert.That(new[] { sender.text, recipient.text, title.text, date.text }, Is.EqualTo(new[] { "작전지원팀", "Kernel / 작전실", "현장 보고", "1994.01.31" }));
+            Assert.That(new[] { sender.text, recipient.text, title.text, date.text }, Is.EqualTo(new[] { "작전지원팀", "Kernel / 작전실", "현장 보고", "94.01.31 (월)" }));
             Assert.That(new[] { sender, recipient, title, date }.All(field => !field.transform.IsChildOf(bodyScroll.transform)), Is.True);
             Assert.That(detail.text, Does.Contain("본문 내용").And.Not.Contain("작전지원팀").And.Not.Contain("DAY 1"));
             Canvas.ForceUpdateCanvases();
@@ -775,7 +787,7 @@ namespace Codetective.Terminal.Tests.UI
             mail.ShowMessage("clinic-mail");
             Assert.That(recipient.text, Is.EqualTo("상담소"));
             Assert.That(title.text, Is.EqualTo("예약 문의"));
-            Assert.That(date.text, Is.EqualTo("1994.02.01"));
+            Assert.That(date.text, Is.EqualTo("94.02.01 (화)"));
             Assert.That(detail.rectTransform.anchoredPosition.y, Is.Zero.Within(0.01f));
         }
         [Test]
