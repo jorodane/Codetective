@@ -42,12 +42,24 @@ namespace Codetective.Tests.Operations
         {
             var r = ClinicScenario.Create();
             r.RecordClue(0);
-            Assert.That(r.SaveProtocol("protocol inner(Place target) { var doc = target.inspect(); return archive.analyze(doc); }").Success, Is.True);
+            Assert.That(r.SaveProtocol("protocol inner(Place target) { doc = target.inspect(); return archive.analyze(doc); }").Success, Is.True);
             Assert.That(r.SaveProtocol("protocol outer(Place target) { result = inner(target); return result; }").Success, Is.True);
             Assert.That(r.Execute("answer = outer(archive);").Success, Is.True);
             Assert.That(r.Data["answer"].value.kind, Is.EqualTo(DataKind.Analysis));
             Assert.That(r.Data.ContainsKey("doc"), Is.False);
             Assert.That(r.Execute("outer(client);").Success, Is.False);
+        }
+
+        [Test]
+        public void ExistingProtocolSourcesWithOldDeclarationsCanStillBeLoadedAndRun()
+        {
+            KernelRuntime runtime = ClinicScenario.Create();
+            const string legacy = "protocol saved() { var result = 7; return result; }";
+            Assert.That(runtime.SaveProtocol(legacy).Success, Is.False);
+            KernelSnapshot saved = runtime.Capture();
+            saved.protocols = new[] { legacy };
+            runtime.Restore(saved);
+            Assert.That(runtime.Execute("saved()").Value.number, Is.EqualTo(7));
         }
 
         [Test]
@@ -67,7 +79,7 @@ namespace Codetective.Tests.Operations
             r.RecordClue(0);
             Assert.That(r.Execute("thread01.run(recon, archive);").Success, Is.True);
             Assert.That(r.Agent("thread01").State, Is.EqualTo(AgentState.Executing));
-            Assert.That(r.Execute("save meanwhile").Success, Is.True);
+            Assert.That(r.Execute("meanwhile = 1").Success, Is.True);
             r.Tick(4);
             Assert.That(r.Agent("thread01").State, Is.EqualTo(AgentState.Executing));
             r.Tick(1);

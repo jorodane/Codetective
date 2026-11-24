@@ -267,7 +267,7 @@ namespace Codetective.Terminal
         protected virtual bool HandleEditorKey(KeyCode key, bool protectComposition) => protectComposition &&
             (key == KeyCode.Escape || key == KeyCode.UpArrow || key == KeyCode.DownArrow);
 
-        private void ProcessEditingKey(Event inputEvent)
+        protected virtual void ProcessEditingKey(Event inputEvent)
         {
             bool composing = IsComposing;
             if (composing && (inputEvent.keyCode == KeyCode.Backspace || inputEvent.keyCode == KeyCode.Delete)) return;
@@ -331,11 +331,13 @@ namespace Codetective.Terminal
                 imeSession.Consume(pendingComposition, imeInput != null ? imeInput.RawComposition : "");
                 FinishImeSession();
             }
-            SetTextWithoutNotify(accepted.Text);
+            ApplyCompletionText(accepted);
             FocusAt(accepted.Caret);
             preview = null;
             CompletionApplied?.Invoke();
         }
+
+        protected virtual void ApplyCompletionText(InlineCompletion completion) => SetTextWithoutNotify(completion.Text);
 
         public void SetInlinePreview(InlineCompletion? suggestion)
         {
@@ -434,7 +436,7 @@ namespace Codetective.Terminal
             else { m_CaretPosition = m_CaretSelectPosition = position; UpdateLabel(); }
         }
 
-        public void ReleaseFocus()
+        public virtual void ReleaseFocus()
         {
             ClearSpaceInput();
             submission.Cancel(); pendingCompletion = null; preview = null; focusCaret = -1;
@@ -507,7 +509,7 @@ namespace Codetective.Terminal
             base.OnBeginDrag(eventData);
         }
 
-        private void CommitComposition(bool restartIme = true)
+        protected void CommitComposition(bool restartIme = true)
         {
             string composition = CompositionText;
             if (composition.Length == 0) return;
@@ -517,7 +519,7 @@ namespace Codetective.Terminal
             {
                 int start = Mathf.Clamp(Mathf.Min(m_CaretPosition, m_CaretSelectPosition), 0, text.Length);
                 int end = Mathf.Clamp(Mathf.Max(m_CaretPosition, m_CaretSelectPosition), start, text.Length);
-                SetTextWithoutNotify(text.Remove(start, end - start).Insert(start, composition));
+                ApplyCompositionText(start, end, composition);
                 m_CaretPosition = m_CaretSelectPosition = Mathf.Min(text.Length, start + composition.Length);
                 onValueChanged.Invoke(text);
             }
@@ -525,6 +527,9 @@ namespace Codetective.Terminal
             wasComposing = false;
             UpdateLabel();
         }
+
+        protected virtual void ApplyCompositionText(int start, int end, string composition) =>
+            SetTextWithoutNotify(text.Remove(start, end - start).Insert(start, composition));
 
         private void EndImeSession()
         {

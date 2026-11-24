@@ -17,7 +17,7 @@ MonoBehaviour:
     mailbox: 1
     sender: 국가기록보안국 / 현장지원과
     subject: 첫 임무 배정 · Victor Hale 실종 사건
-    body: "Kernel 귀하.\n\n현장 경찰이 Global Mind Fair에서 Victor Hale 실종 신고를 접수했습니다. 행사는 NSF Public Relations Office가 주최하고 있습니다.\n\nNSF 관련 사안으로 판단해 Kernel에게 수사 지휘를 요청합니다. 승인하면 신고자 Margaret Maggie Sloan의 진술을 작전망으로 전달하겠습니다."
+    body: "Kernel 귀하.\n\n현장 경찰이 [[GlobalMindFair|Global Mind Fair]]에서 [[VictorHale|Victor Hale]] [[VictorHaleDisappearance|실종 신고]]를 접수했습니다. 행사는 [[NsfPublicRelationsOffice|NSF Public Relations Office]]가 주최하고 있습니다.\n\nNSF 관련 사안으로 판단해 Kernel에게 수사 지휘를 요청합니다. 승인하면 신고자 [[Maggie|Margaret Maggie Sloan]]의 진술을 작전망으로 전달하겠습니다."
     day: 1
     afterConversation: kernel-onboarding
     afterAppointmentId: "1:regular"

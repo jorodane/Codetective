@@ -260,6 +260,11 @@ namespace Codetective.Gameplay
             Monitor?.ShowPage(pageId);
             ShowMonitor();
         }
+        public void InsertConsultationReference(string id, string label)
+        {
+            TerminalController terminal = Monitor != null ? Monitor.GetComponent<TerminalController>() : null;
+            if (terminal != null && terminal.TryInsertObjectReference(id, label) && !terminal.InteractionEnabled) ShowMonitor();
+        }
         private void PickedUpItem(HoldableItem item)
         {
             if (item.Use == HeldItemUse.Newspaper) newspaper.Read(Runtime, item);

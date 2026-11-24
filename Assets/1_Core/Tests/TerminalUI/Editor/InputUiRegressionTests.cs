@@ -236,11 +236,28 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(field.text, Is.EqualTo("연습 = 지휘소"));
         }
 
+        [TestCase(KeyCode.Backspace)]
+        [TestCase(KeyCode.Delete)]
+        public void AReferenceUsesTheSavedCaretAndOneDeletionRemovesTheWholeLabel(KeyCode key)
+        {
+            field.SetTextWithoutNotify("result = .checkComms()");
+            const int start = 9;
+            field.selectionAnchorPosition = field.selectionFocusPosition = start;
+            events.SetSelectedGameObject(null);
+            Assert.That(field.InsertObjectReference("hq", "Operations HQ"), Is.True);
+            Assert.That(field.text, Is.EqualTo("result = Operations HQ.checkComms()"));
+            field.FocusDraft(); Invoke(typeof(CompletingInputField), field, "LateUpdate");
+            if (key == KeyCode.Delete) field.selectionAnchorPosition = field.selectionFocusPosition = start;
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = key });
+            Assert.That(field.text, Is.EqualTo("result = .checkComms()"));
+            Assert.That(field.EncodeReferences(field.text), Is.EqualTo(field.text));
+        }
+
         [Test]
         public void SubmittingAnOrdinaryCommandKeepsTheInputSelectedAndFocused()
         {
             var runtime = new KernelRuntime(); Controller(runtime, out _);
-            Submit("save sample");
+            Submit("sample = 1");
             Assert.That(runtime.Data.ContainsKey("sample"), Is.True);
             Assert.That(field.text, Is.Empty);
             Assert.That(events.currentSelectedGameObject, Is.EqualTo(field.gameObject));
@@ -251,12 +268,13 @@ namespace Codetective.Terminal.Tests.UI
         public void SubmittingAComposedNameRestoresFocusAndConsumesTheDelayedImeCommit()
         {
             var runtime = new KernelRuntime(); Controller(runtime, out _);
-            field.SetTextWithoutNotify("save "); field.FocusAtEnd(); Compose("단");
+            runtime.Store("단", Datum.Number(1));
+            field.SetTextWithoutNotify("sample = "); field.FocusAtEnd(); Compose("단");
             field.CompletionQuery = _ => null;
             PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return });
             Invoke(typeof(CompletingInputField), field, "LateUpdate");
             PumpInput(new Event { type = EventType.KeyDown, character = '단' });
-            Assert.That(runtime.Data.ContainsKey("단"), Is.True);
+            Assert.That(runtime.Data["sample"].value.number, Is.EqualTo(1));
             Assert.That(field.text, Is.Empty);
             Assert.That(field.isFocused, Is.True);
             Assert.That(events.currentSelectedGameObject, Is.EqualTo(field.gameObject));

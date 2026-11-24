@@ -61,8 +61,11 @@ namespace Codetective.Operations
             foreach (ObservationRecord report in Observations.Where(o => o.subjectId == profileId && (!string.IsNullOrWhiteSpace(o.statement) || !string.IsNullOrEmpty(o.statementKey))))
                 text.Append(ObservationText(report)).Append("\n\n");
             foreach (ConsultationLine line in Consultation.Where(l => ProfileOf(l) == profileId && RecordedClues.Contains(l.fact)).GroupBy(l => l.fact).Select(g => g.First()))
-                if (!observations.Any(o => o.subjectId == profileId && o.statement == line.sentence))
-                    text.Append("● ").Append(line.keyword).Append('\n').Append(line.sentence).Append("\n\n");
+            {
+                string statement = ObjectReferenceText.PlainText(line.sentence);
+                if (!observations.Any(o => o.subjectId == profileId && o.statement == statement))
+                    text.Append("● ").Append(line.keyword).Append('\n').Append(statement).Append("\n\n");
+            }
             return text.ToString().TrimEnd();
         }
         public string ProfileJournalText(string profileId, int pageIndex)
@@ -108,7 +111,7 @@ namespace Codetective.Operations
 
             // The saved cursor belongs to this visit, including repeats with the same lines on another day.
             ConsultationLine[] dialogue = EpisodeFor(appointment)?.lines ?? definition?.dialogue ?? Array.Empty<ConsultationLine>();
-            string[] heard = dialogue.Take(Math.Min(appointment.cursor + 1, appointment.lineCount)).Select(line => line.sentence)
+            string[] heard = dialogue.Take(Math.Min(appointment.cursor + 1, appointment.lineCount)).Select(line => ObjectReferenceText.PlainText(line.sentence))
                 .Where(line => !string.IsNullOrWhiteSpace(line)).ToArray();
             if (heard.Length > 0)
                 details.Append("\n\n상담에서 들은 내용\n").Append(string.Join("\n\n", heard));

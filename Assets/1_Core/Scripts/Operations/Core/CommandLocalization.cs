@@ -85,12 +85,12 @@ namespace Codetective.Operations
             "프로토콜 정찰(장소 대상)\n{\n    반환 대상.조사();\n}" :
             "protocol recon(Place target)\n{\n    return target.inspect();\n}";
         public string HelpForLanguage => TutorialHelp() ?? (Language == CommandLocale.Korean ?
-            "암호 이름 = 대상 : 치환 참조 등록\n암호 이름 : 빈 치환문 등록\n삭제 이름 : 치환 규칙 폐기\n대답 선택지 : 질문에 응답 (선택지만 입력해도 됩니다.)\n도움말 : 명령어 목록\n\n" +
+            "이름 = 대상 : 치환 참조 등록 또는 변경\n색으로 표시된 객체를 눌러 명령에 넣습니다.\n삭제 이름 : 치환 규칙 폐기\n대답 선택지 : 질문에 응답 (선택지만 입력해도 됩니다.)\n도움말 : 명령어 목록\n\n" +
             "기존 개체를 참조해 사용합니다. new/malloc은 지원하지 않습니다.\n" +
             "대상. → 현재 권한 목록\n이름 = 대상\n이름.변수 = 값\n이름 = 대상.명령(입력)\n" +
-            "예: 지휘소.커피요청()\n문서 = 자료실.조사()\n스레드01.프로토콜실행(정찰, 자료실)\n\n" + ExampleProtocol : Help);
+            "예를 들어 지휘소 참조에 본부라는 이름을 붙인 뒤 본부.커피요청()을 보낼 수 있습니다.\n\n" + ExampleProtocol : Help);
         public string StartupGuide => Language == CommandLocale.Korean ?
-            "지휘소. 로 권한 목록을 확인하세요.\n도움말로 명령 형식을 확인할 수 있습니다." :
-            "Type hq. to view available commands.\nType help to see command syntax.";
+            "참조 뒤에 마침표를 입력하면 권한 목록을 볼 수 있습니다.\n도움말로 명령 형식을 확인할 수 있습니다." :
+            "Add a dot after a reference to see its available commands.\nType help to see command syntax.";
     }
 }

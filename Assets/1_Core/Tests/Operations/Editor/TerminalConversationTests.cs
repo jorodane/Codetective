@@ -108,7 +108,7 @@ namespace Codetective.Tests.Operations
             Assert.That(r.Execute("answer").Success, Is.False);
             Assert.That(r.Execute("answer maybe").Success, Is.False);
             Assert.That(r.Execute("maybe").Success, Is.False);
-            Assert.That(r.Execute("code answer = 7;").Success, Is.True);
+            Assert.That(r.Execute("answer = 7;").Success, Is.True);
             Assert.That(r.Execute("answer = 9;").Success, Is.True);
             Assert.That(r.Data["answer"].value.number, Is.EqualTo(9));
             Assert.That(r.TerminalAwaitingAnswer, Is.True);
@@ -165,7 +165,7 @@ namespace Codetective.Tests.Operations
             var definition = Definition(); definition.steps[0].lines = new[] { Line("가😀a\u0301", 1) };
             KernelRuntime r = World(definition); r.AdvanceTerminalConversation(1);
             Assert.That(r.TerminalConversationTranscript(), Does.Contain("가▌").And.Not.Contain("😀"));
-            Assert.That(r.Execute("save forbidden").Success, Is.False); Assert.That(r.Data.ContainsKey("forbidden"), Is.False);
+            Assert.That(r.Execute("forbidden = 1").Success, Is.False); Assert.That(r.Data.ContainsKey("forbidden"), Is.False);
             r.AdvanceTerminalConversation(1); Assert.That(r.TerminalConversationTranscript(), Does.Contain("가😀▌"));
             r.AdvanceTerminalConversation(1); Assert.That(r.TerminalInputLocked, Is.False); Assert.That(r.TerminalConversationTranscript(), Does.Contain("가😀a\u0301"));
         }
@@ -179,12 +179,12 @@ namespace Codetective.Tests.Operations
         [Test] public void OnlySuccessfulOffScriptActionsCountAndFirstTwoAreForgiven()
         {
             KernelRuntime r = World(); Listen(r);
-            Assert.That(r.Execute("save side").Success, Is.True); Assert.That(r.Data.ContainsKey("side"), Is.True);
+            Assert.That(r.Execute("side = 1").Success, Is.True); Assert.That(r.Data.ContainsKey("side"), Is.True);
             Assert.That(r.TerminalConversationTranscript(), Does.Contain("[Operator] ▌")); Assert.That(r.TerminalDisturbance, Is.Zero);
             Listen(r); Assert.That(r.TerminalConversationTranscript(), Does.Contain("Forgiven once"));
             r.Execute("free side"); Assert.That(r.TerminalDisturbance, Is.Zero); Listen(r);
             Assert.That(r.TerminalConversationTranscript(), Does.Contain("Forgiven twice"));
-            r.Execute("save other"); Assert.That(r.TerminalDisturbance, Is.EqualTo(1));
+            r.Execute("other = 1"); Assert.That(r.TerminalDisturbance, Is.EqualTo(1));
             Assert.That(r.ConversationProgress("tutorial").deviations, Is.EqualTo(3));
             r.AdvanceTerminalConversation(0.6); Assert.That(r.TerminalDisturbance, Is.Zero); Assert.That(r.TerminalInputLocked, Is.True);
             Listen(r); Assert.That(r.TerminalConversationTranscript(), Does.Contain("Kernel. Follow"));
@@ -208,11 +208,11 @@ namespace Codetective.Tests.Operations
         }
         [Test] public void TutorialSlotNamesNeverOverwriteExistingPlayerDataOrProtocols()
         {
-            var definition = Definition(TerminalGoalKind.Allocate); KernelRuntime r = World(definition, false);
+            var definition = Definition(TerminalGoalKind.BindReference); KernelRuntime r = World(definition, false);
             r.Store("practice", Datum.Number(9)); r.SaveProtocol("protocol practice2() { return 1; }");
             r.ReadMail("intro"); r.EnterTerminalPage("kernel"); Listen(r);
             Assert.That(r.ConversationProgress("tutorial").slotName, Is.EqualTo("practice3"));
-            Assert.That(r.Execute("저장 practice3").Success, Is.True); Listen(r);
+            Assert.That(r.Execute("practice3 = hq").Success, Is.True); Listen(r);
             Assert.That(r.Data["practice"].value.number, Is.EqualTo(9)); Assert.That(r.GetTrigger("tutorial.complete"), Is.True);
         }
         [Test] public void ReferenceAndReleaseGoalsDoNotCreateOrDestroyWorldObjects()
@@ -226,8 +226,8 @@ namespace Codetective.Tests.Operations
         }
         [Test] public void EarlyValidWorkIsRecognizedWhenItsLessonIsReached()
         {
-            var d = Definition(); d.steps[1].goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate };
-            KernelRuntime r = World(d); Listen(r); r.Execute("save practice"); Listen(r); r.Execute("help"); Listen(r);
+            var d = Definition(); d.steps[1].goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" };
+            KernelRuntime r = World(d); Listen(r); r.Execute("practice = hq"); Listen(r); r.Execute("help"); Listen(r);
             Assert.That(r.GetTrigger("tutorial.complete"), Is.True); Assert.That(r.Data.ContainsKey("practice"), Is.True);
         }
         [Test] public void WorldClockFreezesUntilTheConversationCompletes()
@@ -245,7 +245,7 @@ namespace Codetective.Tests.Operations
         }
         [Test] public void SavingMidLinePreservesTextPositionDeviationCountAndPendingReply()
         {
-            KernelRuntime r = World(); Listen(r); r.Execute("save a"); Listen(r); r.Execute("free a"); Listen(r); r.Execute("save a"); r.AdvanceTerminalConversation(0.2);
+            KernelRuntime r = World(); Listen(r); r.Execute("a = 1"); Listen(r); r.Execute("free a"); Listen(r); r.Execute("a = 1"); r.AdvanceTerminalConversation(0.2);
             string before = r.TerminalConversationTranscript(); KernelSnapshot saved = r.Capture();
             KernelRuntime restored = World(start: false); restored.Restore(saved);
             Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(before)); Assert.That(restored.TerminalInputLocked, Is.True);

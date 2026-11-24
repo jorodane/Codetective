@@ -30,12 +30,12 @@ namespace Codetective.Operations
         public event Action<string, string> SceneActionRequested;
         public event Action DayEnded;
 
-        public const string Help = "code <name> = <target> : register a substitution\n" +
-            "code <name> : register an empty substitution\nfree <name> : discard a substitution\n" +
+        public const string Help = "<name> = <target> : register or update a substitution\n" +
+            "Click an object reference in a message to insert it.\nfree <name> : discard a substitution\n" +
             "answer <choice> : respond to the current question (or enter just the choice)\nhelp : list commands\n\n" +
             "Assign references to existing objects; new/malloc are unavailable.\n" +
             "object. lists currently available commands.\nname = target\nname = object.command(input)\n" +
-            "Examples: hq.requestCoffee()\ndoc = archive.inspect()\nthread01.run(recon, archive)\n" +
+            "For example, name the headquarters reference office and enter office.requestCoffee().\n" +
             "Protocol editor: protocol recon(Place target) { return target.inspect(); }";
 
         public void Register(Entity entity, params string[] rootAliases) => Register(entity, true, rootAliases);
@@ -120,7 +120,11 @@ namespace Codetective.Operations
                 throw new CommandException("객체·프로토콜·예약 명령과 다른 데이터 이름을 사용하세요.");
         }
 
-        public ExecutionResult Execute(string source)
+        public ExecutionResult Execute(string source) => ExecuteCommand(source, source, false);
+
+        public ExecutionResult ExecuteLinkedInput(string source, string displayedSource) => ExecuteCommand(source, displayedSource, true);
+
+        private ExecutionResult ExecuteCommand(string source, string displayedSource, bool linkObjects)
         {
             if (TerminalInputLocked) return ExecutionResult.Error(Text("terminal.dialogue.receiving", "수신 중입니다. 안내가 끝난 뒤 입력하세요."));
             bool observed = TerminalConversationActive && terminalCommandTrace == null && !string.IsNullOrWhiteSpace(source);
@@ -128,11 +132,11 @@ namespace Codetective.Operations
             if (observed)
             {
                 terminalCommandTrace = new TerminalCommandTrace();
-                AddConversationLog(new TerminalConversationLog { text = "> " + source, complete = true });
+                AddConversationLog(new TerminalConversationLog { text = "> " + displayedSource, complete = true });
             }
             try
             {
-                ExecutionResult result = ExecuteTerminalCommand(source);
+                ExecutionResult result = ExecuteTerminalCommand(source, linkObjects);
                 if (observed)
                 {
                     AddConversationLog(new TerminalConversationLog { text = (result.Success ? "" : "오류 ") + result.Message, complete = true });
@@ -142,7 +146,7 @@ namespace Codetective.Operations
             }
             finally { terminalCommandTrace = previous; }
         }
-        private ExecutionResult ExecuteTerminalCommand(string source)
+        private ExecutionResult ExecuteTerminalCommand(string source, bool linkObjects)
         {
             if (string.IsNullOrWhiteSpace(source)) return ExecutionResult.Error("");
             if (source.IndexOfAny(new[] { '\r', '\n' }) >= 0) return ExecutionResult.Error("한 번에 한 줄만 입력하세요. 여러 줄은 프로토콜 편집창에서 작성하세요.");
@@ -154,25 +158,25 @@ namespace Codetective.Operations
                 if (shortAnswer != null) return AcceptTerminalAnswer(shortAnswer);
                 string[] words = source.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
                 string keyword = CommandVocabulary.Keyword(words[0]);
-                // A declaration with a right-hand side is parsed as an assignment.
-                // A bare declaration uses the same operation as the older save command.
-                if (keyword == "code" && words.Length == 2 && CommandParser.IsIdentifier(words[1]))
-                    keyword = "save";
                 if (terminalCommandTrace != null) { terminalCommandTrace.keyword = keyword; terminalCommandTrace.argument = words.Length == 2 ? words[1] : ""; }
                 if (keyword == "help") return words.Length == 1 ? ExecutionResult.Ok(HelpForLanguage) : ExecutionResult.Error("사용법: " + words[0]);
                 if (keyword == "answer" && (words.Length == 1 ? TerminalAwaitingAnswer :
                     char.IsLetterOrDigit(words[1][0]) || words[1][0] == '_'))
                     return PrepareTerminalAnswer(words);
-                if (keyword == "save" || keyword == "free")
+                if (keyword == "free")
                 {
                     if (!CanUseTerminalKeyword(keyword)) throw new CommandException(TutorialPermissionMessage);
                     if (words.Length != 2) return ExecutionResult.Error($"사용법: {words[0]} 이름");
-                    if (keyword == "save") { Allocate(words[1]); return ExecutionResult.Ok($"'{words[1]}' 치환문을 등록했습니다."); }
                     return Free(words[1]) ? ExecutionResult.Ok($"'{words[1]}' 치환 규칙을 폐기했습니다.") :
                         ExecutionResult.Error($"'{words[1]}'에 할당된 데이터가 없습니다.");
                 }
                 budget = 1024; depth = 0;
                 Statement statement = new CommandParser(source).ReadSingle();
+                if (linkObjects)
+                {
+                    if (statement.AssignPath != null) RequireLinkedObject(statement.AssignPath[0]);
+                    RequireLinkedObjects(statement.Value);
+                }
                 RequireTutorialStatementPermission(statement);
                 if (terminalCommandTrace != null) terminalCommandTrace.assigned = statement.Assign;
                 Datum value = ExecuteStatement(statement, null, null);
@@ -180,6 +184,19 @@ namespace Codetective.Operations
                 return ExecutionResult.Ok(value.kind == DataKind.Empty ? "명령을 수행했습니다." : Format(value), value);
             }
             catch (CommandException error) { return ExecutionResult.Error(error.Message + " (" + CommandVocabulary.KeywordName("help", Language) + "로 사용법 확인)"); }
+        }
+
+        private void RequireLinkedObjects(Expression expression)
+        {
+            if (expression.Path != null && (expression.Path.Length > 1 || !protocols.ContainsKey(expression.Path[0])))
+                RequireLinkedObject(expression.Path[0]);
+            foreach (Expression item in expression.Arguments ?? expression.Elements ?? Enumerable.Empty<Expression>()) RequireLinkedObjects(item);
+        }
+
+        private void RequireLinkedObject(string name)
+        {
+            if (!data.ContainsKey(name) && (roots.ContainsKey(name) || IsDiscovered(name) && Entity(name) != null))
+                throw new CommandException(Language == CommandLocale.Korean ? "표시된 객체 참조를 눌러 입력하세요." : "Click the displayed object reference to insert it.");
         }
 
         public ExecutionResult SaveProtocol(string source)
@@ -296,11 +313,12 @@ namespace Codetective.Operations
         {
             if (path.Length == 0) throw new CommandException("대상을 지정하세요.");
             Entity entity = null;
-            if (locals != null && locals.TryGetValue(path[0], out Datum local)) entity = ReferenceTarget(local);
+            if (CommandObjectReference.TryRead(path[0], out string id)) entity = Entity(id);
+            else if (locals != null && locals.TryGetValue(path[0], out Datum local)) entity = ReferenceTarget(local);
             else if ((locals == null || !locals.ContainsKey(FrozenCipherScope)) && data.TryGetValue(path[0], out DataSlot slot)) entity = ReferenceTarget(slot.value);
             else roots.TryGetValue(path[0], out entity);
             if (entity == null && IsDiscovered(path[0])) entity = Entity(path[0]);
-            if (entity == null) throw new CommandException("알 수 없거나 비어 있는 대상입니다: " + path[0]);
+            if (entity == null) throw new CommandException("알 수 없거나 비어 있는 대상입니다: " + (id ?? path[0]));
             CheckEntityAccess(entity, locals);
             for (int i = 1; i < path.Length; i++)
             {
@@ -366,9 +384,9 @@ namespace Codetective.Operations
             return Math.Max(0, ResolveOperation(target, e.Path.Last(), arguments, locals).Minutes);
         }
 
-        public IReadOnlyList<Completion> Complete(string source, bool composing = false) => Complete(source, composing, null);
+        public IReadOnlyList<Completion> Complete(string source, bool composing = false, bool linkObjects = false) => Complete(source, composing, null, linkObjects);
 
-        private IReadOnlyList<Completion> Complete(string source, bool composing, Dictionary<string, Datum> locals)
+        private IReadOnlyList<Completion> Complete(string source, bool composing, Dictionary<string, Datum> locals, bool linkObjects = false)
         {
             source = source ?? "";
             int equal = source.LastIndexOf('=');
@@ -388,7 +406,7 @@ namespace Codetective.Operations
                 string prefix = input.Substring(start).TrimStart();
                 string before = leading + input.Substring(0, start) + input.Substring(start, input.Substring(start).Length - prefix.Length);
                 if (prefix.Contains("."))
-                    return Complete(prefix, composing, locals).Select(c => new Completion(c.Label, before + c.Replacement)).ToArray();
+                    return Complete(prefix, composing, locals, linkObjects).Select(c => new Completion(c.Label, before + c.Replacement)).ToArray();
                 Parameter[] expected = { new Parameter("input", DataKind.Any) };
                 try
                 {
@@ -397,6 +415,7 @@ namespace Codetective.Operations
                     if (call.Length == 1 && protocols.TryGetValue(call[0], out Protocol p) && argumentIndex < p.Parameters.Length) expected = new[] { p.Parameters[argumentIndex] };
                     else if (call.Length > 1)
                     {
+                        if (linkObjects) RequireLinkedObject(call[0]);
                         Entity target = ResolveCompletionEntity(call.Take(call.Length - 1).ToArray(), locals);
                         Parameter[] options = target.EffectiveOperations.Where(o => o.Matches(call.Last()) && OperationDenial(target, o, locals) == null && argumentIndex < o.Parameters.Length)
                             .Select(o => o.Parameters[argumentIndex]).ToArray();
@@ -405,7 +424,7 @@ namespace Codetective.Operations
                 }
                 catch (CommandException) { }
                 return AvailableValues(locals, prefix, composing).Where(v => expected.Any(p => Accepts(p, v.Value)) && Prefix(v.Key, prefix, composing))
-                    .Select(v => new Completion(v.Key + " : " + TypeName(v.Value), before + v.Key)).ToArray();
+                    .Select(v => new Completion(v.Key + " : " + TypeName(v.Value), before + CompletionSpelling(v, linkObjects))).ToArray();
             }
             int dot = input.LastIndexOf('.');
             if (dot >= 0)
@@ -416,7 +435,9 @@ namespace Codetective.Operations
                 string prefix = input.Substring(dot + 1);
                 try
                 {
-                    Entity entity = ResolveCompletionEntity(objectPath.Split('.'), locals);
+                    string[] path = objectPath.Split('.');
+                    if (linkObjects) RequireLinkedObject(path[0]);
+                    Entity entity = ResolveCompletionEntity(path, locals);
                     var output = new List<Completion>();
                     foreach (var child in KnownChildren(entity).Where(_ => tutorial == null))
                     {
@@ -444,22 +465,25 @@ namespace Codetective.Operations
                 }
                 catch (CommandException) { return Array.Empty<Completion>(); }
             }
-            bool canReadSlots = HasTutorialPermission(tutorial, TerminalGoalKind.Allocate);
-            if (!canBind && !canReadSlots) return Array.Empty<Completion>();
-            return AvailableValues(locals, input, composing).Where(v => Prefix(v.Key, input, composing) &&
-                (tutorial == null || (v.Value.kind != DataKind.Protocol && (canBind || data.ContainsKey(v.Key))))).Select(v =>
+            if (!canBind) return Array.Empty<Completion>();
+            return AvailableValues(locals, input, composing, includeObjects: !linkObjects || tutorial == null).Where(v => Prefix(v.Key, input, composing) &&
+                (tutorial == null || v.Value.kind != DataKind.Protocol)).Select(v =>
             {
                 Entity target = equal < 0 ? ReferenceTarget(v.Value) : null;
                 bool memberAccess = target != null && (tutorial == null || tutorial.Any(goal => goal.kind == TerminalGoalKind.Invoke && goal.targetId == target.Id));
-                return new Completion(v.Key + " : " + TypeName(v.Value), leading + v.Key + (memberAccess ? "." : ""));
+                return new Completion(v.Key + " : " + TypeName(v.Value), leading + CompletionSpelling(v, linkObjects) + (memberAccess ? "." : ""));
             }).ToArray();
         }
 
-        private IEnumerable<KeyValuePair<string, Datum>> AvailableValues(Dictionary<string, Datum> locals, string prefix, bool composing)
+        private string CompletionSpelling(KeyValuePair<string, Datum> candidate, bool linkObjects) =>
+            linkObjects && candidate.Value.CanReferenceEntity && !data.ContainsKey(candidate.Key)
+                ? CommandObjectReference.Write(candidate.Value.id) : candidate.Key;
+
+        private IEnumerable<KeyValuePair<string, Datum>> AvailableValues(Dictionary<string, Datum> locals, string prefix, bool composing, bool includeObjects = true)
         {
             if (locals != null) foreach (var local in locals) if (!local.Key.StartsWith("\u0001", StringComparison.Ordinal) && PlayerValueVisible(local.Value, locals)) yield return local;
             foreach (var slot in data) if ((locals == null || !locals.ContainsKey(slot.Key)) && PlayerValueVisible(slot.Value.value, locals)) yield return new KeyValuePair<string, Datum>(slot.Key, slot.Value.value);
-            foreach (var root in roots.Concat(entities.Where(e => IsDiscovered(e.Key) && !roots.ContainsKey(e.Key) && discoveries[e.Key].source != "초기 작전망" &&
+            if (includeObjects) foreach (var root in roots.Concat(entities.Where(e => IsDiscovered(e.Key) && !roots.ContainsKey(e.Key) && discoveries[e.Key].source != "초기 작전망" &&
                 !data.Values.Any(s => s.value.CanReferenceEntity && s.value.id == e.Key))))
                 if (root.Key == root.Value.Id && EntityDenial(root.Value) == null)
                 {

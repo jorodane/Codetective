@@ -8,38 +8,39 @@ namespace Codetective.Terminal.Tests
     public sealed class TerminalSessionTests
     {
         [Test]
-        public void SavingAllocatesSeparateNamedSlots()
+        public void AssignmentsCreateSeparateNamedSlots()
         {
             var session = new TerminalSession();
-            Assert.That(session.Execute("save 단서").Success, Is.True);
-            Assert.That(session.Execute("save 용의자").Success, Is.True);
+            Assert.That(session.Execute("단서 = 1").Success, Is.True);
+            Assert.That(session.Execute("용의자 = 1").Success, Is.True);
             Assert.That(session.Memory.Select(slot => slot.Name), Is.EqualTo(new[] { "단서", "용의자" }));
             Assert.That(session.Memory[0].Id, Is.Not.EqualTo(session.Memory[1].Id));
             Assert.That(session.Memory[0], Is.Not.SameAs(session.Memory[1]));
         }
 
         [Test]
-        public void DuplicateSavePreservesTheOriginalSlot()
+        public void ReassignmentUpdatesTheOriginalSlot()
         {
             var session = new TerminalSession();
-            session.Execute("save clue");
+            session.Execute("clue = 1");
             var original = session.Memory[0];
-            Assert.That(session.Execute("save clue").Success, Is.False);
+            Assert.That(session.Execute("clue = 2").Success, Is.True);
             Assert.That(session.Count, Is.EqualTo(1));
             Assert.That(session.Memory[0], Is.SameAs(original));
+            Assert.That(session.Memory[0].Value.number, Is.EqualTo(2));
         }
 
         [Test]
         public void DeleteRemovesOnlyTheRequestedSlotAndAllowsReallocation()
         {
             var session = new TerminalSession();
-            session.Execute("save a");
-            session.Execute("save b");
+            session.Execute("a = 1");
+            session.Execute("b = 1");
             var removed = session.Memory[0];
             var remaining = session.Memory[1];
             Assert.That(session.Execute("free a").Success, Is.True);
             Assert.That(session.Memory.Single(), Is.SameAs(remaining));
-            Assert.That(session.Execute("save a").Success, Is.True);
+            Assert.That(session.Execute("a = 1").Success, Is.True);
             Assert.That(session.Memory.Last(), Is.Not.SameAs(removed));
         }
 
@@ -48,6 +49,9 @@ namespace Codetective.Terminal.Tests
         [TestCase("save")]
         [TestCase("free")]
         [TestCase("save one two")]
+        [TestCase("save clue")]
+        [TestCase("암호 연습")]
+        [TestCase("code clue = 2")]
         [TestCase("free clue extra")]
         [TestCase("실행 clue")]
         [TestCase("free missing")]
@@ -56,7 +60,7 @@ namespace Codetective.Terminal.Tests
         public void InvalidCommandsDoNotChangeExistingMemory(string line)
         {
             var session = new TerminalSession();
-            session.Execute("save clue");
+            session.Execute("clue = 1");
             var original = session.Memory.Single();
             Assert.That(session.Execute(line).Success, Is.False);
             Assert.That(session.Memory.Single(), Is.SameAs(original));
@@ -66,7 +70,7 @@ namespace Codetective.Terminal.Tests
         public void WhitespaceAndKoreanNamesAreSupported()
         {
             var session = new TerminalSession();
-            Assert.That(session.Execute("  save\t사건_01  ").Success, Is.True);
+            Assert.That(session.Execute("  사건_01\t= 1  ").Success, Is.True);
             Assert.That(session.Execute("free 사건_01").Success, Is.True);
             Assert.That(session.Count, Is.Zero);
         }
@@ -75,8 +79,9 @@ namespace Codetective.Terminal.Tests
         public void KoreanUnicodeFormsReferToTheSameSlot()
         {
             var session = new TerminalSession();
-            session.Execute("save 증거");
-            Assert.That(session.Execute("save " + "증거".Normalize(NormalizationForm.FormD)).Success, Is.False);
+            session.Execute("증거 = 1");
+            Assert.That(session.Execute("증거".Normalize(NormalizationForm.FormD) + " = 2").Success, Is.True);
+            Assert.That(session.Memory.Single().Value.number, Is.EqualTo(2));
             Assert.That(session.Complete("free " + "증".Normalize(NormalizationForm.FormD)).Single().DisplayText,
                 Is.EqualTo("증거"));
             Assert.That(session.Execute("free " + "증거".Normalize(NormalizationForm.FormD)).Success, Is.True);
@@ -86,8 +91,8 @@ namespace Codetective.Terminal.Tests
         public void CommandCompletionAddsSpaceForTheArgument()
         {
             var session = new TerminalSession();
-            Assert.That(session.Complete("").Select(item => item.DisplayText), Is.EqualTo(new[] { "code", "free", "help" }));
-            Assert.That(session.Complete("co").Single().ReplacementText, Is.EqualTo("code "));
+            Assert.That(session.Complete("").Select(item => item.DisplayText), Is.EqualTo(new[] { "free", "help" }));
+            Assert.That(session.Complete("co"), Is.Empty);
             Assert.That(session.Complete("fr").Single().ReplacementText, Is.EqualTo("free "));
             Assert.That(session.Complete("he").Single().ReplacementText, Is.EqualTo("help"));
             Assert.That(session.Complete("없는명령"), Is.Empty);
@@ -98,9 +103,9 @@ namespace Codetective.Terminal.Tests
         {
             var session = new TerminalSession();
             Assert.That(session.Complete("free "), Is.Empty);
-            session.Execute("save case_b");
-            session.Execute("save case_a");
-            session.Execute("save other");
+            session.Execute("case_b = 1");
+            session.Execute("case_a = 1");
+            session.Execute("other = 1");
             Assert.That(session.Complete("free case").Select(item => item.ReplacementText),
                 Is.EqualTo(new[] { "free case_a", "free case_b" }));
             Assert.That(session.Complete("free ").Count, Is.EqualTo(3));
@@ -109,37 +114,32 @@ namespace Codetective.Terminal.Tests
         }
 
         [Test]
-        public void CompletionNeverCreatesSlotsOrSuggestsNamesForSave()
+        public void CompletionNeverCreatesSlotsOrSuggestsDeclarations()
         {
             var session = new TerminalSession();
-            session.Execute("save clue");
+            session.Execute("clue = 1");
             Assert.That(session.Complete("save "), Is.Empty);
             Assert.That(session.Complete("free clue extra"), Is.Empty);
             Assert.That(session.Complete("free\nclue"), Is.Empty);
             Assert.That(session.Count, Is.EqualTo(1));
         }
 
-        [TestCase(CommandLocale.Korean, "암호 ㅇ", "암호 연습", "연", "연습", "연습 = 지", "연습 = 지휘소")]
-        [TestCase(CommandLocale.English, "code pr", "code practice", "pr", "practice", "practice = h", "practice = hq")]
-        public void LessonCompletesTheNameAndBindsTheExistingSlotWithoutRedeclaring(CommandLocale language, string prefix,
-            string declaration, string namePrefix, string name, string targetPrefix, string assignment)
+        [TestCase(CommandLocale.Korean, "연습", "지휘소")]
+        [TestCase(CommandLocale.English, "practice", "headquarters")]
+        public void LessonAcceptsAnObjectReferenceInTheFirstAssignment(CommandLocale language, string name, string label)
         {
             KernelRuntime runtime = ClinicScenario.Create(); runtime.Language = language;
-            runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "practice", koreanVariableBase = "연습",
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "practice", koreanVariableBase = "연습", unlockCommandsByStep = true,
                 steps = new[] {
-                    new TerminalConversationStep { id = "allocate", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate } },
                     new TerminalConversationStep { id = "bind", goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } }
                 } });
             runtime.EnterTerminalPage("kernel");
             var session = new TerminalSession(runtime);
-            bool composing = language == CommandLocale.Korean;
-            Assert.That(session.Complete(prefix, composing).Single().ReplacementText, Is.EqualTo(declaration));
-            Assert.That(session.Execute(declaration).Success, Is.True);
-            Assert.That(runtime.TerminalExpectedCommand, Is.EqualTo(assignment));
-            Assert.That(session.Complete(namePrefix).Select(c => c.ReplacementText), Does.Contain(name));
-            Assert.That(session.Complete(prefix, composing).Single().ReplacementText, Is.EqualTo(declaration + " = "));
-            Assert.That(session.Complete(targetPrefix).Select(c => c.ReplacementText), Does.Contain(assignment));
-            Assert.That(session.Execute(assignment).Success, Is.True);
+            string prefix = name + " = ";
+            Assert.That(session.Complete(prefix, linkObjects: true), Is.Empty);
+            Assert.That(session.ExecuteLinkedInput(prefix + runtime.ObjectName("hq"), prefix + label).Success, Is.False);
+            Assert.That(session.Count, Is.Zero);
+            Assert.That(session.ExecuteLinkedInput(prefix + CommandObjectReference.Write("hq"), prefix + label).Success, Is.True);
             Assert.That(runtime.Data[name].value.id, Is.EqualTo("hq"));
             Assert.That(runtime.TerminalConversationActive, Is.False);
         }
@@ -155,7 +155,6 @@ namespace Codetective.Terminal.Tests
                 steps = new[]
                 {
                     new TerminalConversationStep { id = "help", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
-                    new TerminalConversationStep { id = "allocate", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate } },
                     new TerminalConversationStep { id = "bind", goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } },
                     new TerminalConversationStep { id = "invoke", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Invoke, targetId = "hq", operation = "checkComms", argumentCount = 0 } },
                     new TerminalConversationStep { id = "free", goal = new TerminalCommandGoal { kind = TerminalGoalKind.Free } }
@@ -169,13 +168,9 @@ namespace Codetective.Terminal.Tests
 
             runtime.EnterTerminalPage("kernel");
             Assert.That(session.Execute("help").Message, Does.Not.Contain("code").And.Not.Contain("free"));
-            Assert.That(session.Complete("co").Single().ReplacementText, Is.EqualTo("code "));
-            Assert.That(session.Complete("practice = h").Count, Is.Zero);
-            Assert.That(session.Execute("practice = hq").Success, Is.False);
-            Assert.That(session.Execute("code practice").Success, Is.True);
-
-            Assert.That(session.Complete("practice = h").Single().ReplacementText, Is.EqualTo("practice = hq"));
-            Assert.That(session.Complete("answer = h").Single().ReplacementText, Is.EqualTo("answer = hq"));
+            Assert.That(session.Complete("co"), Is.Empty);
+            Assert.That(session.Complete("practice = h", linkObjects: true), Is.Empty);
+            Assert.That(session.Execute("code practice").Success, Is.False);
             Assert.That(session.Complete("hq.").Count, Is.Zero);
             Assert.That(session.Execute("hq.checkComms()").Success, Is.False);
             Assert.That(session.Execute("practice = hq").Success, Is.True);
@@ -195,8 +190,8 @@ namespace Codetective.Terminal.Tests
         public void NamesAreCaseSensitiveAndSessionsAreIndependent()
         {
             var session = new TerminalSession();
-            session.Execute("save Case");
-            session.Execute("save case");
+            session.Execute("Case = 1");
+            session.Execute("case = 1");
             Assert.That(session.Count, Is.EqualTo(2));
             Assert.That(session.Complete("free C").Single().DisplayText, Is.EqualTo("Case"));
             Assert.That(new TerminalSession().Count, Is.Zero);
@@ -207,7 +202,7 @@ namespace Codetective.Terminal.Tests
         {
             var session = new TerminalSession();
             for (int i = 0; i < 40; i++)
-                session.Execute("save var_" + i.ToString("D2"));
+                session.Execute("var_" + i.ToString("D2") + " = 1");
             Assert.That(session.Complete("free var_").Count, Is.EqualTo(40));
             Assert.That(session.Complete("free var_").Last().ReplacementText, Is.EqualTo("free var_39"));
         }
@@ -216,27 +211,67 @@ namespace Codetective.Terminal.Tests
         public void HelpListsAllCommandsWithoutChangingMemory()
         {
             var session = new TerminalSession();
-            session.Execute("save 단서");
+            session.Execute("단서 = 1");
             var original = session.Memory.Single();
             CommandResult result = session.Execute("help");
             Assert.That(result.Success, Is.True);
-            Assert.That(result.Message, Does.Contain("code <name> = <target>"));
+            Assert.That(result.Message, Does.Contain("<name> = <target>").And.Not.Contain("empty substitution"));
             Assert.That(result.Message, Does.Contain("free <name>"));
             Assert.That(result.Message, Does.Contain("help"));
             Assert.That(session.Memory.Single(), Is.SameAs(original));
             Assert.That(session.Execute("help extra").Success, Is.False);
         }
 
-        [TestCase("저장", "삭제")]
-        [TestCase("저장", "free")]
-        [TestCase("save", "해제")]
-        [TestCase("암호", "삭제")]
-        [TestCase("var", "free")]
-        [TestCase("code", "free")]
-        public void LocalizedCommandsUseTheSameMemoryAsEnglish(string save, string free)
+        [Test]
+        public void TheClickedObjectIdentitySurvivesAnIdenticalLabelAndStillRequiresDiscovery()
+        {
+            var runtime = ClinicScenario.Create();
+            Entity second = runtime.CreateInstance("Place", "case.01:별관", "지휘소", exposeRoot: false);
+            ObjectReferenceText text = ObjectReferenceText.Parse("[[hq|지휘소]]와 [[case.01:별관|지휘소]]");
+            Assert.That(text.Text, Is.EqualTo("지휘소와 지휘소"));
+            Assert.That(text.Spans.Select(span => span.Id), Is.EqualTo(new[] { "hq", second.Id }));
+            ObjectReferenceSpan choice = text.Spans[1];
+            var draft = new TerminalReferenceDraft();
+            draft.Update("연습 =");
+            draft.Insert(4, 4, choice.Id, text.Text.Substring(choice.Start, choice.Length));
+            Assert.That(draft.Content.Text, Is.EqualTo("연습 = 지휘소"));
+            string command = draft.Encode(draft.Content.Text);
+            Assert.That(runtime.ExecuteLinkedInput(command, draft.Content.Text).Success, Is.False);
+            runtime.Discover(second.Id);
+            Assert.That(runtime.ExecuteLinkedInput(command, draft.Content.Text).Value.id, Is.EqualTo(second.Id));
+            Assert.That(runtime.Data["연습"].value.id, Is.EqualTo(second.Id));
+        }
+
+        [Test]
+        public void ThePermissionListKeepsAnInsertedReferenceWhenCompletingItsMember()
+        {
+            var runtime = ClinicScenario.Create();
+            runtime.Language = CommandLocale.Korean;
+            var session = new TerminalSession(runtime);
+            var draft = new TerminalReferenceDraft();
+            draft.Update(".통");
+            int caret = draft.Insert(0, 0, "hq", "지휘소");
+            Assert.That(caret, Is.EqualTo(3));
+            Assert.That(draft.Content.Text, Is.EqualTo("지휘소.통"));
+            TerminalCompletion match = session.Complete(draft.Encode(draft.Content.Text), linkObjects: true).Single();
+            InlineCompletion completion = draft.DecodeCompletion(match.ReplacementText, runtime.ObjectName);
+            Assert.That(completion.Text, Is.EqualTo("지휘소.통신확인()"));
+            draft.Set(completion.References);
+            Assert.That(session.ExecuteLinkedInput(draft.Encode(draft.Content.Text), draft.Content.Text).Success, Is.True);
+            Assert.That(session.ExecuteLinkedInput(draft.Content.Text, draft.Content.Text).Success, Is.False);
+            Assert.That(draft.TryDeletion(caret, backwards: true, out ObjectReferenceSpan span), Is.True);
+            draft.Update(draft.Content.Text.Remove(span.Start, span.Length), span.Start);
+            Assert.That(draft.Content.Text, Is.EqualTo(".통신확인()"));
+            Assert.That(draft.Content.Spans, Is.Empty);
+        }
+
+        [TestCase("삭제")]
+        [TestCase("해제")]
+        [TestCase("free")]
+        public void LocalizedDeleteUsesTheSameMemoryAsEnglish(string free)
         {
             var session = new TerminalSession();
-            Assert.That(session.Execute(save + " 단서").Success, Is.True);
+            Assert.That(session.Execute("단서 = 1").Success, Is.True);
             Assert.That(session.Memory.Single().Name, Is.EqualTo("단서"));
             Assert.That(session.Execute(free + " 단서").Success, Is.True);
             Assert.That(session.Count, Is.Zero);

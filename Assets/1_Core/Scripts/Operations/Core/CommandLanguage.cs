@@ -52,6 +52,13 @@ namespace Codetective.Operations
             {
                 char c = source[i];
                 if (char.IsWhiteSpace(c)) { i++; continue; }
+                if (c == '@')
+                {
+                    int start = i++;
+                    while (i < source.Length && CommandObjectReference.IsCodeCharacter(source[i])) i++;
+                    tokens.Add(source.Substring(start, i - start));
+                    continue;
+                }
                 if (c == '/' && i + 1 < source.Length && source[i + 1] == '/')
                 {
                     while (i < source.Length && source[i] != '\n') i++;
@@ -119,7 +126,7 @@ namespace Codetective.Operations
             throw new CommandException($"알 수 없는 데이터 종류: {name}");
         }
 
-        public Protocol ReadProtocol(string source)
+        public Protocol ReadProtocol(string source, bool legacyDeclarations = false)
         {
             if (!MatchKeyword("protocol")) throw new CommandException("protocol / 프로토콜 이름(종류 입력) { ... } 형식으로 작성하세요.");
             string name = Name();
@@ -141,7 +148,7 @@ namespace Codetective.Operations
             while (!Match("}"))
             {
                 if (Peek == "") throw new CommandException("프로토콜의 '}'를 닫으세요.");
-                body.Add(ReadStatement());
+                body.Add(ReadStatement(legacyDeclarations));
                 Require(";");
                 if (body.Count > 512) throw new CommandException("프로토콜은 512개 명령 이하로 작성하세요.");
             }
@@ -190,14 +197,14 @@ namespace Codetective.Operations
 
         public Statement ReadSingle()
         {
-            Statement statement = ReadStatement();
+            Statement statement = ReadStatement(legacyDeclaration: false);
             Match(";");
             if (Peek != "") throw new CommandException("한 번에 한 명령만 실행하세요.");
             if (statement.Return) throw new CommandException("return은 프로토콜 안에서 사용하세요.");
             return statement;
         }
 
-        private Statement ReadStatement()
+        private Statement ReadStatement(bool legacyDeclaration)
         {
             var statement = new Statement();
             if (MatchKeyword("return"))
@@ -206,18 +213,22 @@ namespace Codetective.Operations
                 statement.Value = Peek == ";" ? new Expression { Literal = Datum.Empty } : ReadExpression(0);
                 return statement;
             }
-            if (index + 1 < tokens.Count && IsIdentifier(tokens[index + 1]))
-                MatchKeyword("code");
+            if (CommandVocabulary.Keyword(Peek) == "code" && index + 1 < tokens.Count && IsIdentifier(tokens[index + 1]))
+            {
+                if (!legacyDeclaration) throw new CommandException("치환문은 '이름 = 대상'으로 입력하세요.");
+                Take();
+            }
             if (IsIdentifier(Peek) && index + 1 < tokens.Count && (IsIdentifier(tokens[index + 1]) || tokens[index + 1] == "[" || tokens[index + 1] == "<"))
                 statement.DeclaredType = TypeName();
             int start = index;
-            if (IsIdentifier(Peek))
+            if (IsIdentifier(Peek) || CommandObjectReference.TryRead(Peek, out _))
             {
-                var path = new List<string> { Name() };
+                var path = new List<string> { PathHead() };
                 while (Match(".")) path.Add(Name());
                 if (Match("="))
                 {
-                    if (path.Count == 1) statement.Assign = path[0];
+                    if (path.Count == 1 && IsIdentifier(path[0])) statement.Assign = path[0];
+                    else if (path.Count == 1) throw new CommandException("등호 왼쪽에 사용할 이름을 입력하세요.");
                     else statement.AssignPath = path.ToArray();
                 }
                 else index = start;
@@ -258,7 +269,7 @@ namespace Codetective.Operations
                 if (double.IsNaN(number) || double.IsInfinity(number)) throw new CommandException("유한한 숫자만 사용할 수 있습니다.");
                 Take(); return new Expression { Literal = Datum.Number(number) };
             }
-            var path = new List<string> { Name() };
+            var path = new List<string> { PathHead() };
             while (Match(".")) path.Add(Name());
             var expression = new Expression { Path = path.ToArray() };
             if (Match("("))
@@ -272,6 +283,8 @@ namespace Codetective.Operations
             }
             return expression;
         }
+
+        private string PathHead() => CommandObjectReference.TryRead(Peek, out _) ? Take() : Name();
 
         public static bool IsAllocationKeyword(string name) => name == "new" || name == "malloc" || name == "생성" || name == "메모리할당";
     }

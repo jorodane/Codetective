@@ -20,7 +20,7 @@ MonoBehaviour:
     koreanVariableBase: 사건자료
     introductionTitle: Case.1
     introductionSubtitle: Victor Hale 실종 사건
-    speaker: Maggie
+    speaker: "[[Maggie|Maggie]]"
     useSpeakerPrompt: 1
     firstDay: 1
     lastDay: 2147483647

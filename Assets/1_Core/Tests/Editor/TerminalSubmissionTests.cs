@@ -8,13 +8,14 @@ namespace Codetective.Terminal.Tests
         public void OneEnterSubmitsTheVisibleKoreanNameWithoutWaitingForAnotherEnter()
         {
             var submit = new TerminalSubmission();
-            var composing = new TerminalCompletionInput("save 단", "서", 6, 6);
+            var composing = new TerminalCompletionInput("free 단", "서", 6, 6);
             submit.Request(1, composing);
             Assert.That(submit.TryTake(composing, out string line), Is.True);
-            Assert.That(line, Is.EqualTo("save 단서"));
+            Assert.That(line, Is.EqualTo("free 단서"));
             var session = new TerminalSession();
+            session.Execute("단서 = 1");
             Assert.That(session.Execute(line).Success, Is.True);
-            Assert.That(session.Memory[0].Name, Is.EqualTo("단서"));
+            Assert.That(session.Memory, Is.Empty);
         }
 
         [Test]

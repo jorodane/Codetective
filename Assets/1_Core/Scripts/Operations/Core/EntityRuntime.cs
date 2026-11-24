@@ -100,6 +100,7 @@ namespace Codetective.Operations
             ReferenceTarget(value) == null || EntityDenial(ReferenceTarget(value), locals) == null;
         public bool IsPlayerVisible(Datum value) => value != null && PlayerValueVisible(value, null);
         public bool IsPlayerVisible(Entity entity) => entity != null && EntityDenial(entity) == null;
+        public bool CanLinkObject(string id) => IsPlayerVisible(Entity(id));
         private Datum TagReference(Datum value)
         {
             if (value.kind == DataKind.Array || value.kind == DataKind.Dictionary)

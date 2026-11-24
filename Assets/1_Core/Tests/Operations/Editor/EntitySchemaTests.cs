@@ -103,7 +103,7 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = World();
             r.Language = CommandLocale.Korean;
-            const string source = "프로토콜 보기(방형 대상) {\n    변수 다음 = 대상.peer;\n    반환 다음.메\n}";
+            const string source = "프로토콜 보기(방형 대상) {\n    다음 = 대상.peer;\n    반환 다음.메\n}";
             int caret = source.IndexOf("다음.메", StringComparison.Ordinal) + "다음.메".Length;
             Completion result = r.CompleteProtocol(source, caret).Single();
             Assert.That(result.Replacement, Does.Contain("반환 다음.메모\n}"));

@@ -99,12 +99,13 @@ namespace Codetective.Operations
             ConsultationLine line = Consultation[index];
             if (HasClinicSchedule ? !heardConsultationLines.Contains(index) : index > ConsultationIndex) throw new CommandException("아직 듣지 않은 진술입니다.");
             if (string.IsNullOrWhiteSpace(line.fact) || string.IsNullOrWhiteSpace(line.keyword)) throw new CommandException("기록할 상담 단서가 없습니다.");
-            Datum value = Datum.Ref(line.kind, line.fact, line.keyword, line.sentence);
+            string statement = ObjectReferenceText.PlainText(line.sentence);
+            Datum value = Datum.Ref(line.kind, line.fact, line.keyword, statement);
             if (!RecordedClues.Contains(line.fact))
             {
                 CollectEvidence(value, "상담 단서");
                 Observe(new ObservationDefinition { source = line.speaker, subjectId = Entity(ProfileOf(line)) != null ? ProfileOf(line) : "",
-                    statement = line.sentence, value = value });
+                    statement = statement, value = value });
                 RecordedClues.Add(line.fact);
                 Facts.Add(line.fact);
                 Report("새 데이터: " + line.dataName + " / " + line.keyword + " — 관련 권한을 확인하세요.");
@@ -191,7 +192,7 @@ namespace Codetective.Operations
             var restoredProtocols = new Dictionary<string, Protocol>(StringComparer.Ordinal);
             foreach (string source in snapshot.protocols ?? Array.Empty<string>())
             {
-                Protocol protocol = new CommandParser(source).ReadProtocol(source);
+                Protocol protocol = new CommandParser(source).ReadProtocol(source, legacyDeclarations: true);
                 ValidateProtocolTypes(protocol);
                 restoredProtocols.Add(protocol.Name, protocol);
             }
@@ -206,7 +207,7 @@ namespace Codetective.Operations
                 agent.KnowledgeFlags.UnionWith(saved.knowledgeFlags ?? Array.Empty<string>()); agent.GrantedAuthorities.UnionWith(saved.grantedAuthorities ?? Array.Empty<string>());
                 foreach (FrameSnapshot frame in saved.frames ?? Array.Empty<FrameSnapshot>())
                 {
-                    Protocol protocol = new CommandParser(frame.source).ReadProtocol(frame.source);
+                    Protocol protocol = new CommandParser(frame.source).ReadProtocol(frame.source, legacyDeclarations: true);
                     ValidateProtocolTypes(protocol);
                     if (frame.cursor < 0 || frame.cursor > protocol.Body.Count) throw new CommandException("진행 중 프로토콜의 저장 위치가 잘못되었습니다.");
                     agent.Frames.Add(new ProtocolFrame { Protocol = protocol, Cursor = frame.cursor, ReturnTarget = frame.returnTarget,

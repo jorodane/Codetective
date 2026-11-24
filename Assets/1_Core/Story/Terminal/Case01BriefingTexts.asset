@@ -16,7 +16,7 @@ MonoBehaviour:
   entries:
   - key: case01.maggie.report
     language: ko
-    text: 안녕하십니까. 저는 Hands on Books의 대표 Margaret Maggie Sloan입니다. 금일 NSF Public Relations Office에서 주최하는 Global Mind Fair에서 저와 계약을 진행중이었던 Meridian Profile Services의 대표 Victor Hale이 실종된 사실을 신고합니다. 주최측은 실종 사건의 은닉을 시도하는 것으로 보입니다.
+    text: "안녕하십니까. 저는 [[HandsOnBooks|Hands on Books]]의 대표 [[Maggie|Margaret Maggie Sloan]]입니다. 금일 [[NsfPublicRelationsOffice|NSF Public Relations Office]]에서 주최하는 [[GlobalMindFair|Global Mind Fair]]에서 저와 계약을 진행중이었던 [[MeridianProfileServices|Meridian Profile Services]]의 대표 [[VictorHale|Victor Hale]]이 실종된 사실을 신고합니다. 주최측은 [[VictorHaleDisappearance|실종 사건]]의 은닉을 시도하는 것으로 보입니다."
   - key: case01.maggie.report
     language: en
-    text: Hello. My name is Margaret Maggie Sloan, and I run Hands on Books. I'm reporting the disappearance of Victor Hale, the head of Meridian Profile Services, with whom I was negotiating a contract at today's Global Mind Fair, organized by the NSF Public Relations Office. The organizers appear to be trying to cover up his disappearance.
+    text: "Hello. My name is [[Maggie|Margaret Maggie Sloan]], and I run [[HandsOnBooks|Hands on Books]]. I'm reporting the disappearance of [[VictorHale|Victor Hale]], the head of [[MeridianProfileServices|Meridian Profile Services]], with whom I was negotiating a contract at today's [[GlobalMindFair|Global Mind Fair]], organized by the [[NsfPublicRelationsOffice|NSF Public Relations Office]]. The organizers appear to be trying to cover up [[VictorHaleDisappearance|his disappearance]]."

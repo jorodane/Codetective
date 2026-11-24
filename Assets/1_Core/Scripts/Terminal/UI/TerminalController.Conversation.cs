@@ -16,6 +16,7 @@ namespace Codetective.Terminal
         private CommandLocale renderedConversationCommandLocale;
         private bool conversationInputLocked;
         private CrtScreen conversationScreen;
+        private ObjectReferenceTextView transcriptLinks;
         private const float AnswerInset = 40f;
         private static readonly Vector2 QuestionPadding = new Vector2(12, 9);
         private RectTransform answerRow, questionPanel;
@@ -30,22 +31,27 @@ namespace Codetective.Terminal
         {
             KernelRuntime runtime = session.Runtime;
             if (runtime.TerminalConversationActive || runtime.TerminalConversationId == null || !mergedConversations.Add(runtime.TerminalConversationId)) return;
-            string log = runtime.TerminalConversationTranscript(includeAnswerPrompts: false);
-            if (!string.IsNullOrWhiteSpace(log)) AppendHistory(log);
+            ObjectReferenceText log = runtime.TerminalConversationContent(includeAnswerPrompts: false);
+            if (!string.IsNullOrWhiteSpace(log.Text)) AppendHistoryContent(log);
         }
-        private string ConversationTranscript()
+        private ObjectReferenceText ConversationTranscript()
         {
             KernelRuntime runtime = session.Runtime;
-            string log = runtime.TerminalConversationActive ? runtime.TerminalConversationTranscript(includeAnswerPrompts: false) : "";
-            string text = history.Text + (string.IsNullOrEmpty(log) ? "" : "\n\n" + log);
+            ObjectReferenceText content = runtime.TerminalConversationActive ? ObjectReferenceText.Join("\n\n",
+                new[] { history.Content, runtime.TerminalConversationContent(includeAnswerPrompts: false) }) : history.Content;
             // Keep the combined uGUI Text mesh within the same budget as ordinary scrollback.
-            if (text.Length > 12000)
+            if (content.Text.Length > 12000)
             {
-                int start = text.Length - 12000;
-                if (char.IsLowSurrogate(text[start])) start++;
-                text = text.Substring(start);
+                int start = content.Text.Length - 12000;
+                if (char.IsLowSurrogate(content.Text[start])) start++;
+                content = content.Slice(start, content.Text.Length - start);
             }
-            return text;
+            return content;
+        }
+        private void DrawTranscript(ObjectReferenceText content)
+        {
+            if (transcriptLinks == null) transcriptLinks = ObjectReferenceTextView.Attach(transcript, (id, label) => TryInsertObjectReference(id, label));
+            transcriptLinks.Show(content, Runtime.CanLinkObject);
         }
         private void UpdateConversationPresentation()
         {
@@ -68,10 +74,9 @@ namespace Codetective.Terminal
             renderedConversationRevision = runtime.TerminalConversationRevision; renderedConversationLocale = runtime.DisplayLanguage; renderedConversationCommandLocale = runtime.Language;
             RefreshCommandPrompt();
             RefreshAnswerPrompt();
-            string text = ConversationTranscript();
-            if (transcript.text == text) return;
-            QueueTranscriptScroll();
-            transcript.text = text;
+            ObjectReferenceText content = ConversationTranscript();
+            if (transcript.text != content.Text) QueueTranscriptScroll();
+            DrawTranscript(content);
         }
 
         private void RefreshCommandPrompt()

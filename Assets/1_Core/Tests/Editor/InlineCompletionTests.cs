@@ -15,7 +15,7 @@ namespace Codetective.Terminal.Tests
         public void EachConfirmingKeyAcceptsThePreviewAndOnlyANewEnterRunsTheCommand(CompletionKey key)
         {
             var session = new TerminalSession();
-            session.Execute("save clue");
+            session.Execute("clue = 1");
             TerminalCompletionInput typed = Input("free cl");
             string replacement = session.Complete(typed.Text).Single().ReplacementText;
             var proposal = new InlineCompletion(replacement, replacement.Length);
@@ -40,7 +40,7 @@ namespace Codetective.Terminal.Tests
         {
             KernelRuntime runtime = ClinicScenario.Create();
             var session = new TerminalSession(runtime);
-            session.Execute("save clue");
+            session.Execute("clue = 1");
             TerminalCompletionInput typed = Input("free cl");
             for (int i = 0; i < 60; i++)
             {
@@ -59,7 +59,7 @@ namespace Codetective.Terminal.Tests
         {
             var runtime = new KernelRuntime { Language = CommandLocale.Korean };
             var session = new TerminalSession(runtime);
-            session.Execute("저장 단서");
+            session.Execute("단서 = 1");
             var composing = new TerminalCompletionInput("삭제 ", "다", 3, 3);
             string replacement = session.Complete(composing.Text, true).Single().ReplacementText;
             var proposal = new InlineCompletion(replacement, replacement.Length);
@@ -92,8 +92,8 @@ namespace Codetective.Terminal.Tests
 
         [TestCase("", "암호 ")]
         [TestCase("   ", "암호 ")]
-        [TestCase("암호 대상 =", "암호 대상 =지휘소")]
-        [TestCase("암호 대상 = ", "암호 대상 = 지휘소")]
+        [TestCase("대상 =", "대상 =지휘소")]
+        [TestCase("대상 = ", "대상 = 지휘소")]
         [TestCase("지휘소.", "지휘소.통신확인()")]
         [TestCase("삭제 ", "삭제 단서")]
         [TestCase("자료실.분석( ", "자료실.분석( 문서")]
@@ -112,9 +112,9 @@ namespace Codetective.Terminal.Tests
             var runtime = ClinicScenario.Create();
             runtime.Language = CommandLocale.Korean;
             var session = new TerminalSession(runtime);
-            const string typed = "암호 대상 = 지";
+            const string typed = "대상 = 지";
             string replacement = session.Complete(typed).Single().ReplacementText;
-            Assert.That(replacement, Is.EqualTo("암호 대상 = 지휘소"));
+            Assert.That(replacement, Is.EqualTo("대상 = 지휘소"));
             var suggestion = new InlineCompletion(replacement, replacement.Length);
             Assert.That(InlineCompletion.Resolve(CompletionKey.Space, Input(typed), suggestion, true), Is.EqualTo(CompletionKeyAction.Accept));
             Assert.That(InlineCompletion.Resolve(CompletionKey.Enter, Input(replacement), suggestion, true), Is.EqualTo(CompletionKeyAction.Submit));
@@ -126,7 +126,7 @@ namespace Codetective.Terminal.Tests
         public void AnAlreadyTypedCandidateDoesNotRequireAnExtraConfirmOrReplaceTheName()
         {
             var session = new TerminalSession();
-            session.Execute("save a"); session.Execute("save ab");
+            session.Execute("a = 1"); session.Execute("ab = 1");
             TerminalCompletion[] suggestions = session.Complete("free a").ToArray();
             Assert.That(suggestions.First().ReplacementText, Is.EqualTo("free a"));
             var exact = new InlineCompletion("free a", 6);

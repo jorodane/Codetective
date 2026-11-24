@@ -59,7 +59,7 @@ namespace Codetective.Operations
             var parameters = operation.Parameters.Select((p, i) => p.TypeName(CommandLocale.English) + " input" + i).ToArray();
             string source = "protocol dispatched(Entity target" + (parameters.Length > 0 ? ", " + string.Join(", ", parameters) : "") +
                 ") { return target." + operation.Code + "(" + string.Join(", ", arguments.Select((a, i) => "input" + i)) + "); }";
-            Protocol protocol = new CommandParser(source).ReadProtocol(source);
+            Protocol protocol = new CommandParser(source).ReadProtocol(source, legacyDeclarations: true);
             agent.Frames.Clear(); agent.Observations.Clear(); agent.Discoveries.Clear();
             agent.CipherTable.Clear(); foreach (var pair in data) agent.CipherTable[pair.Key] = pair.Value.value.Copy();
             agent.KnowledgeFlags.Clear(); agent.GrantedAuthorities.Clear();

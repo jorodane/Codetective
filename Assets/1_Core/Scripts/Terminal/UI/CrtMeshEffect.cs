@@ -8,6 +8,7 @@ namespace Codetective.Terminal
     [RequireComponent(typeof(Graphic))]
     public sealed class CrtMeshEffect : BaseMeshEffect, IMaterialModifier
     {
+        internal System.Action<VertexHelper> BeforeBend { get; set; }
         private CrtScreen screen;
         private Matrix4x4 lastMatrix;
         private bool hasMatrix;
@@ -54,6 +55,7 @@ namespace Codetective.Terminal
         {
             if (!IsActive())
                 return;
+            BeforeBend?.Invoke(mesh);
             if (screen == null)
                 screen = GetComponentInParent<CrtScreen>();
             if (screen != null)

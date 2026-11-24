@@ -35,7 +35,7 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = World();
             Assert.That(r.Entity("VictorHale").GetValue("attended").number, Is.EqualTo(1));
-            Assert.That(r.Execute("암호 피해자 = VictorHale").Success, Is.False);
+            Assert.That(r.Execute("피해자 = VictorHale").Success, Is.False);
             Assert.That(r.Complete("Victor"), Is.Empty); Assert.That(r.Data, Is.Empty);
             Assert.That(r.IsDiscovered("VictorHale"), Is.False);
         }
@@ -45,8 +45,8 @@ namespace Codetective.Tests.Operations
             KernelRuntime r = World(); Assert.That(r.Execute("Maggie.대화하기()").Success, Is.True);
             Assert.That(r.IsDiscovered("VictorHale"), Is.False); r.Tick(2);
             Assert.That(r.IsDiscovered("VictorHale"), Is.True); Assert.That(r.Data, Is.Empty);
-            Assert.That(r.Execute("암호 피해자 = VictorHale").Success, Is.True);
-            Assert.That(r.Execute("암호 참석여부 = Attendance").Success, Is.True);
+            Assert.That(r.Execute("피해자 = VictorHale").Success, Is.True);
+            Assert.That(r.Execute("참석여부 = Attendance").Success, Is.True);
             r.Observe(Claim("공식 행사 기록", false, "Victor Hale / 개인 사정 불참"));
             Assert.That(r.Execute("피해자.attended").Value.number, Is.Zero);
             Assert.That(r.Entity("VictorHale").GetValue("attended").number, Is.EqualTo(1));
@@ -106,7 +106,7 @@ namespace Codetective.Tests.Operations
         [Test]
         public void ProtocolGlobalsAreReadAtExecutionAndParametersCaptureTheirAssignedTarget()
         {
-            KernelRuntime r = World(); r.Discover("VictorHale"); r.Execute("var target = VictorHale");
+            KernelRuntime r = World(); r.Discover("VictorHale"); r.Execute("target = VictorHale");
             r.SaveProtocol("protocol who() { return target; }"); r.Execute("target = Rachel");
             Assert.That(r.Execute("who()").Value.id, Is.EqualTo("Rachel"));
             r.SaveProtocol("protocol frozen(Person person) { return person; }"); r.Execute("thread01.run(frozen, target)"); r.Execute("target = Maggie"); r.Tick(1);
@@ -147,8 +147,8 @@ namespace Codetective.Tests.Operations
         [Test]
         public void NewAndMallocRemainForbiddenAndDuplicateDictionaryKeysFail()
         {
-            KernelRuntime r = World(); Assert.That(r.Execute("var x = new Person()").Success, Is.False);
-            Assert.That(r.Execute("malloc(4)").Success, Is.False); Assert.That(r.Execute("var x = {Maggie: 1, Maggie: 2}").Success, Is.False);
+            KernelRuntime r = World(); Assert.That(r.Execute("x = new Person()").Success, Is.False);
+            Assert.That(r.Execute("malloc(4)").Success, Is.False); Assert.That(r.Execute("x = {Maggie: 1, Maggie: 2}").Success, Is.False);
             Assert.That(r.Data, Is.Empty);
         }
         [Test]
@@ -157,7 +157,7 @@ namespace Codetective.Tests.Operations
             KernelRuntime r = World(); Entity victor = r.Entity("VictorHale");
             Entity first = r.CreateInstance("Place", "first", "첫 장소"), second = r.CreateInstance("Place", "second", "다음 장소");
             victor.AddVariable(new VariableDefinition { Code = "location", Kind = DataKind.Place, SchemaId = "Place" }); victor.SetValue("location", r.Reference(first));
-            r.Discover(victor.Id); r.Execute("var person = VictorHale");
+            r.Discover(victor.Id); r.Execute("person = VictorHale");
             Assert.That(r.Execute("person.attended").Success, Is.False);
             r.Observe(new ObservationDefinition { subjectId = victor.Id, field = "location", useCurrentField = true });
             victor.SetValue("location", r.Reference(second));
@@ -192,7 +192,7 @@ namespace Codetective.Tests.Operations
         [Test]
         public void AnAlreadyTransmittedProtocolKeepsItsCipherTableAfterAliasesAreRebound()
         {
-            KernelRuntime r = World(); r.Execute("var target = Maggie");
+            KernelRuntime r = World(); r.Execute("target = Maggie");
             r.SaveProtocol("protocol identify() { hq.waitReport(); return target; }"); r.Execute("thread01.run(identify)");
             r.Execute("target = Rachel"); r.Tick(4);
             Assert.That(r.Agent("thread01").Report.id, Is.EqualTo("Maggie")); Assert.That(r.Data["target"].value.id, Is.EqualTo("Rachel"));
@@ -253,7 +253,7 @@ namespace Codetective.Tests.Operations
         public void TransmittedProtocolsCannotSeeAliasesRegisteredAfterTransmission()
         {
             KernelRuntime r = World(); r.SaveProtocol("protocol delayed() { hq.waitReport(); return later; }");
-            r.Execute("thread01.run(delayed)"); r.Execute("var later = Maggie"); r.Tick(4);
+            r.Execute("thread01.run(delayed)"); r.Execute("later = Maggie"); r.Tick(4);
             Assert.That(r.Agent("thread01").State, Is.EqualTo(AgentState.Waiting));
             Assert.That(r.Agent("thread01").Report.kind, Is.EqualTo(DataKind.Empty));
         }
@@ -263,7 +263,7 @@ namespace Codetective.Tests.Operations
             KernelRuntime r = World(); r.Entity("Maggie").SetValue("occupation", Datum.Text("현재 직업"));
             Assert.That(r.LastKnownValue("Maggie", "occupation").kind, Is.EqualTo(DataKind.Empty));
             r.SaveProtocol("protocol relay(Text value) { return value; }");
-            r.SaveProtocol("protocol nested() { var result = relay(Maggie.occupation); return result; }");
+            r.SaveProtocol("protocol nested() { result = relay(Maggie.occupation); return result; }");
             r.Execute("thread01.run(nested)"); r.Tick(1);
             Assert.That(r.Agent("thread01").Report.text, Is.EqualTo("현재 직업"));
         }
@@ -281,7 +281,7 @@ namespace Codetective.Tests.Operations
         [Test]
         public void StoredCollectionsRespectAccessChangesForEveryNestedReference()
         {
-            KernelRuntime r = World(); Assert.That(r.Execute("var group = {Maggie: [Rachel]}").Success, Is.True);
+            KernelRuntime r = World(); Assert.That(r.Execute("group = {Maggie: [Rachel]}").Success, Is.True);
             r.Entity("Rachel").SetEntityAccess(PlayerAccess.Internal);
             Assert.That(r.Execute("group").Success, Is.False);
             r.Entity("Rachel").SetEntityAccess(PlayerAccess.Public);
@@ -291,7 +291,7 @@ namespace Codetective.Tests.Operations
         public void DeliveringAReturnedObjectNeverRefreshesItFromUnreportedWorldState()
         {
             KernelRuntime r = World(); Entity victor = r.Entity("VictorHale"); r.Discover(victor.Id, "초기 작전망", true);
-            r.SaveProtocol("protocol inspect() { var result = VictorHale.look(); hq.waitReport(); return result; }");
+            r.SaveProtocol("protocol inspect() { result = VictorHale.look(); hq.waitReport(); return result; }");
             r.Execute("thread01.run(inspect)"); r.Tick(1); victor.SetValue("attended", Datum.Boolean(false)); r.Tick(4);
             Assert.That(r.Agent("thread01").Report.id, Is.EqualTo(victor.Id));
             Assert.That(r.LastKnownValue(victor.Id, "attended").number, Is.EqualTo(1));

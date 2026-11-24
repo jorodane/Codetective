@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using Codetective.Operations;
 
 namespace Codetective.Terminal
 {
@@ -11,12 +12,18 @@ namespace Codetective.Terminal
     {
         public string Text { get; }
         public int Caret { get; }
+        public ObjectReferenceText References { get; }
+        private bool AddsReference { get; }
         public InlineCompletion(string text, int caret)
         {
             Text = text ?? "";
             Caret = Math.Max(0, Math.Min(caret, Text.Length));
+            References = null;
+            AddsReference = false;
         }
-        public bool Changes(TerminalCompletionInput input) => input.Anchor == input.Caret && Text != input.Text;
+        public InlineCompletion(ObjectReferenceText content, int caret, bool addsReference) : this(content.Text, caret)
+        { References = content; AddsReference = addsReference; }
+        public bool Changes(TerminalCompletionInput input) => input.Anchor == input.Caret && (Text != input.Text || AddsReference);
 
         public InlineCompletion ForSpaceKey()
         {
@@ -28,7 +35,8 @@ namespace Codetective.Terminal
             string completed = Text.Remove(separator, Caret - separator);
             if (separator == completed.Length || completed[separator] != ' ')
                 completed = completed.Insert(separator, " ");
-            return new InlineCompletion(completed, separator + 1);
+            return References == null ? new InlineCompletion(completed, separator + 1) :
+                new InlineCompletion(new ObjectReferenceText(completed, References.Spans), separator + 1, AddsReference);
         }
 
         public string SuffixFor(TerminalCompletionInput input)

@@ -389,14 +389,16 @@ namespace Codetective.Tests.Operations
             restored.CompleteTerminalIntroduction("case01-briefing");
             restored.AdvanceTerminalConversation(1000);
             Assert.That(restored.TerminalConversationTranscript(), Does.StartWith("Maggie> 안녕하십니까.").And.Contain("실종 사건의 은닉을 시도하는 것으로 보입니다."));
+            Assert.That(restored.TerminalConversationContent().Spans.Select(span => span.Id),
+                Does.Contain("Maggie").And.Contain("VictorHale").And.Contain("GlobalMindFair").And.Contain("VictorHaleDisappearance"));
             Assert.That(restored.TerminalInputLocked, Is.False);
             Assert.That(restored.Evidence.Select(entry => entry.Id), Does.Contain("Maggie").And.Contain("VictorHale").And.Contain("VictorHaleDisappearance")
                 .And.Contain("HandsOnBooks").And.Contain("MeridianProfileServices").And.Contain("NsfPublicRelationsOffice").And.Contain("GlobalMindFair"));
             Assert.That(restored.Observations.Single(report => report.statementKey == "case01.maggie.report").kind, Is.EqualTo(InformationKind.Testimony));
             Assert.That(restored.Data, Is.Empty);
-            Assert.That(restored.Execute("암호 피해자 = VictorHale").Success, Is.True);
-            Assert.That(restored.Execute("암호 사건 = VictorHaleDisappearance").Success, Is.True);
-            Assert.That(restored.Execute("암호 주최측 = NsfPublicRelationsOffice").Success, Is.True);
+            Assert.That(restored.Execute("피해자 = VictorHale").Success, Is.True);
+            Assert.That(restored.Execute("사건 = VictorHaleDisappearance").Success, Is.True);
+            Assert.That(restored.Execute("주최측 = NsfPublicRelationsOffice").Success, Is.True);
             Assert.That(restored.Execute("매기.대화하기()").Success, Is.True);
             restored.Tick(2);
             Assert.That(restored.IsDiscovered("OfficialAttendance"), Is.True);

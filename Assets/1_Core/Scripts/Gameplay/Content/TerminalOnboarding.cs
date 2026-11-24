@@ -36,12 +36,10 @@ namespace Codetective.Gameplay
                     Line("connection", "현장지원과입니다. 메일은 확인하셨겠지요. 먼저 작전망의 기본 사용법부터 확인하겠습니다.", "Field Support here. You have read the mail. Let's check the basics of the operations network."),
                     Line("listen", "Enter로 안내를 한 줄씩 넘기십시오. 안내가 끝나면 다음 명령을 입력해 보십시오:\n{command}", "Press Enter to read the briefing one line at a time. When it finishes, enter {command}.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
-                new TerminalConversationStep { id = "allocate", lines = new[] {
+                new TerminalConversationStep { id = "reference", previousIds = new[] { "allocate" }, lines = new[] {
                     Line("permissions", "잘하셨습니다. 권한 목록은 현재 사용할 수 있는 정보와 행동을 보여줍니다.", "Good. The permissions list shows the information and actions currently available to you."),
-                    Line("allocate", "이번에는 빈 치환문을 등록하겠습니다.\n입력: {command}\n이번 연습에 사용할 이름은 {slot}입니다.", "Let's register an empty substitution. Enter {command}. We will use the name {slot} for this exercise.") },
-                    goal = new TerminalCommandGoal { kind = TerminalGoalKind.Allocate } },
-                new TerminalConversationStep { id = "reference", lines = new[] {
-                    Line("reference", "이미 등록한 {slot}에 지휘소를 연결하십시오. 등호 오른쪽에 치환할 대상을 적습니다.\n{command}", "Bind the substitution you registered to headquarters. Write the target on the right of the equals sign.\n{command}") },
+                    Line("reference", "{slot} = 까지 입력한 뒤 색으로 표시된 [[hq|지휘소]]를 눌러 넣으십시오. Enter로 보내면 {slot}으로 그 대상을 부를 수 있습니다.",
+                        "Type {slot} =, then click [[hq|headquarters]] to insert it. Press Enter to register {slot} as its name.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } },
                 new TerminalConversationStep { id = "invoke", lines = new[] {
                     Line("substitution", "이제 지휘소를 가리키는 이름은 {slot}입니다.", "Now you can use {slot} to refer to headquarters."),
@@ -76,7 +74,8 @@ namespace Codetective.Gameplay
                 },
                 new TerminalConversationStep { id = "finish", lines = new[] {
                     Line("world", "치환문을 폐기해도 실제 지휘소는 사라지지 않습니다. 대상을 부르는 규칙만 정리한 것입니다.", "Discarding a substitution does not remove headquarters. You have only removed a rule for referring to it."),
-                    Line("coffee", "지휘소의 권한 목록에서 커피 요청도 찾아보십시오. 명령은 화면 밖의 실제 행동으로 이어집니다.", "You can also find a coffee request in headquarters' permissions. Commands lead to real actions beyond the screen."),
+                    Line("coffee", "[[hq|지휘소]]를 눌러 넣고 마침표를 입력하면 권한 목록에서 커피 요청도 찾을 수 있습니다.",
+                        "Click [[hq|headquarters]] and type a dot to find the coffee request in its permissions."),
                     OfficeLine("finish", "곧 아홉 시 예약 손님이 들어옵니다. 말풍선을 눌러 적당히 맞장구만 치시면 됩니다. 상담을 마치고 잠시 쉬시면 첫 임무를 메일로 보내겠습니다.", "Your nine o'clock client is about to arrive. Click the speech bubble to chime in now and then. Take a short break after the session and we will send your first assignment by mail.") } }
             };
             var asset = ScriptableObject.CreateInstance<TerminalConversationAsset>(); asset.name = "KernelOnboarding";

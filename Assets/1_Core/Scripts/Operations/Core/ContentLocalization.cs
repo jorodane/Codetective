@@ -57,7 +57,8 @@ namespace Codetective.Operations
             get => displayLanguage;
             set { string locale = ContentTextCatalog.Locale(value); if (displayLanguage != locale) { displayLanguage = locale; Revision++; } }
         }
-        public string Text(string key, string fallback = "") => Texts.Resolve(key, fallback, DisplayLanguage);
+        public string Text(string key, string fallback = "") => string.IsNullOrEmpty(key) ? fallback ?? "" :
+            ObjectReferenceText.PlainText(Texts.Resolve(key, fallback, DisplayLanguage));
         public string DisplayName(Entity entity) => entity == null ? "" : Text(entity.LabelKey, entity.Label);
         public string KnownName(string id, string fallback = "")
         {

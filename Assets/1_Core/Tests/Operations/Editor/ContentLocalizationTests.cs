@@ -23,7 +23,7 @@ namespace Codetective.Tests.Operations
         }
         [Test] public void ChangingDisplayLanguageDoesNotChangeCommandsAliasesOrProtocolSources()
         {
-            KernelRuntime r = World(); r.Execute("암호 피해자 = victor"); const string source = "protocol relay() { return 피해자; }";
+            KernelRuntime r = World(); r.Execute("피해자 = victor"); const string source = "protocol relay() { return 피해자; }";
             Assert.That(r.SaveProtocol(source).Success, Is.True); string[] commands = r.Complete("").Select(c => c.Replacement).ToArray();
             Assert.That(r.ViewData("victor").Name, Is.EqualTo("빅터 헤일")); r.DisplayLanguage = "en-GB";
             Assert.That(r.ViewData("victor").Name, Is.EqualTo("Victor Hale")); Assert.That(r.Language, Is.EqualTo(CommandLocale.Korean));
@@ -44,7 +44,7 @@ namespace Codetective.Tests.Operations
         }
         [Test] public void SavedReferencesAndObservationsUseNewCatalogTranslationsAfterLoading()
         {
-            KernelRuntime r = World(); r.Execute("암호 피해자 = victor");
+            KernelRuntime r = World(); r.Execute("피해자 = victor");
             r.Observe(new ObservationDefinition { subjectId = "victor", field = "description", value = Datum.Text("원문 설명", "person.description"),
                 statement = "원문 진술", statementKey = "claim", source = "원문 출처", sourceKey = "witness" });
             KernelSnapshot saved = r.Capture(); KernelRuntime loaded = World("Updated translation"); loaded.DisplayLanguage = "en"; loaded.Restore(saved);

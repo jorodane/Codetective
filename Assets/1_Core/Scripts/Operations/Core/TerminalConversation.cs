@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 
 namespace Codetective.Operations
 {
@@ -30,6 +29,7 @@ namespace Codetective.Operations
     [Serializable] public sealed class TerminalConversationStep
     {
         public string id;
+        public string[] previousIds = Array.Empty<string>();
         public TerminalDialogueLine[] lines = Array.Empty<TerminalDialogueLine>();
         public TerminalCommandGoal goal = new TerminalCommandGoal();
         public TerminalAnswer[] answers = Array.Empty<TerminalAnswer>();
@@ -39,6 +39,7 @@ namespace Codetective.Operations
         public TerminalConversationStep Copy() => new TerminalConversationStep
         {
             id = id,
+            previousIds = previousIds?.ToArray() ?? Array.Empty<string>(),
             lines = lines.Select(line => line.Copy()).ToArray(),
             goal = goal.Copy(),
             answers = answers?.Select(answer => answer.Copy()).ToArray() ?? Array.Empty<TerminalAnswer>(),
@@ -136,7 +137,7 @@ namespace Codetective.Operations
         public string text = "", textKey = "", speaker = "", speakerKey = "", englishCommand = "", koreanCommand = "";
         public string suffix = "";
         public int visibleElements;
-        public bool complete;
+        public bool complete, authored;
         public TerminalConversationLog Copy() => (TerminalConversationLog)MemberwiseClone();
     }
     [Serializable] public sealed class TerminalActionProof
@@ -210,8 +211,6 @@ namespace Codetective.Operations
         public bool TerminalUsesGuidedStartup => terminalConversations.Values.Any(d => d.replacesStartupGuide);
         public string TerminalExpectedCommand => ConversationStep == null ? "" : ExpectedCommand(ConversationStep.goal, Conversation, Language);
         public TerminalGoalKind TerminalExpectedGoal => Conversation?.phase == TerminalConversationPhase.AwaitingCommand ? ConversationStep.goal.kind : TerminalGoalKind.None;
-        public string TerminalDeclarationName => TerminalExpectedGoal == TerminalGoalKind.Allocate || TerminalExpectedGoal == TerminalGoalKind.BindReference ?
-            GoalDataName(ConversationStep.goal, Conversation) : "";
         private TerminalAnswer[] WaitingAnswers => Conversation?.phase == TerminalConversationPhase.AwaitingCommand ?
             ConversationStep.answers : Array.Empty<TerminalAnswer>();
         public bool TerminalAwaitingAnswer => WaitingAnswers.Length > 0;
@@ -220,7 +219,7 @@ namespace Codetective.Operations
         private string AnswerPromptChoices => " " + string.Concat(TerminalAnswerKeys.Select(key => "[" + key + "]"));
         public string TerminalAnswerPrompt => TerminalAwaitingAnswer ? Text(AnswerPromptKey, "대답>") + AnswerPromptChoices : "";
         public string TerminalQuestion => TerminalAwaitingAnswer ? string.Join("\n\n", ConversationStep.lines.Select(line =>
-            Text(line.textKey, line.text).Replace("{slot}", Conversation.slotName).Replace("{command}", TerminalExpectedCommand))) : "";
+            ObjectReferenceText.PlainText(Texts.Resolve(line.textKey, line.text, DisplayLanguage)).Replace("{slot}", Conversation.slotName).Replace("{command}", TerminalExpectedCommand))) : "";
         public bool IsTerminalAnswerKey(string key) => FindWaitingAnswer(key) != null;
 
         // A missing restriction means ordinary story permissions apply. A dormant tutorial starts with help alone.
@@ -248,7 +247,7 @@ namespace Codetective.Operations
             switch (keyword)
             {
                 case "answer": return TerminalAwaitingAnswer;
-                case "code": case "save": return HasTutorialPermission(TutorialGoals(), TerminalGoalKind.Allocate);
+                case "code": case "save": return false;
                 case "free": return HasTutorialPermission(TutorialGoals(), TerminalGoalKind.Free);
                 default: return true;
             }
@@ -276,8 +275,7 @@ namespace Codetective.Operations
             if (statement.AssignPath != null || !string.IsNullOrEmpty(statement.DeclaredType) || value.Path == null)
                 throw new CommandException(TutorialPermissionMessage);
             if (!value.IsCall && value.Path.Length == 1 && !protocols.ContainsKey(value.Path[0]) &&
-                (HasTutorialPermission(goals, TerminalGoalKind.BindReference) ||
-                statement.Assign == null && HasTutorialPermission(goals, TerminalGoalKind.Allocate) && data.ContainsKey(value.Path[0]))) return;
+                HasTutorialPermission(goals, TerminalGoalKind.BindReference)) return;
             if (!value.IsCall || statement.Assign != null || value.Path.Length != 2 || !HasTutorialPermission(goals, TerminalGoalKind.Invoke) ||
                 value.Arguments.Any(argument => argument.IsCall || argument.Elements != null || argument.Path?.Length > 1))
                 throw new CommandException(TutorialPermissionMessage);
@@ -365,7 +363,6 @@ namespace Codetective.Operations
         {
             string name = GoalDataName(goal, p);
             if (goal.kind == TerminalGoalKind.Help) return CommandVocabulary.KeywordName("help", locale);
-            if (goal.kind == TerminalGoalKind.Allocate) return CommandVocabulary.KeywordName("code", locale) + " " + name;
             if (goal.kind == TerminalGoalKind.Free) return CommandVocabulary.KeywordName("free", locale) + " " + name;
             Entity target = Entity(goal.targetId); string receiver = target?.NameFor(locale) ?? goal.targetId;
             if (goal.kind == TerminalGoalKind.BindReference) return name + " = " + receiver;
@@ -377,7 +374,7 @@ namespace Codetective.Operations
             }
             return "";
         }
-        private string ConversationText(TerminalConversationLog entry, TerminalConversationProgress p)
+        private ObjectReferenceText ConversationText(TerminalConversationLog entry, TerminalConversationProgress p)
         {
             bool korean = Language == CommandLocale.Korean;
             string command = (korean ? entry.koreanCommand : entry.englishCommand) ?? "";
@@ -385,8 +382,10 @@ namespace Codetective.Operations
             int separator = command.IndexOf(' ');
             string keyword = separator >= 0 ? CommandVocabulary.Keyword(command.Substring(0, separator)) : null;
             if (keyword == "save" || keyword == "code")
-                command = command.Contains("=") ? command.Substring(separator + 1) : CommandVocabulary.KeywordName("code", Language) + command.Substring(separator);
-            return Text(entry.textKey, entry.text).Replace("{slot}", p.slotName).Replace("{command}", command.TrimEnd(';')) + entry.suffix;
+                command = command.Contains("=") ? command.Substring(separator + 1) : p.slotName + " =";
+            string text = Texts.Resolve(entry.textKey, entry.text, DisplayLanguage).Replace("{slot}", p.slotName)
+                .Replace("{command}", command.TrimEnd(';')) + entry.suffix;
+            return entry.authored || !string.IsNullOrEmpty(entry.textKey) ? ObjectReferenceText.Parse(text) : new ObjectReferenceText(text);
         }
         private int AddConversationLog(TerminalConversationLog entry)
         {
@@ -413,7 +412,7 @@ namespace Codetective.Operations
             bool hasSpeaker = !string.IsNullOrEmpty(line.speaker) || !string.IsNullOrEmpty(line.speakerKey);
             p.activeLog = AddConversationLog(new TerminalConversationLog { text = line.text, textKey = line.textKey,
                 speaker = hasSpeaker ? line.speaker : ConversationDefinition.speaker, speakerKey = hasSpeaker ? line.speakerKey : ConversationDefinition.speakerKey,
-                englishCommand = ExpectedCommand(ConversationStep.goal, p, CommandLocale.English), koreanCommand = ExpectedCommand(ConversationStep.goal, p, CommandLocale.Korean) });
+                englishCommand = ExpectedCommand(ConversationStep.goal, p, CommandLocale.English), koreanCommand = ExpectedCommand(ConversationStep.goal, p, CommandLocale.Korean), authored = true });
         }
         public void AdvanceTerminalConversation(double seconds, bool visible = true)
         {
@@ -430,7 +429,7 @@ namespace Codetective.Operations
                     ConversationChanged(false);
                     continue;
                 }
-                string text = ConversationText(entry, p); int length = StringInfo.ParseCombiningCharacters(text).Length;
+                string text = ConversationText(entry, p).Text; int length = StringInfo.ParseCombiningCharacters(text).Length;
                 bool waitForEnter = TerminalLineUsesEnter;
                 bool handsOffToInput = ConversationDefinition.advanceWithEnter && !waitForEnter &&
                     (p.reply || IsUnanswered(ConversationStep) || GoalRequiresInput(ConversationStep.goal));
@@ -467,7 +466,6 @@ namespace Codetective.Operations
         private bool ConversationGoalSatisfied(TerminalCommandGoal goal)
         {
             var p = Conversation; string name = GoalDataName(goal, p);
-            if (goal.kind == TerminalGoalKind.Allocate) return data.ContainsKey(name);
             if (goal.kind == TerminalGoalKind.BindReference) return data.TryGetValue(name, out DataSlot slot) && slot.value.CanReferenceEntity && slot.value.id == goal.targetId;
             if (goal.kind == TerminalGoalKind.Free) return !data.ContainsKey(name);
             if (goal.kind == TerminalGoalKind.Invoke) return p.performed.Any(a => a.targetId == goal.targetId && a.operation == goal.operation && (goal.argumentCount < 0 || a.arguments == goal.argumentCount));
@@ -477,7 +475,7 @@ namespace Codetective.Operations
             step.answers.Length > 0 && string.IsNullOrEmpty(Conversation.answerKey);
 
         private bool GoalRequiresInput(TerminalCommandGoal goal) =>
-            goal.kind != TerminalGoalKind.None && (!goal.acceptExisting || !ConversationGoalSatisfied(goal));
+            goal.kind != TerminalGoalKind.None && goal.kind != TerminalGoalKind.Allocate && (!goal.acceptExisting || !ConversationGoalSatisfied(goal));
 
         private void ReadyForConversationCommand()
         {
@@ -506,7 +504,7 @@ namespace Codetective.Operations
             if (!string.IsNullOrEmpty(p.answerKey))
                 ApplyStoryEffects(step.answers.FirstOrDefault(answer => answer.key == p.answerKey)?.effects);
             p.answerKey = "";
-            string source = Text(definition.speakerKey, definition.speaker);
+            string source = ObjectReferenceText.PlainText(Texts.Resolve(definition.speakerKey, definition.speaker, DisplayLanguage));
             foreach (string id in step.discoveries) Discover(id, source);
             foreach (ObservationDefinition report in step.reports) Observe(report);
             ApplyStoryEffects(step.onComplete);
@@ -547,7 +545,7 @@ namespace Codetective.Operations
                 }
                 return;
             }
-            bool matched = goal.kind == TerminalGoalKind.Help && trace.keyword == "help" || goal.kind == TerminalGoalKind.Allocate && trace.keyword == "save" && trace.argument == name ||
+            bool matched = goal.kind == TerminalGoalKind.Help && trace.keyword == "help" ||
                 goal.kind == TerminalGoalKind.Free && trace.keyword == "free" && trace.argument == name || goal.kind == TerminalGoalKind.BindReference && trace.assigned == name && result.Value.CanReferenceEntity && result.Value.id == goal.targetId ||
                 goal.kind == TerminalGoalKind.Invoke && trace.actions.Any(a => a.targetId == goal.targetId && a.operation == goal.operation && (goal.argumentCount < 0 || a.arguments == goal.argumentCount)) ||
                 goal.kind == TerminalGoalKind.StoryCondition && goal.condition.Matches(this);
@@ -564,33 +562,37 @@ namespace Codetective.Operations
             }
             ConversationChanged(true);
         }
-        public string TerminalConversationTranscript(bool includeAnswerPrompts = true)
+        public string TerminalConversationTranscript(bool includeAnswerPrompts = true) => TerminalConversationContent(includeAnswerPrompts).Text;
+
+        public ObjectReferenceText TerminalConversationContent(bool includeAnswerPrompts = true)
         {
-            var p = Conversation; if (p == null) return "";
-            var text = new StringBuilder();
+            var p = Conversation; if (p == null) return new ObjectReferenceText("");
+            var lines = new List<ObjectReferenceText>();
             foreach (TerminalConversationLog entry in p.log)
             {
                 if (!includeAnswerPrompts && entry.textKey == AnswerPromptKey) continue;
-                string line = ConversationText(entry, p);
+                ObjectReferenceText line = ConversationText(entry, p);
                 if (!entry.complete)
                 {
-                    int[] elements = StringInfo.ParseCombiningCharacters(line);
-                    int count = Math.Min(entry.visibleElements, elements.Length); line = count >= elements.Length ? line : line.Substring(0, elements[count]);
+                    int[] elements = StringInfo.ParseCombiningCharacters(line.Text);
+                    if (entry.visibleElements < elements.Length) line = line.Slice(0, elements[entry.visibleElements]);
                 }
-                if (text.Length > 0) text.Append("\n\n");
+                var parts = new List<ObjectReferenceText>();
                 if (!string.IsNullOrEmpty(entry.speaker) || !string.IsNullOrEmpty(entry.speakerKey))
                 {
-                    string speaker = Text(entry.speakerKey, entry.speaker);
-                    if (ConversationDefinition.useSpeakerPrompt) text.Append(speaker).Append("> ");
-                    else text.Append('[').Append(speaker).Append("] ");
+                    string speaker = Texts.Resolve(entry.speakerKey, entry.speaker, DisplayLanguage);
+                    parts.Add(ObjectReferenceText.Parse(ConversationDefinition.useSpeakerPrompt ? speaker + "> " : "[" + speaker + "] "));
                 }
-                text.Append(line); if (!entry.complete) text.Append('▌');
+                parts.Add(line);
+                if (!entry.complete) parts.Add(new ObjectReferenceText("▌"));
+                lines.Add(ObjectReferenceText.Join("", parts));
             }
-            return text.ToString();
+            return ObjectReferenceText.Join("\n\n", lines);
         }
         private void RestoreTerminalConversations(KernelSnapshot snapshot)
         {
             var restored = new Dictionary<string, TerminalConversationProgress>(StringComparer.Ordinal);
+            var revisedSteps = new HashSet<string>(StringComparer.Ordinal);
             foreach (TerminalConversationProgress item in snapshot.terminalConversations ?? Array.Empty<TerminalConversationProgress>())
             {
                 if (item == null || string.IsNullOrWhiteSpace(item.id) || restored.ContainsKey(item.id) || !Enum.IsDefined(typeof(TerminalConversationPhase), item.phase) || item.deviations < 0 ||
@@ -601,7 +603,12 @@ namespace Codetective.Operations
                     item.phase == TerminalConversationPhase.Speaking && (item.activeLog < 0 || item.activeLog >= item.log.Count || item.pendingIndex >= item.pending.Count))
                     throw new CommandException("저장된 터미널 대화 상태가 유효하지 않습니다.");
                 var state = item.Copy();
-                if (terminalConversations.TryGetValue(state.id, out var definition) && state.phase != TerminalConversationPhase.Dormant && !definition.steps.Any(s => s.id == state.stepId)) state.phase = TerminalConversationPhase.Completed;
+                if (terminalConversations.TryGetValue(state.id, out var definition) && IsActiveConversation(state) && !definition.steps.Any(s => s.id == state.stepId))
+                {
+                    TerminalConversationStep replacement = definition.steps.FirstOrDefault(s => s.previousIds.Contains(state.stepId));
+                    if (replacement == null) state.phase = TerminalConversationPhase.Completed;
+                    else { state.stepId = replacement.id; revisedSteps.Add(state.id); }
+                }
                 restored.Add(state.id, state);
             }
             foreach (var definition in terminalConversations.Values)
@@ -614,6 +621,7 @@ namespace Codetective.Operations
             TerminalConversationProgress active = restored.Values.FirstOrDefault(p => terminalConversations.ContainsKey(p.id) && IsActiveConversation(p));
             if (active != null) activeTerminalConversation = active.id;
             else if (Conversation == null) activeTerminalConversation = null;
+            if (active != null && revisedSteps.Contains(active.id)) BeginConversationSpeech(ConversationStep.lines, false);
             ConversationChanged(false);
         }
     }

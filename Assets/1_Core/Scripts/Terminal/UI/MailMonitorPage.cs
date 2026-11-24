@@ -19,6 +19,7 @@ namespace Codetective.Terminal
         private string selectedId, displayedId;
         private RectTransform list;
         private Text detail, sender, recipient, title, date, feedback;
+        private ObjectReferenceTextView bodyLinks;
         private ScrollRect bodyScroll;
         private Button clinicTab, kernelTab, accept;
         private string listSignature;
@@ -60,6 +61,10 @@ namespace Codetective.Terminal
             title = HeaderField(header, "제목", -72, 26);
             date = HeaderField(header, "날짜", -104, 24);
             detail = MonitorWidgets.ScrollText(transform, font, new Vector2(DetailLeft, -BodyTop), new Vector2(DetailWidth, 624 - BodyTop));
+            bodyLinks = ObjectReferenceTextView.Attach(detail, (id, label) =>
+            {
+                if (Interactive) GetComponentInParent<TerminalController>()?.TryInsertObjectReference(id, label);
+            });
             bodyScroll = detail.transform.parent.GetComponent<ScrollRect>();
             accept = MonitorWidgets.Button(transform, font, new Vector2(DetailLeft, -578), new Vector2(DetailWidth, 46), "확인", Accept);
             choiceList = MonitorWidgets.ScrollList("MailChoices", "Responses", transform, new Vector2(DetailLeft, -480), new Vector2(DetailWidth, 144));
@@ -125,7 +130,7 @@ namespace Codetective.Terminal
                     " ~ " + KernelRuntime.TimeOfDay(request.appointment.BookingEndMinute) + "\n" + request.appointment.patientName;
             }
             if (selected != null && !string.IsNullOrEmpty(runtime.SelectedMailChoice(selected.id))) body += "\n\n답변: " + runtime.SelectedMailChoiceLabel(selected.id);
-            detail.text = RefreshChoices(selected, body);
+            bodyLinks.Show(ObjectReferenceText.Parse(RefreshChoices(selected, body)), runtime.CanLinkObject);
             if (displayedId != selectedId)
             {
                 displayedId = selectedId;

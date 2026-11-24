@@ -48,7 +48,7 @@ namespace Codetective.Terminal
     /// <summary>One play session. Allocations and completion candidates share the same source of truth.</summary>
     public sealed class TerminalSession
     {
-        private static readonly string[] Commands = { "code", "free", "help", "answer" };
+        private static readonly string[] Commands = { "free", "help", "answer" };
         public const string HelpText = KernelRuntime.Help;
         private readonly Dictionary<int, MemorySlot> wrappers = new Dictionary<int, MemorySlot>();
         public KernelRuntime Runtime { get; }
@@ -69,7 +69,13 @@ namespace Codetective.Terminal
             return new CommandResult(result.Success, result.Message);
         }
 
-        public IReadOnlyList<TerminalCompletion> Complete(string line, bool isComposing = false)
+        public CommandResult ExecuteLinkedInput(string source, string displayedSource)
+        {
+            ExecutionResult result = Runtime.ExecuteLinkedInput(source, displayedSource);
+            return new CommandResult(result.Success, result.Message);
+        }
+
+        public IReadOnlyList<TerminalCompletion> Complete(string line, bool isComposing = false, bool linkObjects = false)
         {
             line = (line ?? string.Empty).Normalize(NormalizationForm.FormC).TrimStart();
             if (line.IndexOfAny(new[] { '\r', '\n' }) >= 0)
@@ -95,7 +101,7 @@ namespace Codetective.Terminal
                     .Select(command => new { Code = command, Name = CommandVocabulary.Match(CommandVocabulary.KeywordName(command, Runtime.Language),
                         CommandVocabulary.KeywordNames(command), line, isComposing) }).Where(c => c.Name != null)
                     .Select(command => new TerminalCompletion(command.Name, command.Code == "help" ? command.Name : command.Name + " "))
-                    .Concat(Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement))).ToArray();
+                    .Concat(Runtime.Complete(line, isComposing, linkObjects).Select(c => new TerminalCompletion(c.Label, c.Replacement))).ToArray();
             }
 
             string enteredCommand = line.Substring(0, separator);
@@ -105,17 +111,7 @@ namespace Codetective.Terminal
             if ((canonicalCommand == "code" || canonicalCommand == "answer") && prefix.StartsWith("=", StringComparison.Ordinal))
                 canonicalCommand = null;
             if (!Runtime.CanUseTerminalKeyword(canonicalCommand)) return Array.Empty<TerminalCompletion>();
-            if (canonicalCommand == "save" || canonicalCommand == "help") return Array.Empty<TerminalCompletion>();
-            if (canonicalCommand == "code" && prefix.IndexOf('=') < 0)
-            {
-                string name = Runtime.TerminalDeclarationName;
-                if (!string.IsNullOrEmpty(name) && ComparisonForm(name, isComposing).StartsWith(ComparisonForm(prefix, isComposing), StringComparison.Ordinal))
-                {
-                    string replacement = line.Substring(0, line.Length - prefix.Length) + name;
-                    if (Runtime.TerminalExpectedGoal == TerminalGoalKind.BindReference) replacement += " = ";
-                    return new[] { new TerminalCompletion(name, replacement) };
-                }
-            }
+            if (canonicalCommand == "help") return Array.Empty<TerminalCompletion>();
             if (canonicalCommand == "answer")
             {
                 // The question lists all options. An empty argument must not select one by default.
@@ -125,7 +121,7 @@ namespace Codetective.Terminal
                     .Select(key => new TerminalCompletion("[" + key + "]", enteredCommand + " " + key)).ToArray();
             }
             if (canonicalCommand != "free")
-                return Runtime.Complete(line, isComposing).Select(c => new TerminalCompletion(c.Label, c.Replacement)).ToArray();
+                return Runtime.Complete(line, isComposing, linkObjects).Select(c => new TerminalCompletion(c.Label, c.Replacement)).ToArray();
 
             if (prefix.Any(char.IsWhiteSpace))
                 return Array.Empty<TerminalCompletion>();

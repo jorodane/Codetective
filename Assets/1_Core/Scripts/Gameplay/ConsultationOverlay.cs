@@ -1,6 +1,7 @@
 using System.Linq;
 using Codetective.Interaction;
 using Codetective.Operations;
+using Codetective.Terminal;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,6 +17,7 @@ namespace Codetective.Gameplay
         private Renderer[] terminalParts;
         private RectTransform bubble;
         private Text speaker, sentence, feedback;
+        private ObjectReferenceTextView sentenceLinks;
         private Button main, clue, firstResponse, secondResponse;
         private AudioSource audioSource;
         private bool reservedCameraSpace;
@@ -37,6 +39,10 @@ namespace Codetective.Gameplay
             main.onClick.AddListener(() => Acknowledge(nextAcknowledgement++ % 2));
             speaker = OverlayWidgets.Label(bubble, font, new Vector2(16, -8), new Vector2(640, 26), "", 20);
             sentence = OverlayWidgets.Label(bubble, font, new Vector2(16, -39), new Vector2(640, 96), "", 22);
+            sentenceLinks = ObjectReferenceTextView.Attach(sentence, (id, label) =>
+            {
+                if (CanReply) game.InsertConsultationReference(id, label);
+            });
             sentence.resizeTextForBestFit = true; sentence.resizeTextMinSize = 16; sentence.resizeTextMaxSize = 22;
             clue = OverlayWidgets.Button(bubble, font, Vector2.zero, new Vector2(640, 32), "", CollectClue);
             clue.GetComponentInChildren<Text>().color = new Color(1, 0.38f, 0.32f);
@@ -147,12 +153,14 @@ namespace Codetective.Gameplay
             {
                 showingSequence = true;
                 speaker.text = visit.phase == VisitPhase.Closing ? "Kernel" : visit.patientName;
-                sentence.text = game.Runtime.VisitPresentationText; main.interactable = false;
+                sentenceLinks.Show(new ObjectReferenceText(game.Runtime.VisitPresentationText), game.Runtime.CanLinkObject);
+                main.interactable = false;
                 feedback.text = visit.phase == VisitPhase.Arriving ? "입실 중" : visit.phase == VisitPhase.Departing ? "퇴실 중" : "상담 마무리";
                 return;
             }
             if (showingSequence) { showingSequence = false; feedback.text = "말풍선을 눌러 응답"; }
-            speaker.text = visit?.patientName ?? line.speaker; sentence.text = line.sentence;
+            speaker.text = visit?.patientName ?? line.speaker;
+            sentenceLinks.Show(ObjectReferenceText.Parse(line.sentence), game.Runtime.CanLinkObject);
             if (hasClue) clue.GetComponentInChildren<Text>().text = "● " + line.keyword + (game.Runtime.RecordedClues.Contains(line.fact) ? "  [기록됨]" : "");
             if (firstResponse.gameObject.activeSelf) firstResponse.GetComponentInChildren<Text>().text = choices >= 1 ? line.responses[0] : "음.";
             if (secondResponse.gameObject.activeSelf) secondResponse.GetComponentInChildren<Text>().text = choices >= 2 ? line.responses[1] : "아아.";

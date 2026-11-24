@@ -57,11 +57,11 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(sample, Is.Not.Null); KernelRuntime world = sample.CreateRuntime();
             Assert.That(world.IsDiscovered("VictorHale"), Is.False);
             Assert.That(world.Execute("매기.대화하기()").Success, Is.True); world.Tick(2);
-            Assert.That(world.Execute("암호 피해자 = VictorHale").Success, Is.True);
+            Assert.That(world.Execute("피해자 = VictorHale").Success, Is.True);
             Assert.That(world.Execute("참석기록.read()").Success, Is.True); world.Tick(2);
             Assert.That(world.Execute("피해자.attended").Value.number, Is.Zero);
             Assert.That(world.Entity("VictorHale").GetValue("attended").number, Is.EqualTo(1));
-            Assert.That(world.Execute("암호 참석여부 = 행사참석").Success, Is.True);
+            Assert.That(world.Execute("참석여부 = 행사참석").Success, Is.True);
             Assert.That(world.Execute("레이첼.질문하기(참석여부)").Success, Is.True); world.Tick(2);
             Assert.That(world.Execute("에블린.질문하기(참석여부)").Success, Is.True); world.Tick(2);
             KernelRuntime loaded = sample.CreateRuntime(); loaded.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(world.Capture())));
@@ -678,7 +678,7 @@ namespace Codetective.Terminal.Tests.UI
             host.ShowPage("clinic");
             terminal.SetInteractionEnabled(true);
             Assert.That(root.GetComponent<CanvasGroup>().interactable, Is.True);
-            Invoke(terminal, "Submit", "save must_not_run");
+            Invoke(terminal, "Submit", "must_not_run = 1");
             terminal.SetInteractionEnabled(false);
             runtime.Report("페이지 전환 중에도 수신되는 보고"); Invoke(terminal, "LateUpdate");
             Assert.That(runtime.Data.ContainsKey("must_not_run"), Is.False);
@@ -753,6 +753,32 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(Field<Text>(schedule, "appointmentText").text, Does.Contain("가족 돌봄에 대해 상담하고 싶습니다."));
             Assert.That(runtime.ScheduleForDay(2).Count, Is.EqualTo(1));
         }
+        [Test]
+        public void ClickingAnObjectInMailReturnsToTheKernelDraftWithTheReference()
+        {
+            runtime.RegisterMail(new StoryMail { id = "object-link", mailbox = Mailbox.Kernel, body = "[[hq|Operations HQ]] is ready." });
+            terminal.SetInteractionEnabled(true);
+            host.ShowPage("kernel"); input.SetTextWithoutNotify("office = ");
+            host.ShowPage("mail");
+            MailMonitorPage mail = host.CurrentPage.GetComponent<MailMonitorPage>();
+            Text detail = Field<Text>(mail, "detail");
+            Assert.That(detail.text, Is.EqualTo("Operations HQ is ready."));
+            Canvas.ForceUpdateCanvases();
+            UICharInfo glyph = detail.cachedTextGenerator.characters[0];
+            UILineInfo line = detail.cachedTextGenerator.lines[0];
+            Vector2 localPoint = new Vector2(glyph.cursorPos.x + glyph.charWidth * 0.5f, line.topY - line.height * 0.5f) / detail.pixelsPerUnit;
+            Vector2 point = RectTransformUtility.WorldToScreenPoint(null, detail.transform.TransformPoint(localPoint + detail.PixelAdjustPoint(Vector2.zero)));
+            var links = detail.GetComponent<ObjectReferenceTextView>();
+            Assert.That(links.IsRaycastLocationValid(point, null), Is.True);
+            links.OnPointerClick(new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left, position = point });
+
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel"));
+            Assert.That(input.text, Is.EqualTo("office = Operations HQ"));
+            Assert.That(runtime.Data, Is.Empty);
+            Invoke(terminal, "Submit", input.text);
+            Assert.That(runtime.Data["office"].value.id, Is.EqualTo("hq"));
+        }
+
         [Test]
         public void MailFieldsStayAboveTheScrollableBodyAndUseTheDestinationMailboxByDefault()
         {

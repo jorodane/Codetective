@@ -55,7 +55,7 @@ namespace Codetective.Operations
             agent.Observations.Clear(); agent.Discoveries.Clear();
             agent.KnowledgeFlags.Clear(); agent.GrantedAuthorities.Clear();
             // Each running operation keeps its authored source, independently of later edits.
-            Protocol snapshot = new CommandParser(protocol.Source).ReadProtocol(protocol.Source);
+            Protocol snapshot = new CommandParser(protocol.Source).ReadProtocol(protocol.Source, legacyDeclarations: true);
             agent.Frames.Add(new ProtocolFrame { Protocol = snapshot, Locals = locals });
             agent.Delay = -1;
             agent.State = AgentState.Executing;
@@ -143,7 +143,7 @@ namespace Codetective.Operations
                         finally { executingAgent = previous; }
                         var locals = Bind(child, args, agent.CipherTable);
                         frame.Cursor++;
-                        agent.Frames.Add(new ProtocolFrame { Protocol = new CommandParser(child.Source).ReadProtocol(child.Source),
+                        agent.Frames.Add(new ProtocolFrame { Protocol = new CommandParser(child.Source).ReadProtocol(child.Source, legacyDeclarations: true),
                             Locals = locals, ReturnTarget = statement.Assign });
                         continue;
                     }

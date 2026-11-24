@@ -5,8 +5,6 @@ namespace Codetective.Terminal.Tests
 {
     public sealed class TerminalCompletionInputTests
     {
-        [TestCase("c", "code")]
-        [TestCase("co", "code")]
         [TestCase("f", "free")]
         [TestCase("fr", "free")]
         [TestCase("h", "help")]
@@ -22,7 +20,7 @@ namespace Codetective.Terminal.Tests
         public void SameLengthKoreanCompositionChangesRemainObservableWithoutMovingTheCaret()
         {
             var session = new TerminalSession();
-            session.Execute("save 단서");
+            session.Execute("단서 = 1");
             var first = new TerminalCompletionInput("free ", "ㄷ", 5, 5);
             var second = new TerminalCompletionInput("free ", "다", 5, 5);
             var third = new TerminalCompletionInput("free ", "단", 5, 5);
@@ -41,8 +39,8 @@ namespace Codetective.Terminal.Tests
         public void FreeSuggestsAllocatedNamesWhileTheirKoreanPrefixIsComposing(string committedName, string composition)
         {
             var session = new TerminalSession();
-            session.Execute("save 단서");
-            session.Execute("save 증거");
+            session.Execute("단서 = 1");
+            session.Execute("증거 = 1");
             string committed = "free " + committedName;
             var input = new TerminalCompletionInput(committed, composition, committed.Length, committed.Length);
             Assert.That(input.IsAtEnd, Is.True);
@@ -81,7 +79,7 @@ namespace Codetective.Terminal.Tests
         public void PartialSyllableMatchingIsLimitedToActiveComposition()
         {
             var session = new TerminalSession();
-            session.Execute("save 단서");
+            session.Execute("단서 = 1");
             Assert.That(session.Complete("free 다"), Is.Empty);
             Assert.That(session.Complete("free 다", true).Single().DisplayText, Is.EqualTo("단서"));
             Assert.That(session.Execute("free 다").Success, Is.False);

@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Codetective.Operations;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -16,6 +18,10 @@ namespace Codetective.Terminal
         private CrtScreen crtScreen;
         private CanvasRenderer caretRenderer;
         private PointerEventData projectedDrag;
+        private readonly TerminalReferenceDraft draft = new TerminalReferenceDraft();
+        private ObjectReferenceTextView referenceColors;
+        private int savedAnchor = -1, savedCaret = -1;
+        private int editStart = int.MaxValue;
 
         private CrtScreen CurvedScreen => crtScreen != null ? crtScreen :
             crtScreen = GetComponentInParent<CrtScreen>();
@@ -28,7 +34,8 @@ namespace Codetective.Terminal
                 base.OnPointerDown(eventData);
                 if (entering && textComponent != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(
                     textComponent.rectTransform, eventData.position, eventData.pressEventCamera, out Vector2 point))
-                    FocusAt(Mathf.Clamp(GetCharacterIndexFromPosition(point) + m_DrawStart, 0, text.Length));
+                    FocusAt(draft.Snap(Mathf.Clamp(GetCharacterIndexFromPosition(point) + m_DrawStart, 0, text.Length)));
+                SnapSelection();
             }
         }
 
@@ -43,6 +50,7 @@ namespace Codetective.Terminal
             if (CurvedScreen == null || !CurvedScreen.IsCurved)
             {
                 base.OnDrag(eventData);
+                SnapSelection();
                 return;
             }
 
@@ -61,9 +69,121 @@ namespace Codetective.Terminal
                 projectedDrag.pointerCurrentRaycast = eventData.pointerCurrentRaycast;
                 projectedDrag.pointerPressRaycast = eventData.pointerPressRaycast;
                 base.OnDrag(projectedDrag);
+                SnapSelection();
                 if (projectedDrag.used)
                     eventData.Use();
             }
+        }
+
+        public string EncodeReferences(string value)
+        {
+            draft.Update(text, editStart);
+            return draft.Encode(value, value == text ? int.MaxValue : Mathf.Min(m_CaretPosition, m_CaretSelectPosition));
+        }
+
+        public InlineCompletion DecodeCompletion(string value, Func<string, string> label) => draft.DecodeCompletion(value, label);
+
+        public bool InsertObjectReference(string id, string label)
+        {
+            if (string.IsNullOrWhiteSpace(label) || string.IsNullOrEmpty(id)) return false;
+            CommitComposition();
+            draft.Update(text);
+            int anchor = Mathf.Clamp(isFocused ? m_CaretSelectPosition : savedAnchor < 0 ? text.Length : savedAnchor, 0, text.Length);
+            int caret = Mathf.Clamp(isFocused ? m_CaretPosition : savedCaret < 0 ? text.Length : savedCaret, 0, text.Length);
+            int start = draft.Snap(Mathf.Min(anchor, caret), anchor == caret ? 0 : -1);
+            int end = draft.Snap(Mathf.Max(anchor, caret), anchor == caret ? 0 : 1);
+            int separator = start > 0 && text[start - 1] == '=' ? 1 : 0;
+            if (characterLimit > 0 && text.Length - (end - start) + label.Length + separator > characterLimit) return false;
+            savedAnchor = savedCaret = draft.Insert(start, end, id, label);
+            SetTextWithoutNotify(draft.Content.Text);
+            m_CaretSelectPosition = m_CaretPosition = savedCaret;
+            UpdateLabel();
+            onValueChanged.Invoke(text);
+            return true;
+        }
+
+        public void FocusDraft()
+        {
+            IgnoreEnterForCurrentFrame();
+            FocusAt(Mathf.Clamp(savedCaret < 0 ? text.Length : savedCaret, 0, text.Length));
+        }
+
+        public void ClearDraft()
+        {
+            draft.Set(new ObjectReferenceText(""));
+            savedAnchor = savedCaret = -1;
+            SetTextWithoutNotify("");
+        }
+
+        private void RememberSelection()
+        {
+            if (!isFocused) return;
+            CommitComposition(false);
+            savedAnchor = m_CaretSelectPosition;
+            savedCaret = m_CaretPosition;
+        }
+
+        public override void OnDeselect(BaseEventData eventData)
+        { RememberSelection(); base.OnDeselect(eventData); }
+
+        public override void ReleaseFocus()
+        { RememberSelection(); base.ReleaseFocus(); }
+
+        protected override void ApplyCompletionText(InlineCompletion completion)
+        {
+            if (completion.References != null) draft.Set(completion.References);
+            else draft.Update(completion.Text);
+            base.ApplyCompletionText(completion);
+        }
+
+        protected override void ApplyCompositionText(int start, int end, string composition)
+        {
+            base.ApplyCompositionText(start, end, composition);
+            draft.Update(text, start);
+        }
+
+        protected override void ProcessEditingKey(Event inputEvent)
+        {
+            draft.Update(text);
+            if (readOnly || IsComposing || draft.Content.Spans.Count == 0) { base.ProcessEditingKey(inputEvent); return; }
+            KeyCode key = inputEvent.keyCode;
+            bool backwards = key == KeyCode.Backspace;
+            if (m_CaretPosition == m_CaretSelectPosition && (backwards || key == KeyCode.Delete) &&
+                draft.TryDeletion(m_CaretPosition, backwards, out ObjectReferenceSpan span))
+            { m_CaretSelectPosition = span.Start; m_CaretPosition = span.End; }
+            SnapSelection();
+            editStart = Mathf.Min(m_CaretPosition, m_CaretSelectPosition);
+            if (backwards && m_CaretPosition == m_CaretSelectPosition) editStart = Mathf.Max(0, editStart - 1);
+            try { base.ProcessEditingKey(inputEvent); draft.Update(text, editStart); }
+            finally { editStart = int.MaxValue; }
+            SnapSelection(key == KeyCode.LeftArrow ? -1 : key == KeyCode.RightArrow ? 1 : 0);
+        }
+
+        private void SnapSelection(int direction = 0)
+        {
+            if (IsComposing || draft.Content.Spans.Count == 0) return;
+            if (m_CaretPosition == m_CaretSelectPosition)
+                m_CaretPosition = m_CaretSelectPosition = draft.Snap(m_CaretPosition, direction);
+            else
+            {
+                bool forwards = m_CaretPosition > m_CaretSelectPosition;
+                m_CaretPosition = draft.Snap(m_CaretPosition, forwards ? 1 : -1);
+                m_CaretSelectPosition = draft.Snap(m_CaretSelectPosition, forwards ? -1 : 1);
+            }
+        }
+
+        protected override void LateUpdate()
+        {
+            base.LateUpdate();
+            if (textComponent == null) return;
+            draft.Update(text);
+            if (referenceColors == null && draft.Content.Spans.Count == 0) return;
+            if (referenceColors == null) referenceColors = ObjectReferenceTextView.Attach(textComponent);
+            ObjectReferenceText visible = draft.View(CompletionInput.Text, Mathf.Min(m_CaretPosition, m_CaretSelectPosition));
+            int from = isFocused ? m_DrawStart : 0;
+            int to = from + textComponent.text.Length;
+            referenceColors.SetSpans(visible.Spans.Where(span => span.End > from && span.Start < to).Select(span =>
+                new ObjectReferenceSpan(Mathf.Max(span.Start, from) - from, Mathf.Min(span.End, to) - Mathf.Max(span.Start, from), span.Id)));
         }
 
         public override void Rebuild(CanvasUpdate update)

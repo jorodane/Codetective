@@ -129,7 +129,7 @@ namespace Codetective.Operations
             if (snapshot.evidence != null) return;
             foreach (DataSlot slot in data.Values) CollectEvidence(slot.value, "이전 기록", false, false);
             foreach (ConsultationLine line in Consultation.Where(l => RecordedClues.Contains(l.fact)))
-                CollectEvidence(Datum.Ref(line.kind, line.fact, line.keyword, line.sentence), "상담 단서", false, false);
+                CollectEvidence(Datum.Ref(line.kind, line.fact, line.keyword, ObjectReferenceText.PlainText(line.sentence)), "상담 단서", false, false);
             foreach (NewsArticle article in news.Values)
             {
                 if (editions.Values.Any(e => e.read && e.articleIds.Contains(article.id))) CollectNewsArticle(article, true);

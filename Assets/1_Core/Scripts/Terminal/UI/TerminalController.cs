@@ -86,6 +86,16 @@ namespace Codetective.Terminal
             return true;
         }
 
+        public bool TryInsertObjectReference(string id, string label)
+        {
+            if (!isActiveAndEnabled || !Runtime.CanLinkObject(id)) return false;
+            MonitorPageHost host = GetComponent<MonitorPageHost>();
+            if (host != null && (host.SystemMenuVisible || (host.CurrentPage?.Id != "kernel" && !host.TryNavigate("kernel")))) return false;
+            if (!input.InsertObjectReference(id, label)) return false;
+            if (AcceptsInput) input.FocusDraft();
+            return true;
+        }
+
         private void RestoreCommandFocus()
         {
             if (!restoreCommandFocus) return;
@@ -99,7 +109,7 @@ namespace Codetective.Terminal
             { restoreCommandFocus = false; return; }
             if (!AcceptsInput || Time.timeScale == 0f) return;
             restoreCommandFocus = false;
-            input.FocusFromEnter();
+            input.FocusDraft();
         }
 
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);
@@ -112,6 +122,7 @@ namespace Codetective.Terminal
             session.Runtime.Message -= QueueReport;
             session = new TerminalSession(runtime);
             session.Runtime.Message += QueueReport;
+            if (input != null) input.ClearDraft();
             ResetConversationPresentation();
             runtimeRevision = -1;
             GetComponent<MonitorPageHost>()?.AttachRuntime(runtime);
@@ -159,7 +170,7 @@ namespace Codetective.Terminal
                            "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
                            "입력창 클릭 후 명령 입력 · Tab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정 · 다음 Enter 실행\n" +
                            "입력하지 않을 때 Tab 다음 페이지 / Shift+Tab 이전 페이지\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
-            transcript.text = history.Text;
+            DrawTranscript(history.Content);
             RefreshCommandPrompt();
             completionPanel.SetActive(false);
             SetInteractionEnabled(interactionEnabled);
@@ -189,6 +200,7 @@ namespace Codetective.Terminal
             {
                 runtimeRevision = session.Runtime.Revision;
                 RefreshCommandPrompt();
+                DrawTranscript(ConversationTranscript());
                 RefreshCompletions();
             }
             TerminalCompletionInput current = input.CompletionInput;
@@ -232,27 +244,29 @@ namespace Codetective.Terminal
             restoreCommandFocus = true;
             bool conversation = session.Runtime.TerminalConversationActive;
             MergeCompletedConversation();
-            CommandResult result = session.Execute(line);
+            CommandResult result = session.ExecuteLinkedInput(input.EncodeReferences(line), line);
             if (!conversation) AppendHistory("> " + line + "\n" + (result.Success ? "" : "오류 ") + result.Message);
 
-            input.SetTextWithoutNotify(string.Empty);
+            input.ClearDraft();
             ApplyInputInteraction();
             RestoreCommandFocus();
             visibility.Edit();
             RefreshCompletions();
         }
 
-        private void AppendHistory(string entry)
+        private void AppendHistory(string entry) => AppendHistoryContent(new ObjectReferenceText(entry));
+
+        private void AppendHistoryContent(ObjectReferenceText entry)
         {
             QueueTranscriptScroll();
             string before = history.Text;
-            string removed = history.Append(entry);
+            string removed = history.AppendContent(entry);
             if (!followTranscript && removed.Length > 0)
             {
                 string remaining = before.Substring(Math.Min(removed.Length, before.Length));
                 preservedTranscriptPosition.y -= MeasureHistory(before) - MeasureHistory(remaining);
             }
-            transcript.text = ConversationTranscript();
+            DrawTranscript(ConversationTranscript());
         }
 
         private void QueueTranscriptScroll(bool toLatest = false)
@@ -316,12 +330,13 @@ namespace Codetective.Terminal
                 }
             }
 
+            string command = input.EncodeReferences(current.Text);
             completions = visibility.ShouldShow(current, lastFocus, AcceptsInput)
-                ? session.Complete(lastText, current.IsComposing)
+                ? session.Complete(command, current.IsComposing, linkObjects: true)
                 : Array.Empty<TerminalCompletion>();
             // A fully typed word is already committed; keep longer names from taking it over.
             foreach (TerminalCompletion candidate in completions)
-                if (candidate.ReplacementText == current.Text) { completions = Array.Empty<TerminalCompletion>(); break; }
+                if (candidate.ReplacementText == command) { completions = Array.Empty<TerminalCompletion>(); break; }
             if (previousSelection != null)
                 for (int i = 0; i < completions.Count; i++)
                     if (completions[i].ReplacementText == previousSelection) { selectedCompletion = i; break; }
@@ -332,8 +347,7 @@ namespace Codetective.Terminal
         private void DrawCompletions()
         {
             completionPanel.SetActive(completions.Count > 0);
-            input.SetInlinePreview(completions.Count > 0 ? new InlineCompletion(completions[selectedCompletion].ReplacementText,
-                completions[selectedCompletion].ReplacementText.Length) : (InlineCompletion?)null);
+            input.SetInlinePreview(completions.Count > 0 ? DisplayCompletion(completions[selectedCompletion]) : (InlineCompletion?)null);
             if (completions.Count == 0)
                 return;
 
@@ -373,9 +387,11 @@ namespace Codetective.Terminal
             }
             RefreshCompletions(current);
             if (completions.Count == 0) return null;
-            string value = completions[selectedCompletion].ReplacementText;
-            return new InlineCompletion(value, value.Length);
+            return DisplayCompletion(completions[selectedCompletion]);
         }
+
+        private InlineCompletion DisplayCompletion(TerminalCompletion completion) => input.DecodeCompletion(completion.ReplacementText,
+            id => Runtime.CanLinkObject(id) ? Runtime.ObjectName(id) : null);
 
         private void RequestCompletions() { visibility.Open(); RefreshCompletions(); }
 
@@ -392,8 +408,7 @@ namespace Codetective.Terminal
             if (index >= completions.Count)
                 return;
             selectedCompletion = index;
-            string value = completions[index].ReplacementText;
-            input.AcceptCompletion(new InlineCompletion(value, value.Length));
+            input.AcceptCompletion(DisplayCompletion(completions[index]));
         }
 
         private void DismissCompletions()
