@@ -23,8 +23,8 @@ MonoBehaviour:
     id: clinic-reservation-followup
     mailbox: 0
     sender: 보호자 상담 예약자
-    subject: DAY 2 오전 상담 예약 문의
-    body: '가족의 기억 재활 문제로 상담을 받고 싶습니다. DAY 2 오전 11시부터 12시 사이에 방문할 수 있을까요?
+    subject: 오전 상담 예약 문의
+    body: '가족의 기억 재활 문제로 상담을 받고 싶습니다. 오전 11시부터 정오까지 방문할 수 있을까요?
 
 
       가능하다면 예약을 승인해 주세요. 확정된 시간에 방문하겠습니다.'
@@ -85,6 +85,7 @@ MonoBehaviour:
         profileId: careVisitor
         patientName: 보호자 상담 손님
         title: 가족의 기억 재활 후속 상담
+        description: 가족의 기억 재활 문제로 상담을 받고 싶습니다. 치료를 받는 가족을 일상에서 어떻게 도울 수 있을지 이야기하고 싶습니다.
         startMinute: 660
         endMinute: 720
         greeting: 예약을 승인해 주셔서 감사합니다.

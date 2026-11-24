@@ -21,20 +21,20 @@ namespace Codetective.Terminal
         private static readonly string[] Weekdays = { "일", "월", "화", "수", "목", "금", "토" };
         private static readonly Color SlotColor = new Color(0.038f, 0.061f, 0.045f);
         private static readonly Color TimeColor = new Color(0.065f, 0.105f, 0.077f);
-        private static readonly Color DividerColor = Color.Lerp(SlotColor, MonitorWidgets.Foreground, 0.30f);
+        private static readonly Color LunchColor = new Color(0.082f, 0.071f, 0.047f);
         private static readonly Color SelectionBorderColor = Color.Lerp(MonitorWidgets.Foreground, MonitorWidgets.SelectedButtonColor, 0.22f);
 
         private KernelRuntime runtime;
         private MonitorPageHost host;
         private TerminalController terminal;
         private Font font;
-        private RectTransform table, emptyCells, appointmentCells, calendar, calendarDays, journal;
-        private Text dateLabel, monthLabel, journalText;
+        private RectTransform table, emptyCells, appointmentCells, calendar, calendarDays, appointmentDetails;
+        private Text dateLabel, monthLabel, appointmentText;
         private Button previousDay, nextDay, previousMonth, nextMonth;
         private DateTime firstDate, calendarMonth;
         private int selectedDay, lastDay, maxDay;
-        private string tableSignature, journalAppointment;
-        private int journalRevision;
+        private string tableSignature, openAppointmentId;
+        private int detailsRevision;
         private float nextRefresh;
 
         public void Initialize(KernelRuntime value, Font typeface)
@@ -74,19 +74,20 @@ namespace Codetective.Terminal
             Vector2 arrowSize = new Vector2(48, 44);
             previousDay = MonitorWidgets.Button(transform, font, new Vector2(382, -90), arrowSize, "<", () => ShowDay(selectedDay - 1));
             var date = MonitorWidgets.Button(transform, font, new Vector2(434, -90), new Vector2(252, 44), "날짜", ToggleCalendar);
-            dateLabel = date.GetComponentInChildren<Text>(); dateLabel.fontSize = 26;
+            dateLabel = date.GetComponentInChildren<Text>(true); dateLabel.fontSize = 26;
             nextDay = MonitorWidgets.Button(transform, font, new Vector2(690, -90), arrowSize, ">", () => ShowDay(selectedDay + 1));
 
             table = MonitorWidgets.Rect("Timetable", transform, new Vector2(28, -176), new Vector2(Width, Hours * HourHeight));
             CellLabel(table, new Vector2(0, 36), new Vector2(TimeWidth - CellGap, 30), "상담 시간", 22, TextAnchor.MiddleCenter);
-            CellLabel(table, new Vector2(TimeWidth + 12, 36), new Vector2(NameWidth - 24, 30), "이름", 22);
-            CellLabel(table, new Vector2(TimeWidth + NameWidth + 12, 36), new Vector2(ContentWidth - NameWidth - 24, 30), "상담 내용", 22);
+            CellLabel(table, new Vector2(TimeWidth + 12, 36), new Vector2(ContentWidth - 24, 30), "예약", 22);
             for (int row = 0; row < Hours; row++)
             {
                 int start = ClinicHours.Opening + row * ClinicHours.MinutesPerSlot;
-                var clock = Panel("Time", table, new Vector2(0, -row * HourHeight), new Vector2(TimeWidth - CellGap, HourHeight - CellGap), TimeColor);
-                CellLabel(clock, Vector2.zero, clock.sizeDelta, KernelRuntime.TimeOfDay(start) + " ~ " +
-                    KernelRuntime.TimeOfDay(start + ClinicHours.MinutesPerSlot), 24, TextAnchor.MiddleCenter);
+                bool bookableHour = ClinicHours.IsBookableHour(start);
+                var clock = Panel("Time", table, new Vector2(0, -row * HourHeight), new Vector2(TimeWidth - CellGap, HourHeight - CellGap),
+                    bookableHour ? TimeColor : LunchColor);
+                string time = KernelRuntime.TimeOfDay(start) + " ~ " + KernelRuntime.TimeOfDay(start + ClinicHours.MinutesPerSlot);
+                FitCell(CellLabel(clock, Vector2.zero, clock.sizeDelta, bookableHour ? time : time + "\n점심시간", bookableHour ? 24 : 20, TextAnchor.MiddleCenter));
             }
             Vector2 cellOrigin = new Vector2(TimeWidth, 0);
             Vector2 cellSize = new Vector2(ContentWidth, table.sizeDelta.y);
@@ -104,11 +105,11 @@ namespace Codetective.Terminal
             calendarDays = MonitorWidgets.Rect("CalendarDays", calendar, new Vector2(0, -94), new Vector2(Width, 408));
             calendar.gameObject.SetActive(false);
 
-            journal = MonitorWidgets.Rect("AppointmentJournal", transform, origin, size);
-            CellLabel(journal, Vector2.zero, new Vector2(860, 44), "상담 일지", 28);
-            MonitorWidgets.Button(journal, font, new Vector2(904, 0), new Vector2(160, 44), "닫기", ShowTable);
-            journalText = MonitorWidgets.ScrollText(journal, font, new Vector2(0, -60), new Vector2(Width, size.y - 60));
-            journal.gameObject.SetActive(false);
+            appointmentDetails = MonitorWidgets.Rect("AppointmentDetails", transform, origin, size);
+            CellLabel(appointmentDetails, Vector2.zero, new Vector2(860, 44), "상담 내용", 28);
+            MonitorWidgets.Button(appointmentDetails, font, new Vector2(904, 0), new Vector2(160, 44), "닫기", ShowTable);
+            appointmentText = MonitorWidgets.ScrollText(appointmentDetails, font, new Vector2(0, -60), new Vector2(Width, size.y - 60));
+            appointmentDetails.gameObject.SetActive(false);
         }
 
         private static RectTransform Panel(string name, RectTransform parent, Vector2 position, Vector2 size, Color color)
@@ -144,15 +145,16 @@ namespace Codetective.Terminal
             if (calendar.gameObject.activeSelf && lastDay != runtime.Day) DrawCalendar();
             lastDay = runtime.Day;
             if (table.gameObject.activeSelf) DrawAppointments();
-            if (journal.gameObject.activeSelf && journalRevision != runtime.Revision) RefreshJournal();
+            if (appointmentDetails.gameObject.activeSelf && detailsRevision != runtime.Revision) RefreshAppointment();
         }
 
         private void DrawAppointments()
         {
             var visits = runtime.ScheduleForDay(selectedDay);
-            var journalProfiles = visits.Any(v => v.HasJournal) ? new HashSet<string>(runtime.VisibleProfileIds, StringComparer.Ordinal) : null;
-            string signature = selectedDay + "|" + string.Join("|", visits.Select(v =>
-                $"{v.id}:{v.startMinute}:{v.endMinute}:{v.phase}:{v.outcome}:{v.title}:{journalProfiles?.Contains(v.profileId)}"));
+            int latestUnavailableHour = selectedDay == runtime.Day ? (int)runtime.Minute / ClinicHours.MinutesPerSlot * ClinicHours.MinutesPerSlot :
+                selectedDay < runtime.Day ? ClinicHours.Closing : 0;
+            string signature = $"{selectedDay}:{latestUnavailableHour}|" + string.Join("|", visits.Select(v =>
+                $"{v.id}:{v.startMinute}:{v.endMinute}:{v.phase}:{v.outcome}:{v.title}"));
             if (signature == tableSignature) return;
             tableSignature = signature;
             MonitorWidgets.ClearRows(emptyCells);
@@ -169,7 +171,7 @@ namespace Codetective.Terminal
             var columnEnds = new List<int>();
             for (int i = 0; i < bookings.Length;)
             {
-                while (row < bookings[i].first) DrawEmptySlot(row++);
+                while (row < bookings[i].first) DrawEmptySlot(row++, latestUnavailableHour);
 
                 // When older visits map to the same hour, show them side by side without covering either cell.
                 columnEnds.Clear();
@@ -192,11 +194,11 @@ namespace Codetective.Terminal
                     var (visit, first, end, column) = bookings[i];
                     Vector2 position = new Vector2(column * columnWidth, -first * HourHeight);
                     Vector2 size = new Vector2(columnWidth - CellGap, (end - first) * HourHeight - CellGap);
-                    DrawAppointmentCell(visit, visit.HasJournal && journalProfiles.Contains(visit.profileId), position, size);
+                    DrawAppointmentCell(visit, position, size);
                 }
                 row = groupEnd;
             }
-            while (row < Hours) DrawEmptySlot(row++);
+            while (row < Hours) DrawEmptySlot(row++, latestUnavailableHour);
         }
 
         private static int HourBoundary(int minute)
@@ -205,43 +207,43 @@ namespace Codetective.Terminal
             return (offset + ClinicHours.MinutesPerSlot / 2) / ClinicHours.MinutesPerSlot;
         }
 
-        private void DrawEmptySlot(int row)
+        private void DrawEmptySlot(int row, int latestUnavailableHour)
         {
-            var slot = Panel("Slot", emptyCells, new Vector2(0, -row * HourHeight), new Vector2(ContentWidth, HourHeight - CellGap), SlotColor);
-            if (ClinicHours.Opening + row * ClinicHours.MinutesPerSlot == ClinicHours.LunchStart)
-                CellLabel(slot, new Vector2(12, 0), new Vector2(NameWidth - 24, slot.sizeDelta.y), "점심시간", 22).color =
+            int start = ClinicHours.Opening + row * ClinicHours.MinutesPerSlot;
+            bool bookableHour = ClinicHours.IsBookableHour(start);
+            var slot = Panel("Slot", emptyCells, new Vector2(0, -row * HourHeight), new Vector2(ContentWidth, HourHeight - CellGap),
+                bookableHour ? SlotColor : LunchColor);
+            if (bookableHour && start > latestUnavailableHour)
+                CellLabel(slot, new Vector2(12, 0), new Vector2(ContentWidth - 24, slot.sizeDelta.y), "예약 가능", 22).color =
                     Color.Lerp(MonitorWidgets.Foreground, SlotColor, 0.38f);
-            Panel("DescriptionDivider", slot, new Vector2(NameWidth, 0), new Vector2(2, slot.sizeDelta.y), TimeColor);
         }
 
-        private void DrawAppointmentCell(AppointmentProgress visit, bool canOpenJournal, Vector2 position, Vector2 size)
+        private void DrawAppointmentCell(AppointmentProgress visit, Vector2 position, Vector2 size)
         {
-            RectTransform cell;
-            if (canOpenJournal)
-            {
-                Button button = MonitorWidgets.Button(appointmentCells, font, position, size, "", () => OpenJournal(visit.id));
-                button.gameObject.name = visit.id;
-                cell = (RectTransform)button.transform;
-            }
-            else
-            {
-                Color color = visit.phase == VisitPhase.Waiting || visit.phase == VisitPhase.Finished ?
-                    MonitorWidgets.ButtonColor : MonitorWidgets.SelectedButtonColor;
-                cell = Panel(visit.id, appointmentCells, position, size, color);
-            }
-            float visitorWidth = Mathf.Min(NameWidth, size.x * 0.43f);
+            Button button = MonitorWidgets.Button(appointmentCells, font, position, size, visit.patientName, () => OpenAppointment(visit.id));
+            button.name = visit.id;
+            if (visit.phase != VisitPhase.Waiting && visit.phase != VisitPhase.Finished)
+                button.image.color = MonitorWidgets.SelectedButtonColor;
+            var cell = (RectTransform)button.transform;
+            bool hasTitle = !string.IsNullOrWhiteSpace(visit.title);
             float padding = Mathf.Min(12, size.x * 0.06f);
-            float journalWidth = canOpenJournal ? Mathf.Min(96, size.x * 0.24f) : 0;
-            Panel("DescriptionDivider", cell, new Vector2(visitorWidth, 0), new Vector2(2, size.y), DividerColor);
-            var visitor = CellLabel(cell, new Vector2(padding, 0), new Vector2(visitorWidth - 2 * padding, size.y), visit.patientName, 26);
+            float arrowWidth = Mathf.Min(42, size.x * 0.18f);
+            float visitorWidth = hasTitle ? Mathf.Min(NameWidth, size.x * 0.43f) : size.x - arrowWidth;
+            var visitor = button.GetComponentInChildren<Text>(true);
+            visitor.rectTransform.anchoredPosition = new Vector2(padding, 0);
+            visitor.rectTransform.sizeDelta = new Vector2(visitorWidth - 2 * padding, size.y);
+            visitor.alignment = TextAnchor.MiddleLeft;
+            visitor.fontSize = 26;
             visitor.fontStyle = FontStyle.Bold;
             FitCell(visitor);
-            var description = CellLabel(cell, new Vector2(visitorWidth + padding, 0),
-                new Vector2(size.x - visitorWidth - journalWidth - 2 * padding, size.y), visit.title, 24);
-            description.name = "Description";
-            FitCell(description);
-            if (canOpenJournal)
-                FitCell(CellLabel(cell, new Vector2(size.x - journalWidth, 0), new Vector2(journalWidth - padding, size.y), "일지 ›", 20, TextAnchor.MiddleRight));
+            if (hasTitle)
+            {
+                var title = CellLabel(cell, new Vector2(visitorWidth + padding, 0),
+                    new Vector2(size.x - visitorWidth - arrowWidth - 2 * padding, size.y), visit.title, 24);
+                title.name = "Title";
+                FitCell(title);
+            }
+            FitCell(CellLabel(cell, new Vector2(size.x - arrowWidth, 0), new Vector2(arrowWidth - padding, size.y), "›", 24, TextAnchor.MiddleRight));
         }
 
         private static void FitCell(Text label)
@@ -253,8 +255,8 @@ namespace Codetective.Terminal
 
         private void ShowTable()
         {
-            journalAppointment = null;
-            journal.gameObject.SetActive(false);
+            openAppointmentId = null;
+            appointmentDetails.gameObject.SetActive(false);
             calendar.gameObject.SetActive(false);
             table.gameObject.SetActive(true);
             if (selectedDay > 0) DrawAppointments();
@@ -265,7 +267,7 @@ namespace Codetective.Terminal
             if (calendar.gameObject.activeSelf) { ShowTable(); return; }
             DateTime date = firstDate.AddDays(selectedDay - 1);
             calendarMonth = new DateTime(date.Year, date.Month, 1);
-            journal.gameObject.SetActive(false); journalAppointment = null;
+            appointmentDetails.gameObject.SetActive(false); openAppointmentId = null;
             table.gameObject.SetActive(false);
             calendar.gameObject.SetActive(true);
             DrawCalendar();
@@ -304,22 +306,22 @@ namespace Codetective.Terminal
             }
         }
 
-        private void OpenJournal(string id)
+        private void OpenAppointment(string id)
         {
             if (!isActiveAndEnabled || host.SystemMenuVisible || !terminal.InteractionEnabled) return;
-            journalAppointment = id;
-            if (!RefreshJournal()) return;
-            CrtScrollRect scroll = journalText.GetComponentInParent<CrtScrollRect>();
+            openAppointmentId = id;
+            if (!RefreshAppointment()) return;
+            CrtScrollRect scroll = appointmentText.GetComponentInParent<CrtScrollRect>(true);
             scroll.StopMovement();
-            journalText.rectTransform.anchoredPosition = Vector2.zero;
+            appointmentText.rectTransform.anchoredPosition = Vector2.zero;
             table.gameObject.SetActive(false);
-            journal.gameObject.SetActive(true);
+            appointmentDetails.gameObject.SetActive(true);
         }
 
-        private bool RefreshJournal()
+        private bool RefreshAppointment()
         {
-            journalRevision = runtime.Revision;
-            try { journalText.text = runtime.AppointmentJournalText(selectedDay, journalAppointment); return true; }
+            detailsRevision = runtime.Revision;
+            try { appointmentText.text = runtime.AppointmentDetailsText(selectedDay, openAppointmentId); return true; }
             catch (CommandException) { ShowTable(); return false; }
         }
     }

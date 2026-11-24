@@ -15,6 +15,8 @@ namespace Codetective.Operations
         public const int LunchEnd = 13 * MinutesPerSlot;
         public const int Closing = 18 * MinutesPerSlot;
 
+        public static bool IsBookableHour(int startMinute) => ContainsBooking(startMinute, startMinute + MinutesPerSlot);
+
         internal static bool ContainsBooking(int start, int end) => start < end &&
             start % MinutesPerSlot == 0 && end % MinutesPerSlot == 0 &&
             (start >= Opening && end <= LunchStart || start >= LunchEnd && end <= Closing);
@@ -26,9 +28,10 @@ namespace Codetective.Operations
         public string profileId = "client";
         public string patientName = "상담 손님";
         public string title;
+        public string description;
         public int startMinute = ClinicHours.Opening;
         public int endMinute; // 0 uses a single hour.
-        internal int BookingEndMinute => endMinute == 0 ? startMinute + ClinicHours.MinutesPerSlot : endMinute;
+        public int BookingEndMinute => endMinute == 0 ? startMinute + ClinicHours.MinutesPerSlot : endMinute;
         public bool beforeAssignment;
         public string afterConversation;
         public string episodePoolId;
@@ -39,7 +42,7 @@ namespace Codetective.Operations
         public StoryEffects onArrival = new StoryEffects();
         public StoryEffects onCompleted = new StoryEffects();
         public StoryEffects onTimeLimit = new StoryEffects();
-        public PatientAppointment Copy() => new PatientAppointment { id = id, profileId = profileId, patientName = patientName, title = title, startMinute = startMinute,
+        public PatientAppointment Copy() => new PatientAppointment { id = id, profileId = profileId, patientName = patientName, title = title, description = description, startMinute = startMinute,
             beforeAssignment = beforeAssignment, afterConversation = afterConversation, episodePoolId = episodePoolId,
             endMinute = endMinute, greeting = greeting, farewell = farewell, dialogue = dialogue.Select(l => l.Copy()).ToArray(),
             condition = condition?.Copy() ?? new StoryCondition(), onArrival = onArrival?.Copy() ?? new StoryEffects(),

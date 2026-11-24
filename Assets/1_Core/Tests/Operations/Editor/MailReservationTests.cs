@@ -85,12 +85,17 @@ namespace Codetective.Tests.Operations
             Assert.That(() => r.ChooseMail("inquiry", "decline"), Throws.TypeOf<CommandException>());
         }
         [Test]
-        public void ApprovedFuturePatientAppearsInTheRealDayFlowAtTheConfirmedTime()
+        public void ApprovedElevenOClockAppointmentRunsUntilTheStartOfLunch()
         {
-            KernelRuntime r = World(); r.ReadMail("inquiry"); r.ChooseMail("inquiry", "approve"); FinishDay(r); r.NextDay();
+            KernelRuntime r = World(); r.ReadMail("inquiry"); r.ChooseMail("inquiry", "approve");
+            Assert.That(r.ScheduleForDay(2).Single(visit => visit.id == "mail:inquiry").endMinute, Is.EqualTo(ClinicHours.LunchStart));
+            FinishDay(r); r.NextDay();
             r.WaitForNextAppointment(); Advance(r); r.FinishConsultation(); while (r.IsClinicTransitioning) Advance(r);
             r.WaitForNextAppointment(); Assert.That(r.Minute, Is.EqualTo(660)); Assert.That(r.CurrentAppointment.id, Is.EqualTo("mail:inquiry"));
             Advance(r); Assert.That(r.CurrentConsultation.sentence, Is.EqualTo("예약하고 왔어요."));
+            r.Tick(60);
+            Assert.That(r.Minute, Is.EqualTo(720));
+            Assert.That(r.CurrentAppointment.outcome, Is.EqualTo(VisitOutcome.ReservationEnd));
         }
         [Test]
         public void SameDayApprovalPreservesAnOngoingConversationAndItsBookedEnd()

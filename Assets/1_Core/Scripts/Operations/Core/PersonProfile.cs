@@ -78,24 +78,49 @@ namespace Codetective.Operations
             return session + (visits.Length == 0 ? "" : "\n\n상담 내역\n" + visits) + "\n\n기록한 단서 / 추가 정보\n" + ProfileFindings(profileId);
         }
 
-        public string AppointmentJournalText(int day, string appointmentId)
+        public string AppointmentDetailsText(int day, string appointmentId) => AppointmentText(day, appointmentId, false);
+        public string AppointmentJournalText(int day, string appointmentId) => AppointmentText(day, appointmentId, true);
+
+        private string AppointmentText(int day, string appointmentId, bool requireJournal)
         {
             IReadOnlyList<AppointmentProgress> schedule = ScheduleForDay(day);
-            AppointmentProgress appointment = schedule.FirstOrDefault(visit => visit.id == appointmentId && visit.HasJournal) ??
-                throw new CommandException("상담을 마친 뒤 일지를 확인할 수 있습니다.");
-            RequireVisibleProfile(appointment.profileId);
+            AppointmentProgress appointment = schedule.FirstOrDefault(visit => visit.id == appointmentId) ??
+                throw new CommandException("예약을 찾을 수 없습니다.");
+            if (requireJournal)
+            {
+                if (!appointment.HasJournal) throw new CommandException("상담을 마친 뒤 일지를 확인할 수 있습니다.");
+                RequireVisibleProfile(appointment.profileId);
+            }
 
-            AppointmentProgress[] sessions = schedule.Where(visit => visit.HasJournal && visit.profileId == appointment.profileId).ToArray();
-            var journal = new StringBuilder(appointment.patientName);
-            if (!string.IsNullOrWhiteSpace(appointment.title)) journal.Append('\n').Append(appointment.title);
-            journal.Append("\n\n").Append(DateAt(day, 0).Value.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture))
-                .Append("  ").Append(TimeOfDay(appointment.SessionStart)).Append(" ~ ").Append(TimeOfDay(appointment.SessionEnd));
-            journal.Append("\n\n상담 내용\n");
+            appointmentDefinitions.TryGetValue(appointment.id, out PatientAppointment definition);
+            string description = definition?.description;
+            string mailId = ReservationMailFor(appointment.id);
+            if (string.IsNullOrWhiteSpace(description) && mailId != null && mail.TryGetValue(mailId, out StoryMail request))
+                description = request.body;
 
-            string[] entries = notes.Where(note => note.profileId == appointment.profileId && note.sessionDay == day &&
-                SessionForNote(note, sessions) == appointment).Select(note => note.text).ToArray();
-            journal.Append(entries.Length == 0 ? "작성된 상담 일지가 없습니다." : string.Join("\n\n", entries));
-            return journal.ToString();
+            var details = new StringBuilder(appointment.patientName);
+            if (!string.IsNullOrWhiteSpace(appointment.title)) details.Append('\n').Append(appointment.title);
+            details.Append("\n\n").Append(DateAt(day, 0).Value.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture))
+                .Append("  ").Append(TimeOfDay(appointment.startMinute)).Append(" ~ ").Append(TimeOfDay(appointment.endMinute));
+            details.Append("\n\n예약 내용\n").Append(string.IsNullOrWhiteSpace(description) ? "등록된 내용이 없습니다." : description);
+            if (appointment.phase == VisitPhase.Waiting || appointment.phase == VisitPhase.Arriving || appointment.outcome == VisitOutcome.Missed ||
+                (!requireJournal && !VisibleProfileIds.Contains(appointment.profileId))) return details.ToString();
+
+            // The saved cursor belongs to this visit, including repeats with the same lines on another day.
+            ConsultationLine[] dialogue = EpisodeFor(appointment)?.lines ?? definition?.dialogue ?? Array.Empty<ConsultationLine>();
+            string[] heard = dialogue.Take(Math.Min(appointment.cursor + 1, appointment.lineCount)).Select(line => line.sentence)
+                .Where(line => !string.IsNullOrWhiteSpace(line)).ToArray();
+            if (heard.Length > 0)
+                details.Append("\n\n상담에서 들은 내용\n").Append(string.Join("\n\n", heard));
+            if (appointment.HasJournal)
+            {
+                details.Append("\n\n실제 상담 시간  ").Append(TimeOfDay(appointment.SessionStart)).Append(" ~ ").Append(TimeOfDay(appointment.SessionEnd));
+                AppointmentProgress[] sessions = schedule.Where(visit => visit.HasJournal && visit.profileId == appointment.profileId).ToArray();
+                string[] entries = notes.Where(note => note.profileId == appointment.profileId && note.sessionDay == day &&
+                    SessionForNote(note, sessions) == appointment).Select(note => note.text).ToArray();
+                details.Append("\n\n상담 일지\n").Append(entries.Length == 0 ? "작성된 상담 일지가 없습니다." : string.Join("\n\n", entries));
+            }
+            return details.ToString();
         }
 
         private static AppointmentProgress SessionForNote(ConsultationNote note, AppointmentProgress[] sessions)

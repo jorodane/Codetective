@@ -274,11 +274,17 @@ namespace Codetective.Tests.Operations
         }
 
         [Test]
-        public void AppointmentJournalMatchesOnlyTheSelectedCompletedConsultation()
+        public void AppointmentDetailsKeepTheBookingTextAndOnlyTheSelectedVisitsHeardLinesAndNotes()
         {
             KernelRuntime r = ClinicScenario.Create();
-            r.RegisterClinicDay(new ClinicDayPlan { day = 0, appointments = new[] { Visit("first", "client", 540), Visit("second", "client", 600) } });
+            PatientAppointment first = Visit("first", "client", 540);
+            first.description = "예약을 요청한 이유";
+            first.dialogue[0].sentence = "상담에서 실제로 들은 이야기";
+            first.dialogue[1].sentence = "아직 듣지 않은 이야기";
+            r.RegisterClinicDay(new ClinicDayPlan { day = 0, appointments = new[] { first, Visit("second", "client", 600) } });
+            Assert.That(r.AppointmentDetailsText(1, "0:first"), Does.Contain("예약을 요청한 이유").And.Not.Contain("상담에서 실제로 들은 이야기"));
             r.Tick(1); Advance(r); r.Tick(5);
+            Assert.That(r.AppointmentDetailsText(1, "0:first"), Does.Contain("상담에서 실제로 들은 이야기").And.Not.Contain("아직 듣지 않은 이야기"));
             r.AddConsultationNote("client", "첫 상담 기록");
             r.Tick(5); r.FinishConsultation(); Leave(r);
             Assert.That(r.AppointmentJournalText(1, "0:first"), Does.Contain("09:00 ~ 09:10").And.Contain("첫 상담 기록"));
@@ -287,9 +293,11 @@ namespace Codetective.Tests.Operations
             Assert.That(r.AppointmentJournalText(1, "0:second"), Does.Contain("작성된 상담 일지가 없습니다").And.Not.Contain("첫 상담 기록"));
             r.AddConsultationNote("client", "두 번째 상담 기록");
             r.WaitUntilClosing(); r.NextDay();
+            Assert.That(r.AppointmentDetailsText(2, "0:first"), Does.Contain("예약을 요청한 이유").And.Not.Contain("상담에서 실제로 들은 이야기"));
             r.WaitForNextAppointment(); Advance(r); r.AddConsultationNote("client", "다음 날 기록");
             KernelSnapshot saved = r.Capture(); r.Restore(saved);
-            Assert.That(r.AppointmentJournalText(1, "0:first"), Does.Contain("첫 상담 기록").And.Not.Contain("두 번째 상담 기록").And.Not.Contain("다음 날 기록"));
+            Assert.That(r.AppointmentDetailsText(1, "0:first"), Does.Contain("첫 상담 기록").And.Contain("상담에서 실제로 들은 이야기")
+                .And.Not.Contain("아직 듣지 않은 이야기").And.Not.Contain("두 번째 상담 기록").And.Not.Contain("다음 날 기록"));
             Assert.That(r.AppointmentJournalText(1, "0:second"), Does.Contain("두 번째 상담 기록").And.Not.Contain("첫 상담 기록"));
         }
 

@@ -27,6 +27,7 @@ MonoBehaviour:
       profileId: client
       patientName: 오전 상담 손님
       title: 회사의 야간 소음과 출입 기록
+      description: 퇴근 무렵 들리는 소음이 자꾸 마음에 걸립니다. 집에 돌아와서도 회사에서 있었던 일이 떠올라 상담을 요청합니다.
       startMinute: 600
       endMinute: 0
       greeting: 안녕하세요. 예약하고 왔습니다.
@@ -67,6 +68,7 @@ MonoBehaviour:
       profileId: careerVisitor
       patientName: 취업 상담 손님
       title: 취업 지원과 직장 적응
+      description: 취업 지원을 받아 새 직장에 들어갔지만 적응이 쉽지 않습니다. 일하면서 느끼는 부담과 앞으로의 진로를 이야기하고 싶습니다.
       startMinute: 780
       endMinute: 900
       greeting: 안녕하세요. 예약하고 왔습니다.
@@ -107,6 +109,7 @@ MonoBehaviour:
       profileId: careVisitor
       patientName: 보호자 상담 손님
       title: 가족의 기억 재활
+      description: 기억 재활 치료를 받는 가족을 돌보고 있습니다. 치료가 계속될 수 있을지 걱정되고, 돌봄 부담도 상담하고 싶습니다.
       startMinute: 900
       endMinute: 1080
       greeting: 안녕하세요. 예약하고 왔습니다.
@@ -147,6 +150,7 @@ MonoBehaviour:
       profileId: regularVisitor
       patientName: 한정우
       title: 일상 스트레스 상담
+      description: 요즘 잠들기 전에 이런저런 생각이 떠오릅니다. 일상에서 느끼는 스트레스와 수면에 관해 이야기하고 싶습니다.
       startMinute: 540
       endMinute: 600
       beforeAssignment: 1
