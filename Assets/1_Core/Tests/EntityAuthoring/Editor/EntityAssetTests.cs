@@ -323,7 +323,7 @@ namespace Codetective.Tests.Operations
             restarted.AdvanceDayMailDelay(0.25);
             Assert.That(restarted.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
             Assert.That(restarted.Inbox(Mailbox.Clinic), Is.Empty);
-            Assert.That(restarted.IsMailRead("government-intro"), Is.False);
+            Assert.That(restarted.UnreadMailCount(Mailbox.Kernel) + restarted.UnreadMailCount(Mailbox.Clinic), Is.EqualTo(1));
         }
 
         private static void FinishTutorialAndReceiveFirstMission(KernelRuntime runtime)
@@ -365,7 +365,12 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.IsDiscovered("Maggie"), Is.False);
             FinishTutorialAndReceiveFirstMission(runtime);
             StoryMail mail = runtime.ReadMail("government-first-mission");
-            Assert.That(mail.body, Does.Contain("현장 경찰").And.Contain("수사 지휘"));
+            Assert.That(mail.body, Does.StartWith("Kernel 귀하.\n\n현장 경찰")
+                .And.Contain("\n\nNSF 관련 사안").And.EndWith("진술을 작전망으로 전달하겠습니다."));
+            Assert.That(mail.afterConversation, Is.EqualTo("kernel-onboarding"));
+            Assert.That(mail.afterAppointmentId, Is.EqualTo("1:regular"));
+            Assert.That(mail.requiresAcceptance, Is.True);
+            Assert.That(mail.acceptLabel, Is.EqualTo("승인"));
             Assert.That(mail.pageOnAccept, Is.EqualTo("kernel"));
             runtime.EnterTerminalPage("kernel");
             Assert.That(runtime.ConversationProgress("case01-briefing").phase, Is.EqualTo(TerminalConversationPhase.Dormant));

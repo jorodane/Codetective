@@ -112,9 +112,7 @@ MonoBehaviour:
       {command}'
   - key: onboarding.reference
     language: en
-    text: |-
-      Bind the substitution you registered to headquarters. Write the target on the right of the equals sign.
-      {command}
+    text: "Bind the substitution you registered to headquarters. Write the target on the right of the equals sign.\n{command}"
   - key: onboarding.substitution
     language: ko
     text: 이제 지휘소를 가리키는 이름은 {slot}입니다.
