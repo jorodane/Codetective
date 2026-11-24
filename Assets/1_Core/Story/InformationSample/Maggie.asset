@@ -20,14 +20,14 @@ MonoBehaviour:
   m_Name: Maggie
   m_EditorClassIdentifier: ''
   instanceId: Maggie
-  displayName: 매기
+  displayName: Margaret Maggie Sloan
   schema:
     fileID: 11400000
     guid: 2a5fcd7e8c554b76b1c3f63d8e476366
     type: 2
   exposeRoot: 1
   informationVersion: 2
-  initiallyKnown: 1
+  initiallyKnown: 0
   aliases: []
   names:
   - language: 1

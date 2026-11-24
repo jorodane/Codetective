@@ -39,10 +39,12 @@ namespace Codetective.Gameplay
             Shadow shadow = go.AddComponent<Shadow>(); shadow.effectColor = new Color(0, 0, 0, 0.8f); shadow.effectDistance = new Vector2(3, -3);
             return text;
         }
-        public IEnumerator Play(int day, string description, Action textFading)
+        public IEnumerator Play(int day, string description, Action textFading) => Play("DAY " + day, description, textFading);
+
+        public IEnumerator Play(string heading, string description, Action textFading = null)
         {
             if (IsVisible) yield break;
-            dayText.text = "DAY " + day; subtitle.text = description;
+            dayText.text = heading; subtitle.text = description;
             dayAlpha.alpha = subtitleAlpha.alpha = 0; root.SetActive(true);
             try
             {

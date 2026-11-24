@@ -325,6 +325,7 @@ namespace Codetective.Gameplay
         }
         public void ShowDayIntro(string title, string subtitle) { clinicDay?.ShowIntro(title, subtitle); }
         public IEnumerator PlayDayStart(int day, string subtitle, Action textFading) => dayStart.Play(day, subtitle, textFading);
+        public IEnumerator PlayTerminalIntroduction(string title, string subtitle) => dayStart.Play(title, subtitle);
         public void HideDay() { clinicDay?.Hide(); }
         public void ShowDaySummary(DailyRecord record) { HideContext(); clinicDay?.ShowSummary(record); }
         public void CloseDaySummary() { clinicDay?.Hide(); }

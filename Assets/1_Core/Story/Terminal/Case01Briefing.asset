@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3dfe70aba5641e18179a1ce8fef487d, type: 3}
+  m_Name: Case01Briefing
+  m_EditorClassIdentifier: ''
+  conversation:
+    id: case01-briefing
+    requiredMailAccepted: government-first-mission
+    pageId: kernel
+    variableBase: caseRecord
+    koreanVariableBase: 사건자료
+    introductionTitle: Case.1
+    introductionSubtitle: Victor Hale 실종 사건
+    speaker: Maggie
+    useSpeakerPrompt: 1
+    firstDay: 1
+    lastDay: 2147483647
+    pauseWorld: 1
+    advanceWithEnter: 1
+    condition: {triggersOn: [], triggersOff: [], quests: []}
+    forgivingReplies: []
+    angryReplies: []
+    angryAfter: 3
+    onComplete: {triggers: [], quests: []}
+    steps:
+    - id: receive-report
+      lines:
+      - text: ''
+        textKey: case01.maggie.report
+        charactersPerSecond: 40
+        pauseAfter: 0.6
+        effectSeconds: 0
+      goal:
+        kind: 0
+        condition: {triggersOn: [], triggersOff: [], quests: []}
+      answers: []
+      onComplete: {triggers: [], quests: []}
+      discoveries:
+      - Maggie
+      - VictorHale
+      - VictorHaleDisappearance
+      - HandsOnBooks
+      - MeridianProfileServices
+      - NSF
+      - NsfPublicRelationsOffice
+      - GlobalMindFair
+      reports:
+      - subjectId: VictorHaleDisappearance
+        field: content
+        sourceId: Maggie
+        source: Maggie
+        statementKey: case01.maggie.report
+        kind: 1
+        value: {kind: 3, textKey: case01.maggie.report}
+      - subjectId: HandsOnBooks
+        field: representative
+        sourceId: Maggie
+        source: Maggie
+        kind: 1
+        value: {kind: 4, id: Maggie}
+      - subjectId: MeridianProfileServices
+        field: representative
+        sourceId: Maggie
+        source: Maggie
+        kind: 1
+        value: {kind: 4, id: VictorHale}
+  textTables:
+  - {fileID: 11400000, guid: 4f8149985e595193b7b26c18cb6ab4d9, type: 2}

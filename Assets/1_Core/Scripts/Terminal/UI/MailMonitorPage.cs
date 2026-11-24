@@ -188,7 +188,15 @@ namespace Codetective.Terminal
         private void Accept()
         {
             if (!Interactive) return;
-            try { runtime.AcceptMail(selectedId); feedback.text = "업무를 수락했습니다. 다음 내용을 확인하세요."; Refresh(false); }
+            try
+            {
+                StoryMail message = runtime.Inbox(mailbox).FirstOrDefault(item => item.id == selectedId);
+                runtime.AcceptMail(selectedId);
+                if (!string.IsNullOrEmpty(message?.pageOnAccept) &&
+                    (GetComponentInParent<MonitorPageHost>()?.TryNavigate(message.pageOnAccept) ?? false)) return;
+                feedback.text = "업무를 수락했습니다. 다음 내용을 확인하세요.";
+                Refresh(false);
+            }
             catch (CommandException error) { feedback.text = error.Message; }
         }
         private string RefreshChoices(StoryMail selected, string body)

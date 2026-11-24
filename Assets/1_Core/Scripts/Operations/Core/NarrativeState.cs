@@ -21,6 +21,7 @@ namespace Codetective.Operations
         public string[] readFacts = Array.Empty<string>();
         public bool requiresAcceptance;
         public string acceptLabel = "확인";
+        public string pageOnAccept = "";
         public string[] acceptFacts = Array.Empty<string>();
         public string[] grantAuthorities = Array.Empty<string>();
         public StoryCondition condition = new StoryCondition();
@@ -34,7 +35,7 @@ namespace Codetective.Operations
         public bool HasReservation => isReservationInquiry || (choices ?? Array.Empty<MailChoice>()).Any(c => c != null && c.approvesReservation);
         public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, recipient = recipient, subject = subject, body = body, day = day,
             afterAppointmentId = afterAppointmentId, minutesAfterAppointment = minutesAfterAppointment,
-            requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel,
+            requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel, pageOnAccept = pageOnAccept,
             acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray(), condition = condition?.Copy() ?? new StoryCondition(),
             onRead = onRead?.Copy() ?? new StoryEffects(), onAccept = onAccept?.Copy() ?? new StoryEffects(),
             choices = (choices ?? Array.Empty<MailChoice>()).Select(c => c.Copy()).ToArray(), isReservationInquiry = HasReservation,

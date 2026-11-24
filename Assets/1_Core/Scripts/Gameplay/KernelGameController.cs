@@ -84,6 +84,7 @@ namespace Codetective.Gameplay
         private bool presentationInitialized;
         private bool sceneBasisCaptured;
         private bool changingScene;
+        private bool terminalIntroductionPlaying;
         private enum SessionStart { Title, NewGame, Continue }
         private static SessionStart nextStart = SessionStart.Title;
         private static string nextSaveId;
@@ -183,9 +184,15 @@ namespace Codetective.Gameplay
 
         private void Update()
         {
-            if (!presentationInitialized || !IsSessionActive || changingScene || inspection.Mode == InspectionMode.Menu || ui.SummaryVisible) return;
+            if (!presentationInitialized || !IsSessionActive || changingScene || terminalIntroductionPlaying || inspection.Mode == InspectionMode.Menu || ui.SummaryVisible) return;
             Runtime.AdvanceDayMailDelay(Time.unscaledDeltaTime);
             if (Transitions.IsBusy) return;
+            if (Runtime.TerminalIntroductionTitle != null && !IsDateTransitioning && !IsVisitPresenting && Monitor is MonitorPageHost host &&
+                !host.SystemMenuVisible && host.CurrentPage?.TerminalPage == true && host.GetComponent<TerminalController>()?.InteractionEnabled == true)
+            {
+                StartCoroutine(PresentTerminalIntroduction(host));
+                return;
+            }
             if (!IsDateTransitioning) Runtime.Tick(Time.deltaTime / Mathf.Max(0.1f, scenario != null ? scenario.secondsPerGameMinute : 2f));
             if (!IsDateTransitioning && Runtime.IsClinicTransitioning && !IsVisitPresenting) StartCoroutine(PresentVisits());
             if (Runtime.IsDayEnded && !Runtime.IsClinicTransitioning && !IsDateTransitioning && !IsVisitPresenting && summaryShownDay != Runtime.Day &&
@@ -323,6 +330,25 @@ namespace Codetective.Gameplay
             DailyRecord record = Runtime.FinalizeDay(); AutoSave(); inspection.BeginTerminalPresentation(true); ui.ShowDaySummary(record); summaryShownDay = Runtime.Day;
         }
         public void CloseDaySummary() { ui.CloseDaySummary(); inspection.EndTerminalPresentation(); }
+        private IEnumerator PresentTerminalIntroduction(MonitorPageHost host)
+        {
+            string conversationId = Runtime.TerminalConversationId;
+            terminalIntroductionPlaying = true;
+            bool previousNavigation = inspection.NavigationBlocked;
+            inspection.NavigationBlocked = true;
+            host.SetOverlayVisible(this, true);
+            try
+            {
+                yield return ui.PlayTerminalIntroduction(Runtime.TerminalIntroductionTitle, Runtime.TerminalIntroductionSubtitle);
+                Runtime.CompleteTerminalIntroduction(conversationId);
+            }
+            finally
+            {
+                if (host != null) host.SetOverlayVisible(this, false);
+                if (inspection != null) inspection.NavigationBlocked = previousNavigation;
+                terminalIntroductionPlaying = false;
+            }
+        }
         private IEnumerator PresentVisits()
         {
             IsVisitPresenting = true; inspection.NavigationBlocked = true; ui.HideContext();
@@ -542,6 +568,7 @@ namespace Codetective.Gameplay
         {
             if (initialized && (narrativeDirty || quickSaving)) TrySave(GameSaveKind.Auto);
             StopAllCoroutines();
+            if (terminalIntroductionPlaying && monitor != null) monitor.SetOverlayVisible(this, false);
             if (profilePaper != null) profilePaper.CancelSwap();
             if (sceneLights != null && initialLights != null) for (int i = 0; i < Math.Min(sceneLights.Length, initialLights.Length); i++) if (sceneLights[i] != null) sceneLights[i].enabled = initialLights[i];
             if (sceneBasisCaptured && curtainCloth != null) curtainCloth.localScale = foldedScale;

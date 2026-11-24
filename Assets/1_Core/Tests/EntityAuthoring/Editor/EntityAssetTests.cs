@@ -315,7 +315,7 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.Inbox(Mailbox.Clinic).Count(), Is.EqualTo(2));
         }
 
-        private static void FinishTutorialAndAcceptFirstMission(KernelRuntime runtime)
+        private static void FinishTutorialAndReceiveFirstMission(KernelRuntime runtime)
         {
             runtime.ReadMail("government-intro"); runtime.EnterTerminalPage("kernel");
             for (int i = 0; i < 16 && runtime.TerminalConversationActive; i++)
@@ -336,7 +336,55 @@ namespace Codetective.Tests.Operations
             runtime.Tick(4);
             Assert.That(runtime.Inbox(Mailbox.Kernel).Any(m => m.id == "government-first-mission"), Is.False);
             runtime.Tick(1);
+        }
+
+        private static void FinishTutorialAndAcceptFirstMission(KernelRuntime runtime)
+        {
+            FinishTutorialAndReceiveFirstMission(runtime);
             runtime.ReadMail("government-first-mission"); runtime.AcceptMail("government-first-mission");
+        }
+
+        [Test]
+        public void FirstCaseStartsAfterApprovalAndReleasesMaggiesReportAsReferencesAfterTheTitle()
+        {
+            var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
+            KernelRuntime runtime = scenario.CreateRuntime();
+            Assert.That(runtime.IsDiscovered("Maggie"), Is.False);
+            FinishTutorialAndReceiveFirstMission(runtime);
+            StoryMail mail = runtime.ReadMail("government-first-mission");
+            Assert.That(mail.body, Does.Contain("현장 경찰").And.Contain("수사 지휘"));
+            Assert.That(mail.pageOnAccept, Is.EqualTo("kernel"));
+            runtime.EnterTerminalPage("kernel");
+            Assert.That(runtime.ConversationProgress("case01-briefing").phase, Is.EqualTo(TerminalConversationPhase.Dormant));
+            runtime.AcceptMail(mail.id);
+            runtime.EnterTerminalPage("kernel");
+            Assert.That(runtime.TerminalIntroductionTitle, Is.EqualTo("Case.1"));
+            Assert.That(runtime.TerminalIntroductionSubtitle, Is.EqualTo("Victor Hale 실종 사건"));
+            Assert.That(runtime.TerminalInputLocked, Is.True);
+            runtime.AdvanceTerminalConversation(1000);
+            Assert.That(runtime.TerminalConversationTranscript(), Is.Empty);
+            Assert.That(runtime.IsDiscovered("VictorHale"), Is.False);
+
+            KernelRuntime restored = scenario.CreateRuntime();
+            restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
+            Assert.That(restored.TerminalIntroductionTitle, Is.EqualTo("Case.1"));
+            restored.CompleteTerminalIntroduction("case01-briefing");
+            restored.AdvanceTerminalConversation(1000);
+            Assert.That(restored.TerminalConversationTranscript(), Does.StartWith("Maggie> 안녕하십니까.").And.Contain("실종 사건의 은닉을 시도하는 것으로 보입니다."));
+            Assert.That(restored.TerminalInputLocked, Is.False);
+            Assert.That(restored.Evidence.Select(entry => entry.Id), Does.Contain("Maggie").And.Contain("VictorHale").And.Contain("VictorHaleDisappearance")
+                .And.Contain("HandsOnBooks").And.Contain("MeridianProfileServices").And.Contain("NsfPublicRelationsOffice").And.Contain("GlobalMindFair"));
+            Assert.That(restored.Observations.Single(report => report.statementKey == "case01.maggie.report").kind, Is.EqualTo(InformationKind.Testimony));
+            Assert.That(restored.Data, Is.Empty);
+            Assert.That(restored.Execute("암호 피해자 = VictorHale").Success, Is.True);
+            Assert.That(restored.Execute("암호 사건 = VictorHaleDisappearance").Success, Is.True);
+            Assert.That(restored.Execute("암호 주최측 = NsfPublicRelationsOffice").Success, Is.True);
+            Assert.That(restored.Execute("매기.대화하기()").Success, Is.True);
+            restored.Tick(2);
+            Assert.That(restored.IsDiscovered("OfficialAttendance"), Is.True);
+            restored.EnterTerminalPage("kernel");
+            restored.CompleteTerminalIntroduction("case01-briefing");
+            Assert.That(restored.Observations.Count(report => report.statementKey == "case01.maggie.report"), Is.EqualTo(1));
         }
 
         [Test]
@@ -357,17 +405,8 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.Execute("상담손님.재단에대하여()").Success, Is.False);
             restored.Entity("client").SetFunctionAccess("askAboutFoundation", PlayerAccess.Inherit);
             Assert.That(restored.Execute("상담손님.재단에대하여()").Success, Is.True);
-            restored.Facts.Add("testimony_crosschecked"); restored.ReadMail("kernel-followup"); restored.AcceptMail("kernel-followup");
-            while (!restored.IsDayEnded)
-            {
-                AppointmentProgress visit = restored.CurrentAppointment;
-                if (restored.IsClinicTransitioning) restored.AdvanceVisitPresentation(visit.id, visit.phase);
-                else if (visit?.phase == VisitPhase.Talking) restored.FinishConsultation();
-                else if (restored.CanWaitForNextAppointment) restored.WaitForNextAppointment();
-                else restored.WaitUntilClosing();
-            }
-            restored.NextDay();
-            Assert.That(restored.NewspaperArticles(2).First().id, Is.EqualTo("investigation-followup"));
+            restored.Facts.Add("testimony_crosschecked");
+            Assert.That(restored.Inbox(Mailbox.Kernel).Any(mail => mail.id == "kernel-followup"), Is.False);
         }
 
         [Test]
@@ -380,7 +419,9 @@ namespace Codetective.Tests.Operations
                 Is.EqualTo(new[] { (540, 600), (600, 660), (780, 900), (900, 1080) }));
             FinishTutorialAndAcceptFirstMission(runtime); runtime.MarkDayIntroSeen();
             runtime.WaitForNextAppointment(); AppointmentProgress visit = runtime.CurrentAppointment; runtime.AdvanceVisitPresentation(visit.id, visit.phase);
-            runtime.RecordClue(runtime.ConsultationIndex); runtime.Tick(120);
+            Assert.That(runtime.CurrentConsultation.sentence, Does.Contain("퇴근"));
+            Assert.That(runtime.CurrentConsultation.fact, Is.Null.Or.Empty);
+            runtime.Tick(120);
             Assert.That(runtime.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing));
             var restored = scenario.CreateRuntime(); restored.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(runtime.Capture())));
             Assert.That(restored.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing)); Assert.That(restored.Minute, Is.EqualTo(660));

@@ -65,7 +65,8 @@ MonoBehaviour:
     fileID: 11400000
     guid: feb72b49f80747d7b7202c9a1a4593fa
     type: 2
-  initialDiscoveries: []
+  initialDiscoveries:
+  - Maggie
   initialObservations: []
   worldEvents: []
   consultation: []

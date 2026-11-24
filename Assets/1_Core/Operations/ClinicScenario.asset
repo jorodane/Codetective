@@ -16,6 +16,7 @@ MonoBehaviour:
   commandLanguage: 1
   terminalConversations:
   - {fileID: 11400000, guid: 164e9f5d2ea80bb983f64acaf58a8cd2, type: 2}
+  - {fileID: 11400000, guid: 26be72b78b1f573c828d865a8cbadf1d, type: 2}
   consultation: []
   schemas:
   - {fileID: 11400000, guid: 7a7b5acfa9f224e0eef60045fb0d7a1f, type: 2}
@@ -26,12 +27,23 @@ MonoBehaviour:
   - {fileID: 11400000, guid: fc8c87359769e1867da7b781df419a8b, type: 2}
   - {fileID: 11400000, guid: 30b4e45445c190ce2d3af11c0d44f283, type: 2}
   - {fileID: 11400000, guid: db40ad8f124448d6b5e899b1440ceab5, type: 2}
+  - {fileID: 11400000, guid: 5fde03e783f65cdc8b8e6e950b7ae567, type: 2}
+  - {fileID: 11400000, guid: a3d1b9cf0c0655d39b89e27a263ee8de, type: 2}
+  - {fileID: 11400000, guid: 457add4722585cf0ba88ca5c0028d60f, type: 2}
+  - {fileID: 11400000, guid: 590aec6aa1f251cbad4559a5c613751d, type: 2}
+  - {fileID: 11400000, guid: f31903be79595213a4784bd7d516b80d, type: 2}
+  - {fileID: 11400000, guid: e4138dde68744d8db91c13cfe0f1a483, type: 2}
+  - {fileID: 11400000, guid: 8765fc929fc54d59a360b73f7b5221be, type: 2}
+  - {fileID: 11400000, guid: 183b0b2844034395b0631b29e7f6ac60, type: 2}
+  - {fileID: 11400000, guid: 7a162196efd24d86bd5e1a1a06596376, type: 2}
+  - {fileID: 11400000, guid: aa05d7ad90eb4b879d243b8424f6e427, type: 2}
+  - {fileID: 11400000, guid: 3596f2df48ad4cd6959443baedbe802a, type: 2}
+  - {fileID: 11400000, guid: 023e61ea9881490e82d150d795e67fd8, type: 2}
   additionalObjects: []
   mail:
   - {fileID: 11400000, guid: 657437bbd3ff730a5f0e3b9666c1f08e, type: 2}
   - {fileID: 11400000, guid: e5609b382fc040a4afec4147515da450, type: 2}
   - {fileID: 11400000, guid: e4ec938a9d6953cf9424ca64b1d1e1f8, type: 2}
-  - {fileID: 11400000, guid: 5ba67d938f6ed226b4ee1db5aad41495, type: 2}
   - {fileID: 11400000, guid: e44bad86def60505ff144ae95f21acdd, type: 2}
   newspaper:
   - {fileID: 11400000, guid: abf57bc08d7dcd35d7a2010223d0a78c, type: 2}

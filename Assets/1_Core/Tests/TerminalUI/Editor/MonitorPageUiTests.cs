@@ -801,6 +801,29 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(runtime.SelectedMailChoice("choice"), Is.Null.Or.Empty);
             host.ShowPage("mail"); Invoke(mail, "Choose", "answer"); Assert.That(runtime.SelectedMailChoice("choice"), Is.EqualTo("answer"));
         }
+        [Test]
+        public void ApprovingADispatchNavigatesToKernelAndStartsTheTitleBeforeTheBriefingLine()
+        {
+            runtime.RegisterMail(new StoryMail { id = "dispatch", mailbox = Mailbox.Kernel, requiresAcceptance = true,
+                acceptLabel = "승인", pageOnAccept = "kernel" });
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "first-case", requiredMailAccepted = "dispatch",
+                introductionTitle = "Case.1", introductionSubtitle = "Victor Hale 실종 사건", speaker = "Maggie", useSpeakerPrompt = true,
+                steps = new[] { new TerminalConversationStep { id = "report", lines = new[] { new TerminalDialogueLine { text = "실종 신고입니다." } } } } });
+            terminal.SetInteractionEnabled(true);
+            host.ShowPage("mail");
+            var page = host.CurrentPage.GetComponent<MailMonitorPage>();
+            Button approval = Field<Button>(page, "accept");
+            Assert.That(approval.GetComponentInChildren<Text>().text, Is.EqualTo("승인"));
+            approval.onClick.Invoke();
+            Assert.That(runtime.IsMailAccepted("dispatch"), Is.True);
+            Assert.That(host.CurrentPage.Id, Is.EqualTo("kernel"));
+            Assert.That(input.interactable, Is.False);
+            Assert.That(runtime.TerminalIntroductionTitle, Is.EqualTo("Case.1"));
+            Assert.That(runtime.TerminalConversationTranscript(), Is.Empty);
+            runtime.CompleteTerminalIntroduction("first-case");
+            runtime.AdvanceTerminalConversation(1000);
+            Assert.That(runtime.TerminalConversationTranscript(), Is.EqualTo("Maggie> 실종 신고입니다."));
+        }
         private static void WithEventSystem(Action<EventSystem> check)
         {
             EventSystem previous = EventSystem.current; var root = new GameObject("Page navigation events", typeof(EventSystem));

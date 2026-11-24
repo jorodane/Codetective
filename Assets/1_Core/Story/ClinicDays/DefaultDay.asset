@@ -26,8 +26,8 @@ MonoBehaviour:
     - id: morning
       profileId: client
       patientName: 오전 상담 손님
-      title: 회사의 야간 소음과 출입 기록
-      description: 회사에서 들었던 소음이 계속 마음에 걸립니다. 지난 상담 이후에 달라진 점과 불안이 계속되는 이유를 이야기하고 싶습니다.
+      title: 직장 스트레스
+      description: 퇴근하고 나서 쉬는 시간이 어땠는지 돌아보고, 업무 생각이 계속 날 때 어떻게 해야 할지 이야기하고 싶습니다.
       startMinute: 600
       endMinute: 0
       greeting: 안녕하세요. 예약하고 왔습니다.
@@ -35,18 +35,10 @@ MonoBehaviour:
       dialogue:
       - profileId: client
         speaker: 상담 손님
-        sentence: 회사 지하실에서 밤마다 이상한 기계음이 들려요.
-        keyword: 지하실 야간 소음
-        fact: basement_noise
-        dataName: basementNoise
-        kind: 6
+        sentence: 퇴근하고 잠깐 산책을 해봤어요. 걸을 때는 회사 생각이 좀 줄더라고요.
       - profileId: client
         speaker: 상담 손님
-        sentence: 누군가 야간 출입 기록을 감추려는 것 같아요.
-        keyword: 야간 출입 기록
-        fact: entry_record_mentioned
-        dataName: entryRecordClue
-        kind: 15
+        sentence: 집에 오면 다시 해야 할 일이 떠오르긴 해요. 조금씩 익숙해지면 좋겠어요.
       condition:
         triggersOn: []
         triggersOff: []

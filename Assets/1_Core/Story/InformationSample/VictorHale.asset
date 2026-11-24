@@ -20,7 +20,7 @@ MonoBehaviour:
   m_Name: VictorHale
   m_EditorClassIdentifier: ''
   instanceId: VictorHale
-  displayName: 빅터 헤일
+  displayName: Victor Hale
   schema:
     fileID: 11400000
     guid: 2a5fcd7e8c554b76b1c3f63d8e476366
