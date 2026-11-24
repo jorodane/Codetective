@@ -41,6 +41,22 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.Inbox(Mailbox.Kernel).Any(m => m.id == "tomorrow"), Is.False);
         }
         [Test]
+        public void MailWithAConversationPrerequisiteWaitsForItToFinishEvenAfterTheWelcomeIsRead()
+        {
+            KernelRuntime runtime = World();
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "briefing", requiredMailRead = "intro",
+                steps = new[] { new TerminalConversationStep { id = "start", lines = new[] { new TerminalDialogueLine { text = "안내" } } } } });
+            runtime.RegisterMail(new StoryMail { id = "case", mailbox = Mailbox.Kernel, afterConversation = "briefing",
+                requiredFacts = new[] { "contact_read" } });
+
+            runtime.ReadMail("intro");
+            runtime.EnterTerminalPage("kernel");
+            Assert.That(runtime.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("intro"));
+            Assert.That(() => runtime.ReadMail("case"), Throws.TypeOf<CommandException>());
+            runtime.AdvanceTerminalConversation(1000);
+            Assert.That(runtime.ReadMail("case").afterConversation, Is.EqualTo("briefing"));
+        }
+        [Test]
         public void SavingBeforeAndAfterDeliveryKeepsTheCorrectIntroAndUnreadState()
         {
             KernelRuntime runtime = World(); runtime.DeferDayMailUntilIntro(); KernelSnapshot snapshot = runtime.Capture();

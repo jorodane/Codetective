@@ -4,14 +4,14 @@ using UnityEngine.UI;
 
 namespace Codetective.Terminal
 {
-    /// <summary>A notification on the physical CRT. It borrows the monitor without navigating or reading any message.</summary>
+    /// <summary>A notification on the physical CRT that opens the arriving message when selected.</summary>
     public sealed class TerminalMailNotice : MonoBehaviour
     {
         private static readonly Color DimTint = new Color(0.60f, 0.72f, 0.64f);
         private MonitorPageHost host;
         private Image display;
         private float blinkSeconds, began;
-        public event Action Acknowledged;
+        public event Action OpenRequested;
         public bool IsVisible => gameObject.activeSelf;
         public bool Covered => host != null && host.HasOtherOverlay(this);
 
@@ -31,12 +31,22 @@ namespace Codetective.Terminal
             if (display.sprite == null)
                 Debug.LogError("The mail notice sprite MailNoticeScreen could not be loaded.", this);
             gameObject.AddComponent<CrtMeshEffect>();
-            Button dismiss = gameObject.AddComponent<Button>();
-            dismiss.targetGraphic = display;
-            dismiss.transition = Selectable.Transition.None;
-            var navigation = dismiss.navigation; navigation.mode = Navigation.Mode.None; dismiss.navigation = navigation;
-            dismiss.onClick.AddListener(() => { Hide(); Acknowledged?.Invoke(); });
+            Button open = gameObject.AddComponent<Button>();
+            open.targetGraphic = display;
+            open.transition = Selectable.Transition.None;
+            var navigation = open.navigation; navigation.mode = Navigation.Mode.None; open.navigation = navigation;
+            open.onClick.AddListener(() => OpenRequested?.Invoke());
             gameObject.SetActive(false);
+        }
+
+        public bool OpenMessage(string id)
+        {
+            if (!IsVisible || Covered) return false;
+            MailMonitorPage mailPage = host.FindPage("mail")?.GetComponent<MailMonitorPage>();
+            // Select while the current page is suspended so restoring it cannot mark a different message read.
+            if (mailPage == null || !mailPage.ShowMessage(id)) return false;
+            Hide();
+            return host.CurrentPage?.Id == "mail" || host.TryNavigate("mail");
         }
 
         public bool Show(int unreadArrivals)

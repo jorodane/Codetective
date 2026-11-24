@@ -110,8 +110,7 @@ namespace Codetective.Operations
         public static string TimeOfDay(double minute) => $"{(int)minute / 60:00}:{(int)minute % 60:00}";
 
         private bool CanStartVisit(PatientAppointment appointment) => (!AwaitingAssignment || appointment.beforeAssignment) &&
-            (string.IsNullOrEmpty(appointment.afterConversation) ||
-                terminalConversationProgress.TryGetValue(appointment.afterConversation, out TerminalConversationProgress progress) && progress.phase == TerminalConversationPhase.Completed);
+            TerminalConversationRequirementMet(appointment.afterConversation);
 
         public IEnumerable<(int day, AppointmentProgress visit)> CompletedConsultationsFor(string profileId)
         {

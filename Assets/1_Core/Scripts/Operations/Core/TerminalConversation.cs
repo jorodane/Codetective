@@ -318,6 +318,8 @@ namespace Codetective.Operations
             if (!terminalConversationProgress.ContainsKey(definition.id)) terminalConversationProgress.Add(definition.id, new TerminalConversationProgress { id = definition.id });
         }
         public TerminalConversationProgress ConversationProgress(string id) => id != null && terminalConversationProgress.TryGetValue(id, out var state) ? state.Copy() : null;
+        private bool TerminalConversationRequirementMet(string id) => string.IsNullOrEmpty(id) ||
+            terminalConversationProgress.TryGetValue(id, out TerminalConversationProgress progress) && progress.phase == TerminalConversationPhase.Completed;
         private bool CanStartTerminalConversation(TerminalConversationDefinition definition) =>
             (string.IsNullOrEmpty(definition.requiredMailRead) || IsMailRead(definition.requiredMailRead)) &&
             (string.IsNullOrEmpty(definition.requiredMailAccepted) || IsMailAccepted(definition.requiredMailAccepted)) && definition.condition.Matches(this);

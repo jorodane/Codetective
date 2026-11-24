@@ -8,9 +8,10 @@ namespace Codetective.Operations
     public sealed class MailArrivalTracker
     {
         private readonly HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
-        private readonly HashSet<string> pending = new HashSet<string>(StringComparer.Ordinal);
+        private readonly List<string> pending = new List<string>();
         private bool signalPending;
         public int PendingCount => pending.Count;
+        public string LatestPendingId => pending.Count > 0 ? pending[pending.Count - 1] : null;
 
         public void Initialize(KernelRuntime runtime)
         {
@@ -20,14 +21,14 @@ namespace Codetective.Operations
         public void Observe(KernelRuntime runtime)
         {
             var unread = new HashSet<string>(StringComparer.Ordinal);
-            foreach (StoryMail message in Available(runtime))
+            foreach (StoryMail message in Available(runtime).OrderBy(m => m.day).ThenBy(m => m.mailbox))
             {
                 bool firstArrival = seen.Add(message.id);
                 if (runtime.IsMailRead(message.id)) continue;
                 unread.Add(message.id);
                 if (firstArrival) { pending.Add(message.id); signalPending = true; }
             }
-            pending.IntersectWith(unread);
+            pending.RemoveAll(id => !unread.Contains(id));
             if (pending.Count == 0) signalPending = false;
         }
         public bool TakeSignal()
@@ -36,6 +37,7 @@ namespace Codetective.Operations
             signalPending = false;
             return result;
         }
+        public void Acknowledge(string id) => pending.Remove(id);
         public void Acknowledge() { pending.Clear(); signalPending = false; }
         private static IEnumerable<StoryMail> Available(KernelRuntime runtime) => runtime.Inbox(Mailbox.Kernel).Concat(runtime.Inbox(Mailbox.Clinic));
     }

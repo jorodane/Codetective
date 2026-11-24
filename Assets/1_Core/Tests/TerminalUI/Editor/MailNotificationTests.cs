@@ -39,7 +39,6 @@ namespace Codetective.Terminal.Tests.UI
                 KernelRuntime runtime = ClinicScenario.Create(); runtime.RegisterMail(new StoryMail { id = "new", subject = "임무", mailbox = Mailbox.Kernel });
                 MonitorPageHost host = Monitor(root, runtime, kernel.GetComponent<MonitorPage>()); host.ShowPage("kernel");
                 TerminalMailNotice notice = panel.AddComponent<TerminalMailNotice>(); notice.Initialize(host, 0.55f);
-                int acknowledged = 0; notice.Acknowledged += () => acknowledged++;
                 Assert.That(notice.Show(1), Is.True); Assert.That(host.SystemMenuVisible, Is.True); Assert.That(kernel.activeSelf, Is.False);
                 Assert.That(panel.GetComponentsInChildren<Canvas>(true), Is.Empty, "The envelope must use the existing physical CRT canvas.");
                 Assert.That(panel.GetComponentsInChildren<Text>(true), Is.Empty, "The notice must be readable from the overview without text.");
@@ -60,13 +59,47 @@ namespace Codetective.Terminal.Tests.UI
                 object menu = new object(); host.SetOverlayVisible(menu, true); notice.Hide();
                 Assert.That(host.SystemMenuVisible, Is.True); Assert.That(kernel.activeSelf, Is.False); Assert.That(notice.Show(1), Is.False);
                 host.SetOverlayVisible(menu, false); Assert.That(notice.Show(1), Is.True);
-                panel.GetComponent<Button>().onClick.Invoke();
-                Assert.That(acknowledged, Is.EqualTo(1)); Assert.That(notice.IsVisible, Is.False); Assert.That(host.SystemMenuVisible, Is.False);
+                notice.Hide();
+                Assert.That(notice.IsVisible, Is.False); Assert.That(host.SystemMenuVisible, Is.False);
                 Assert.That(root.transform.Find("Heading").GetComponent<Text>().enabled, Is.True);
                 Assert.That(root.transform.Find("HeaderRule").GetComponent<Image>().enabled, Is.True);
                 Assert.That(root.transform.Find("Navigation").gameObject.activeSelf, Is.True);
                 Assert.That(kernel.activeSelf, Is.True); Assert.That(draft.GetComponent<InputField>().text, Is.EqualTo("save evidence"));
                 Assert.That(runtime.IsMailRead("new"), Is.False);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [TestCase("kernel")]
+        [TestCase("mail")]
+        public void ClickingTheEnvelopeOpensTheExactNewMessageEvenFromAnotherMailbox(string previousPage)
+        {
+            var root = new GameObject("Monitor", typeof(RectTransform)); root.SetActive(false);
+            var kernel = new GameObject("Kernel", typeof(RectTransform), typeof(MonitorPage)).GetComponent<MonitorPage>();
+            var mail = new GameObject("Mail", typeof(RectTransform), typeof(MonitorPage)).GetComponent<MonitorPage>();
+            kernel.Configure("kernel", "커널"); mail.Configure("mail", "메일"); mail.gameObject.AddComponent<MailMonitorPage>();
+            var panel = new GameObject("Notification", typeof(RectTransform)); panel.transform.SetParent(root.transform, false);
+            try
+            {
+                var runtime = new KernelRuntime();
+                runtime.RegisterMail(new StoryMail { id = "earlier-kernel", subject = "다른 임무", mailbox = Mailbox.Kernel });
+                runtime.RegisterMail(new StoryMail { id = "earlier-clinic", subject = "지난 문의", mailbox = Mailbox.Clinic });
+                MonitorPageHost host = Monitor(root, runtime, kernel, mail);
+                host.AutoReadMailAllowed = () => false;
+                host.ShowPage(previousPage); root.SetActive(true);
+
+                runtime.RegisterMail(new StoryMail { id = "new", subject = "새 예약 문의", mailbox = Mailbox.Clinic });
+                TerminalMailNotice notice = panel.AddComponent<TerminalMailNotice>(); notice.Initialize(host, 0.55f);
+                notice.OpenRequested += () => Assert.That(notice.OpenMessage("new"), Is.True);
+                Assert.That(notice.Show(1), Is.True);
+                host.AutoReadMailAllowed = () => true;
+                panel.GetComponent<Button>().onClick.Invoke();
+
+                Assert.That(notice.IsVisible, Is.False);
+                Assert.That(host.CurrentPage, Is.SameAs(mail));
+                Assert.That(runtime.IsMailRead("new"), Is.True);
+                Assert.That(runtime.IsMailRead("earlier-clinic"), Is.False);
+                Assert.That(runtime.IsMailRead("earlier-kernel"), Is.False);
             }
             finally { Object.DestroyImmediate(root); }
         }

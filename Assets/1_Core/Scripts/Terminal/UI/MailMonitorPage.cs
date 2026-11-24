@@ -87,11 +87,13 @@ namespace Codetective.Terminal
         }
         private void ChangeMailbox(Mailbox value) { mailbox = value; selectedId = null; listSignature = null; feedback.text = ""; Refresh(true); }
         public void ShowMailbox(Mailbox value) => ChangeMailbox(value);
-        public void ShowMessage(string id)
+        public bool ShowMessage(string id)
         {
+            if (runtime == null || string.IsNullOrEmpty(id)) return false;
             StoryMail message = runtime.Inbox(Mailbox.Clinic).Concat(runtime.Inbox(Mailbox.Kernel)).FirstOrDefault(m => m.id == id);
-            if (message == null) return;
+            if (message == null) return false;
             mailbox = message.mailbox; selectedId = id; listSignature = null; feedback.text = ""; Refresh(Interactive);
+            return true;
         }
         private void Refresh(bool openFirst)
         {

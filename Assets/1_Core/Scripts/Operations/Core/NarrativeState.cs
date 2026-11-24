@@ -15,6 +15,7 @@ namespace Codetective.Operations
         public string subject;
         public string body;
         public int day = 1;
+        public string afterConversation;
         public string afterAppointmentId; // Clinic plan day plus appointment ID, e.g. "1:regular".
         public int minutesAfterAppointment;
         public string[] requiredFacts = Array.Empty<string>();
@@ -34,7 +35,7 @@ namespace Codetective.Operations
         // An approval choice also identifies pre-flag inquiry assets and programmatic definitions.
         public bool HasReservation => isReservationInquiry || (choices ?? Array.Empty<MailChoice>()).Any(c => c != null && c.approvesReservation);
         public StoryMail Copy() => new StoryMail { id = id, mailbox = mailbox, sender = sender, recipient = recipient, subject = subject, body = body, day = day,
-            afterAppointmentId = afterAppointmentId, minutesAfterAppointment = minutesAfterAppointment,
+            afterConversation = afterConversation, afterAppointmentId = afterAppointmentId, minutesAfterAppointment = minutesAfterAppointment,
             requiredFacts = requiredFacts.ToArray(), readFacts = readFacts.ToArray(), requiresAcceptance = requiresAcceptance, acceptLabel = acceptLabel, pageOnAccept = pageOnAccept,
             acceptFacts = acceptFacts.ToArray(), grantAuthorities = grantAuthorities.ToArray(), condition = condition?.Copy() ?? new StoryCondition(),
             onRead = onRead?.Copy() ?? new StoryEffects(), onAccept = onAccept?.Copy() ?? new StoryEffects(),
@@ -85,7 +86,8 @@ namespace Codetective.Operations
         public IReadOnlyList<StoryMail> DeferredDayMail => DayMailDeferred ? mail.Values
             .Where(m => m.day == Day && !IsMailRead(m.id) && MailConditionsMet(m))
             .OrderByDescending(m => m.mailbox).ThenBy(m => m.id, StringComparer.Ordinal).Select(m => m.Copy()).ToArray() : Array.Empty<StoryMail>();
-        private bool MailPrerequisitesMet(StoryMail message) => message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this);
+        private bool MailPrerequisitesMet(StoryMail message) => TerminalConversationRequirementMet(message.afterConversation) &&
+            message.requiredFacts.All(Facts.Contains) && message.condition.Matches(this);
         private bool MailConditionsMet(StoryMail message) => message.day <= Day && (IsMailRead(message.id) ||
             MailPrerequisitesMet(message) && (string.IsNullOrEmpty(message.afterAppointmentId) || AppointmentMailMinute(message) <= Minute + MinuteEpsilon));
         private double? AppointmentMailMinute(StoryMail message)
@@ -103,6 +105,8 @@ namespace Codetective.Operations
         {
             if (message == null || string.IsNullOrWhiteSpace(message.id) || message.day < 1 || mail.ContainsKey(message.id))
                 throw new CommandException("메일 ID/도착일이 유효하지 않거나 중복됩니다.");
+            if (!string.IsNullOrEmpty(message.afterConversation) && !terminalConversations.ContainsKey(message.afterConversation))
+                throw new CommandException("메일의 선행 터미널 대화가 없습니다: " + message.afterConversation);
             if (message.minutesAfterAppointment < 0 ||
                 (string.IsNullOrEmpty(message.afterAppointmentId) ? message.minutesAfterAppointment != 0 : !appointmentDefinitions.ContainsKey(message.afterAppointmentId)))
                 throw new CommandException("메일이 도착할 상담 예약과 대기 시간을 확인하세요.");

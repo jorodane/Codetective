@@ -26,7 +26,8 @@ namespace Codetective.Gameplay
             arrivals.Initialize(runtime); runtime.NarrativeChanged += Observe;
             var panel = new GameObject("MailNotification", typeof(RectTransform)); panel.transform.SetParent(host.transform, false); panel.layer = 5;
             notice = panel.AddComponent<TerminalMailNotice>(); notice.Initialize(host, settings != null ? settings.mailBlinkSeconds : 0.55f);
-            notice.Acknowledged += arrivals.Acknowledge;
+            notice.OpenRequested += OpenFromEnvelope;
+            inspection.TerminalClicked += OpenFromTerminal;
             speaker = gameObject.AddComponent<AudioSource>(); speaker.playOnAwake = false; speaker.spatialBlend = 0;
             speaker.volume = settings != null ? Mathf.Clamp01(settings.mailArrivalVolume) : 0.45f;
             sound = settings != null && settings.mailArrivalSound != null ? settings.mailArrivalSound : Resources.Load<AudioClip>("MailArrival");
@@ -37,6 +38,20 @@ namespace Codetective.Gameplay
             !game.IsViewTransitioning && !game.IsVisitPresenting && !inspection.ModalInputBlocked && !notice.Covered &&
             (!inspection.NavigationBlocked || game.IsDateTransitioning && runtime.DayIntroSeen);
         private void Observe() => arrivals.Observe(runtime);
+        private void OpenFromEnvelope()
+        {
+            if (CanAttend && !inspection.NavigationBlocked && OpenArrivingMail()) game.ShowMonitor();
+        }
+        private void OpenFromTerminal() => OpenArrivingMail();
+        private bool OpenArrivingMail()
+        {
+            if (!notice.IsVisible) return false;
+            Observe();
+            string id = arrivals.LatestPendingId;
+            if (!notice.OpenMessage(id)) return false;
+            arrivals.Acknowledge(id);
+            return true;
+        }
         private void Update()
         {
             if (notice == null) return;
@@ -58,7 +73,8 @@ namespace Codetective.Gameplay
         private void OnDestroy()
         {
             if (runtime != null) runtime.NarrativeChanged -= Observe;
-            if (notice != null) { notice.Acknowledged -= arrivals.Acknowledge; ProfileModelUtility.Dispose(notice.gameObject); }
+            if (inspection != null) inspection.TerminalClicked -= OpenFromTerminal;
+            if (notice != null) { notice.OpenRequested -= OpenFromEnvelope; ProfileModelUtility.Dispose(notice.gameObject); }
             if (host != null) host.AutoReadMailAllowed = null;
             ProfileModelUtility.Dispose(speaker);
         }

@@ -24,6 +24,7 @@ MonoBehaviour:
 
       NSF 관련 사안으로 판단해 Kernel에게 수사 지휘를 요청합니다. 승인하면 신고자 Margaret Maggie Sloan의 진술을 작전망으로 전달하겠습니다.
     day: 1
+    afterConversation: kernel-onboarding
     afterAppointmentId: '1:regular'
     minutesAfterAppointment: 5
     requiredFacts:

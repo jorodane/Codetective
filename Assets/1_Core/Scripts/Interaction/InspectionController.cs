@@ -71,6 +71,7 @@ namespace Codetective.Interaction
         public bool CanInspectByPointer => flow.CanInspectByPointer(views != null ? views.ActiveAngle?.Id : null);
         public event Action<CameraAnglePreset> AngleEntered;
         public event Action OverviewEntered;
+        public event Action TerminalClicked;
         public Func<bool> BackHandler { get; set; }
         public Action QuickSaveRequested { get; set; }
         public Func<Vector2, bool> PointerBlocked { get; set; }
@@ -242,7 +243,15 @@ namespace Codetective.Interaction
         public void InspectTarget(InspectionTarget target)
         {
             if (CanInspectByPointer && target != null && target.isActiveAndEnabled)
-                InspectAngle(target.Angle, target.Terminal ?? (target.Angle != null ? FindTerminalFor(target.Angle) : null));
+                InspectTargetByPointer(target);
+        }
+
+        private bool InspectTargetByPointer(InspectionTarget target)
+        {
+            CameraAnglePreset angle = target.Angle;
+            if (angle == null || !TryInspectAngle(angle, target.Terminal ?? FindTerminalFor(angle))) return false;
+            if (angle.Id == "monitor") TerminalClicked?.Invoke();
+            return true;
         }
 
         private void UpdateWorldPointer(Vector2 point, bool pressed, bool held)
@@ -302,10 +311,7 @@ namespace Codetective.Interaction
             { ReturnToOverview(); return true; }
             if (target is InspectionActionTarget action)
             { action.Interact(); return true; }
-            if (target is InspectionTarget angle)
-            {
-                InspectAngle(angle.Angle, angle.Terminal ?? FindTerminalFor(angle.Angle)); return true;
-            }
+            if (target is InspectionTarget angle) return InspectTargetByPointer(angle);
             if (target is ItemPlacementSurface tray)
             { Carry.TryPlaceAtScreenPoint(point, tray); return true; }
             if (!insideMonitorView && CanReturnByPointer(point, obstruction))
@@ -444,7 +450,7 @@ namespace Codetective.Interaction
             if (angle == overviewAngle)
                 ReturnToOverview();
             else if (angle != null)
-                InspectAngle(angle, FindTerminalFor(angle));
+                TryInspectAngle(angle, FindTerminalFor(angle));
         }
 
         public bool TryInspectNumber(int number)
@@ -468,16 +474,16 @@ namespace Codetective.Interaction
             int index = views.AngleSet != null ? views.AngleSet.FindId("monitor") : -1;
             if (index < 0) return false;
             CameraAnglePreset angle = views.AngleSet.Get(index);
-            InspectAngle(angle, FindTerminalFor(angle), true);
+            TryInspectAngle(angle, FindTerminalFor(angle), true);
             return true;
         }
 
-        private void InspectAngle(CameraAnglePreset angle, TerminalController targetTerminal, bool focusKernel = false)
+        private bool TryInspectAngle(CameraAnglePreset angle, TerminalController targetTerminal, bool focusKernel = false)
         {
             if (flow.Mode == InspectionMode.Menu || NavigationBlocked || angle == null || views.AngleSet == null)
-                return;
+                return false;
             if (flow.Mode == InspectionMode.Inspecting && views.ActiveAngle == angle)
-                return;
+                return false;
             CameraAnglePreset previous = inspectedAngle; bool wasReturning = returningToOverview;
             CameraAnglePreset previousInformationReturn = informationReturnAngle;
             InspectionMode previousInformationMode = informationReturnMode; bool hadInformationReturn = hasInformationReturn;
@@ -497,9 +503,10 @@ namespace Codetective.Interaction
             }))
             {
                 inspectedAngle = previous; returningToOverview = wasReturning; informationReturnAngle = previousInformationReturn;
-                informationReturnMode = previousInformationMode; hasInformationReturn = hadInformationReturn; return;
+                informationReturnMode = previousInformationMode; hasInformationReturn = hadInformationReturn; return false;
             }
             activeTerminal?.SetInteractionEnabled(false);
+            return true;
         }
         private bool ChangeAngle(CameraAnglePreset angle, Action changed)
         {

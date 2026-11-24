@@ -460,6 +460,8 @@ namespace Codetective.Terminal.Tests.UI
                 Set(inspection, "overviewAngle", overview); Call(inspection, "Awake");
                 Component target = hotspot.GetComponent(targetType);
                 Set(target, "closeUpAngle", monitor); Set(target, "visualRoot", terminal.transform);
+                int terminalClicks = 0;
+                inspection.GetType().GetEvent("TerminalClicked").AddEventHandler(inspection, (Action)(() => terminalClicks++));
                 Call(inspection, "RegisterTarget", target); Call(inspection, "InspectAngle", monitor);
 
                 terminal.transform.position = origin + Vector3.forward * 3;
@@ -474,6 +476,10 @@ namespace Codetective.Terminal.Tests.UI
                 inspection.GetType().GetProperty("PointerBlocked").SetValue(inspection, null);
                 Assert.That(Call(inspection, "InteractAtScreenPoint", outside), Is.True);
                 Assert.That(views.ActiveAngle, Is.SameAs(overview));
+                Assert.That(terminalClicks, Is.Zero);
+                Assert.That(Call(inspection, "InteractAtScreenPoint", inside), Is.True);
+                Assert.That(views.ActiveAngle, Is.SameAs(monitor));
+                Assert.That(terminalClicks, Is.EqualTo(1));
             }
             finally
             {

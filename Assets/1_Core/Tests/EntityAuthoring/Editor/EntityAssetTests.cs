@@ -313,11 +313,23 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.CompletedConsultationsFor("regularVisitor").Single().visit.title, Is.EqualTo("일상 스트레스 상담"));
             Assert.That(restored.IsDrawerOpen("desk.Drawer_1"), Is.True);
             Assert.That(restored.Inbox(Mailbox.Clinic).Count(), Is.EqualTo(2));
+
+            KernelRuntime restarted = scenario.CreateRuntime();
+            restarted.DeferDayMailUntilIntro();
+            Assert.That(restarted.DeferredDayMail.Select(mail => mail.id), Is.EqualTo(new[] { "government-intro" }));
+            restarted.MarkDayIntroSeen(5);
+            restarted.AdvanceDayMailDelay(4.75);
+            Assert.That(restarted.Inbox(Mailbox.Kernel), Is.Empty);
+            restarted.AdvanceDayMailDelay(0.25);
+            Assert.That(restarted.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
+            Assert.That(restarted.Inbox(Mailbox.Clinic), Is.Empty);
+            Assert.That(restarted.IsMailRead("government-intro"), Is.False);
         }
 
         private static void FinishTutorialAndReceiveFirstMission(KernelRuntime runtime)
         {
             runtime.ReadMail("government-intro"); runtime.EnterTerminalPage("kernel");
+            Assert.That(runtime.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
             for (int i = 0; i < 16 && runtime.TerminalConversationActive; i++)
             {
                 TerminalOnboardingTests.ReadBriefing(runtime);
@@ -325,6 +337,7 @@ namespace Codetective.Tests.Operations
                     Assert.That(runtime.Execute(runtime.TerminalAwaitingAnswer ? "y" : runtime.TerminalExpectedCommand).Success, Is.True);
             }
             Assert.That(runtime.ConversationProgress("kernel-onboarding").phase, Is.EqualTo(TerminalConversationPhase.Completed));
+            Assert.That(runtime.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
             runtime.Tick(1);
             AppointmentProgress visit = runtime.CurrentAppointment;
             Assert.That(visit.id, Is.EqualTo("1:regular"));

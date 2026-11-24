@@ -52,6 +52,20 @@ namespace Codetective.Tests.Operations
             Assert.That(tracker.PendingCount, Is.Zero); Assert.That(runtime.UnreadMailCount(Mailbox.Clinic), Is.EqualTo(1));
         }
         [Test]
+        public void TheEnvelopeTargetsTheLatestArrivalThatIsStillUnreadAcrossMailboxes()
+        {
+            KernelRuntime runtime = World(); var tracker = new MailArrivalTracker(); tracker.Initialize(runtime);
+            runtime.SetTrigger("case_progress", true); tracker.Observe(runtime);
+            Assert.That(tracker.LatestPendingId, Is.EqualTo("followup"));
+            runtime.Facts.Add("assigned"); tracker.Observe(runtime);
+            Assert.That(tracker.LatestPendingId, Is.EqualTo("inquiry"));
+            runtime.ReadMail("inquiry"); tracker.Observe(runtime);
+            Assert.That(tracker.LatestPendingId, Is.EqualTo("followup"));
+            tracker.Acknowledge("followup"); tracker.Observe(runtime);
+            Assert.That(tracker.LatestPendingId, Is.Null);
+            Assert.That(runtime.IsMailRead("followup"), Is.False);
+        }
+        [Test]
         public void AcknowledgedMailDoesNotAlertAgainWhenItsGateOrCameraChanges()
         {
             KernelRuntime runtime = World(); var tracker = new MailArrivalTracker(); tracker.Initialize(runtime);
