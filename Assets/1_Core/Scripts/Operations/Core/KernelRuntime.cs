@@ -139,7 +139,7 @@ namespace Codetective.Operations
                 ExecutionResult result = ExecuteTerminalCommand(source, linkObjects);
                 if (observed)
                 {
-                    AddConversationLog(new TerminalConversationLog { text = (result.Success ? "" : "오류 ") + result.Message, complete = true });
+                    AddConversationLog(new TerminalConversationLog { text = (result.Success ? "" : "오류 ") + result.Message, complete = true, commandResult = true });
                     ObserveTerminalCommand(terminalCommandTrace, result);
                 }
                 return result;

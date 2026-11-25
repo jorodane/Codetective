@@ -45,11 +45,50 @@ namespace Codetective.Tests.Operations
             Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(runtime.TerminalConversationTranscript()));
             Assert.That(restored.ContinueTerminalLine(), Is.True);
             Assert.That(restored.TerminalLineUsesEnter, Is.False);
-            restored.AdvanceTerminalConversation(7);
+            restored.AdvanceTerminalConversation(8);
             Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Second message"));
             Assert.That(restored.TerminalLineInProgress, Is.False);
             Assert.That(restored.ContinueTerminalLine(), Is.False);
             Assert.That(restored.Execute("help").Success, Is.True);
+        }
+
+        [Test]
+        public void ABriefReceptionBetweenLinesSurvivesSavingAndDoesNotBlockCommands()
+        {
+            TerminalConversationDefinition definition = Definition();
+            definition.advanceWithEnter = true;
+            definition.steps[0].lines = new[] { Line("First message"), Line("Second message", 10) };
+            KernelRuntime runtime = World(definition);
+            Listen(runtime);
+            Assert.That(runtime.ContinueTerminalLine(), Is.True);
+            Assert.That(runtime.TerminalConversationTranscript(), Does.Contain("수신중..").And.Not.Contain("Second message"));
+            Assert.That(runtime.Execute("note = 1").Success, Is.True);
+            runtime.AdvanceTerminalConversation(0.2);
+
+            KernelRuntime restored = World(definition, false);
+            restored.Restore(runtime.Capture());
+            restored.DisplayLanguage = "en";
+            Assert.That(restored.ContinueTerminalLine(), Is.True);
+            restored.AdvanceTerminalConversation(10, visible: false);
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Receiving..").And.Not.Contain("Second message"));
+            restored.AdvanceTerminalConversation(0.3);
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("[Operator] ▌").And.Not.Contain("Receiving.."));
+            Listen(restored);
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Second message").And.Contain("> note = 1"));
+        }
+
+        [Test]
+        public void SavedReportNotificationsDoNotAppearInTheKernelConversation()
+        {
+            KernelRuntime runtime = World();
+            Assert.That(runtime.Execute("note = \"[보고] 명령으로 얻은 내용\"").Success, Is.True);
+            KernelSnapshot snapshot = runtime.Capture();
+            snapshot.terminalConversations.Single().log.Add(new TerminalConversationLog { text = "[보고] 메일 확인", complete = true });
+
+            KernelRuntime restored = World(start: false);
+            restored.Restore(snapshot);
+            Listen(restored);
+            Assert.That(restored.TerminalConversationTranscript(), Does.Contain("Welcome").And.Contain("\n\n[보고] 명령으로 얻은 내용").And.Not.Contain("메일 확인"));
         }
 
         [Test]
@@ -207,12 +246,13 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = World(); Listen(r);
             Assert.That(r.Execute("side = 1").Success, Is.True); Assert.That(r.Data.ContainsKey("side"), Is.True);
-            Assert.That(r.TerminalConversationTranscript(), Does.Contain("[Operator] ▌")); Assert.That(r.TerminalDisturbance, Is.Zero);
+            Assert.That(r.TerminalConversationTranscript(), Does.Contain("수신중..")); Assert.That(r.TerminalDisturbance, Is.Zero);
             Listen(r); Assert.That(r.TerminalConversationTranscript(), Does.Contain("Forgiven once"));
             r.Execute("free side"); Assert.That(r.TerminalDisturbance, Is.Zero); Listen(r);
             Assert.That(r.TerminalConversationTranscript(), Does.Contain("Forgiven twice"));
-            r.Execute("other = 1"); Assert.That(r.TerminalDisturbance, Is.EqualTo(1));
+            r.Execute("other = 1"); Assert.That(r.TerminalDisturbance, Is.Zero);
             Assert.That(r.ConversationProgress("tutorial").deviations, Is.EqualTo(3));
+            r.AdvanceTerminalConversation(0.45); Assert.That(r.TerminalDisturbance, Is.EqualTo(1));
             r.AdvanceTerminalConversation(0.6); Assert.That(r.TerminalDisturbance, Is.Zero); Assert.That(r.TerminalLineInProgress, Is.True);
             Listen(r); Assert.That(r.TerminalConversationTranscript(), Does.Contain("Kernel. Follow"));
             Assert.That(r.ConversationProgress("tutorial").stepId, Is.EqualTo("first"));

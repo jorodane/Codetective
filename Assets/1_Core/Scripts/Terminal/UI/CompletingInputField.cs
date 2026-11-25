@@ -89,13 +89,16 @@ namespace Codetective.Terminal
 
         protected virtual void Update()
         {
+            if (!isFocused || !IsInteractable()) return;
+            ReplaceComposingSelection();
             // Capture the visible proposal before uGUI/IME can consume the confirming key.
-            if (isFocused && IsInteractable() && IsCompositionProtected) PollPhysicalKeys();
+            if (IsCompositionProtected) PollPhysicalKeys();
         }
 
         protected override void LateUpdate()
         {
             if (!IsInteractable()) return;
+            ReplaceComposingSelection();
             base.LateUpdate();
             if (focusCaret >= 0 && isFocused)
             {
@@ -176,7 +179,7 @@ namespace Codetective.Terminal
             {
                 if (keyEvent.rawType == EventType.KeyDown)
                     ProcessKeyDown(keyEvent);
-                else if ((keyEvent.type == EventType.ValidateCommand || keyEvent.type == EventType.ExecuteCommand) && keyEvent.commandName == "SelectAll")
+                else if (keyEvent.type == EventType.ExecuteCommand && keyEvent.commandName == "SelectAll")
                 { CommitComposition(); SelectAll(); }
             }
             UpdateLabel();
@@ -513,6 +516,18 @@ namespace Codetective.Terminal
             base.OnBeginDrag(eventData);
         }
 
+        private void ReplaceComposingSelection()
+        {
+            if (!isFocused || readOnly || m_CaretPosition == m_CaretSelectPosition || !IsComposing) return;
+            // uGUI inserts preedit at the caret even when text is selected. Remove the
+            // selected range as soon as replacement begins, using raw caret indices.
+            imeSession.Suppress();
+            try { ReplaceSelectedText(""); }
+            finally { imeSession.Resume(); }
+            onValueChanged.Invoke(text);
+            UpdateLabel();
+        }
+
         protected void CommitComposition(bool restartIme = true)
         {
             string composition = CompositionText;
@@ -521,10 +536,7 @@ namespace Codetective.Terminal
             imeSession.Consume(composition, raw);
             if (!readOnly)
             {
-                int start = Mathf.Clamp(Mathf.Min(m_CaretPosition, m_CaretSelectPosition), 0, text.Length);
-                int end = Mathf.Clamp(Mathf.Max(m_CaretPosition, m_CaretSelectPosition), start, text.Length);
-                ApplyCompositionText(start, end, composition);
-                m_CaretPosition = m_CaretSelectPosition = Mathf.Min(text.Length, start + composition.Length);
+                ReplaceSelectedText(composition);
                 onValueChanged.Invoke(text);
             }
             if (restartIme && imeInput != null) imeInput.RestartIme();
@@ -532,8 +544,16 @@ namespace Codetective.Terminal
             UpdateLabel();
         }
 
-        protected virtual void ApplyCompositionText(int start, int end, string composition) =>
-            SetTextWithoutNotify(text.Remove(start, end - start).Insert(start, composition));
+        private void ReplaceSelectedText(string replacement)
+        {
+            int start = Mathf.Clamp(Mathf.Min(m_CaretPosition, m_CaretSelectPosition), 0, text.Length);
+            int end = Mathf.Clamp(Mathf.Max(m_CaretPosition, m_CaretSelectPosition), start, text.Length);
+            ReplaceCommittedRange(start, end, replacement);
+            m_CaretPosition = m_CaretSelectPosition = Mathf.Min(text.Length, start + replacement.Length);
+        }
+
+        protected virtual void ReplaceCommittedRange(int start, int end, string replacement) =>
+            SetTextWithoutNotify(text.Remove(start, end - start).Insert(start, replacement));
 
         private void EndImeSession()
         {

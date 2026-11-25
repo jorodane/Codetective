@@ -264,6 +264,29 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(field.isFocused, Is.True);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void KernelLogShowsCommandResultsWithoutMailOrClinicNotifications(bool duringDialogue)
+        {
+            var runtime = new KernelRuntime();
+            TerminalController controller = Controller(runtime, out _);
+            if (duringDialogue)
+            {
+                runtime.RegisterTerminalConversation(new TerminalConversationDefinition { id = "briefing", steps = new[] {
+                    new TerminalConversationStep { id = "first", lines = new[] { new TerminalDialogueLine { text = "Briefing.", charactersPerSecond = 1 } } }
+                } });
+                runtime.EnterTerminalPage("kernel");
+            }
+            runtime.RegisterMail(new StoryMail { id = "mail", subject = "예약 문의", mailbox = Mailbox.Clinic });
+            runtime.ReadMail("mail");
+            runtime.Report("11:00 / 상담 손님 입실");
+            Submit("note = 42");
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+
+            string log = controller.GetComponentInChildren<ScrollRect>().content.GetComponent<Text>().text;
+            Assert.That(log, Does.Contain("> note = 42").And.Contain("\n42").And.Not.Contain("예약 문의").And.Not.Contain("손님 입실"));
+        }
+
         [Test]
         public void SubmittingAComposedNameRestoresFocusAndConsumesTheDelayedImeCommit()
         {
@@ -556,6 +579,27 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         private Text Ghost() => field.textComponent.transform.Find("InlineCompletionPreview").GetComponent<Text>();
+
+        [Test]
+        public void StartingKoreanCompositionAfterSelectAllImmediatelyReplacesTheDraft()
+        {
+            field.SetTextWithoutNotify("이전 "); field.FocusAtEnd(); Compose("단");
+            EventModifiers modifier = SystemInfo.operatingSystemFamily == OperatingSystemFamily.MacOSX ? EventModifiers.Command : EventModifiers.Control;
+            PumpInput(new Event { type = EventType.KeyDown, keyCode = KeyCode.A, modifiers = modifier });
+            Assert.That(field.text, Is.EqualTo("이전 단"));
+            Assert.That(Math.Abs(field.selectionAnchorPosition - field.selectionFocusPosition), Is.EqualTo(field.text.Length));
+
+            Compose("ㄴ");
+            PumpInput(new Event { type = EventType.KeyDown, character = '단' });
+            Assert.That(field.text, Is.Empty);
+            Assert.That(field.CompletionInput.Text, Is.EqualTo("ㄴ"));
+            Assert.That(field.textComponent.text, Is.EqualTo("ㄴ"));
+
+            Compose("나");
+            Invoke(typeof(CompletingInputField), field, "CommitComposition", false);
+            Assert.That(field.text, Is.EqualTo("나"));
+            Assert.That(field.textComponent.text, Is.EqualTo("나"));
+        }
 
         [Test]
         public void MovingTheCaretAfterComposingCommitsTheSyllableIntoOrdinaryEditableText()

@@ -34,7 +34,10 @@ namespace Codetective.Terminal
             if (!active) return;
             composition = value ?? "";
             hasEvent = true;
-            if (composition.Length > 0) { commitEcho = ""; echoIndex = 0; }
+            // A different preedit can be reported before the old commit reaches uGUI.
+            // Allow the same character to be composed again while still guarding old text.
+            if (composition.Length > 0 && echoIndex < commitEcho.Length && composition[0] == commitEcho[echoIndex])
+            { commitEcho = ""; echoIndex = 0; }
         }
 
         public void Consume(string value, string raw)

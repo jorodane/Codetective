@@ -107,6 +107,7 @@ namespace Codetective.Tests.Operations
                 Assert.That(r.ExecuteLinkedInput(name + " = " + CommandObjectReference.Write("hq"), name + " = 지휘소").Success, Is.True);
                 if (name != "세번째") ReadBriefing(r);
             }
+            r.AdvanceTerminalConversation(0.5);
             Assert.That(r.TerminalDisturbance, Is.GreaterThan(0));
             ReadBriefing(r); Assert.That(r.TerminalConversationTranscript(), Does.Contain("지금은 장난칠 때가 아닙니다."));
             Assert.That(r.ConversationProgress("kernel-onboarding").stepId, Is.EqualTo("reference"));

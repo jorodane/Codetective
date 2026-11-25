@@ -115,21 +115,15 @@ namespace Codetective.Terminal
         private static readonly Color SelectedColor = new Color(0.16f, 0.32f, 0.27f, 1f);
         private static readonly Color NormalColor = new Color(0.055f, 0.10f, 0.09f, 1f);
         private TerminalSession session = new TerminalSession();
-        private readonly Queue<string> reports = new Queue<string>();
         private int runtimeRevision = -1;
         public void AttachRuntime(KernelRuntime runtime)
         {
-            session.Runtime.Message -= QueueReport;
             session = new TerminalSession(runtime);
-            session.Runtime.Message += QueueReport;
             if (input != null) input.ClearDraft();
             ResetConversationPresentation();
             runtimeRevision = -1;
             GetComponent<MonitorPageHost>()?.AttachRuntime(runtime);
         }
-        private void QueueReport(string message)
-        { if (session.Runtime.TerminalConversationActive) session.Runtime.AppendTerminalConversationReport(message); else reports.Enqueue(message); }
-        private void OnDestroy() => session.Runtime.Message -= QueueReport;
         private readonly TerminalHistory history = new TerminalHistory();
         private IReadOnlyList<TerminalCompletion> completions = Array.Empty<TerminalCompletion>();
         private int selectedCompletion;
@@ -195,7 +189,6 @@ namespace Codetective.Terminal
 
         private void LateUpdate()
         {
-            while (reports.Count > 0) AppendHistory("[보고] " + reports.Dequeue());
             UpdateConversationPresentation();
             RestoreCommandFocus();
             if (runtimeRevision != session.Runtime.Revision)

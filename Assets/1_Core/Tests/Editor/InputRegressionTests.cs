@@ -67,6 +67,17 @@ namespace Codetective.Terminal.Tests
         }
 
         [Test]
+        public void ANewSyllableCanArriveBeforeThePreviousCommitEcho()
+        {
+            var session = new ImeSession();
+            session.Begin(""); session.CompositionChanged("단"); session.Consume("단", "단");
+            session.CompositionChanged("나");
+            Assert.That(session.IgnoreCommitEcho('단'), Is.True);
+            Assert.That(session.Read("나"), Is.EqualTo("나"));
+            Assert.That(session.IgnoreCommitEcho('나'), Is.False);
+        }
+
+        [Test]
         public void AnEmptyImeEventOverridesAStaleBackendString()
         {
             var session = new ImeSession();

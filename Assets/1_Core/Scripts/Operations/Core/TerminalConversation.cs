@@ -137,7 +137,7 @@ namespace Codetective.Operations
         public string text = "", textKey = "", speaker = "", speakerKey = "", englishCommand = "", koreanCommand = "";
         public string suffix = "";
         public int visibleElements;
-        public bool complete, authored;
+        public bool complete, authored, commandResult;
         public TerminalConversationLog Copy() => (TerminalConversationLog)MemberwiseClone();
     }
     [Serializable] public sealed class TerminalActionProof
@@ -150,13 +150,13 @@ namespace Codetective.Operations
         public string id = "", stepId = "", slotName = "", answerKey = "";
         public TerminalConversationPhase phase;
         public int deviations, pendingIndex, activeLog = -1;
-        public bool reply, goalMetWhileSpeaking;
+        public bool reply, goalMetWhileSpeaking, receiving;
         public double elapsed;
         public List<TerminalDialogueLine> pending = new List<TerminalDialogueLine>();
         public List<TerminalConversationLog> log = new List<TerminalConversationLog>();
         public List<TerminalActionProof> performed = new List<TerminalActionProof>();
         public TerminalConversationProgress Copy() => new TerminalConversationProgress { id = id, stepId = stepId, slotName = slotName, answerKey = answerKey, phase = phase, deviations = deviations,
-            pendingIndex = pendingIndex, activeLog = activeLog, reply = reply, goalMetWhileSpeaking = goalMetWhileSpeaking, elapsed = elapsed,
+            pendingIndex = pendingIndex, activeLog = activeLog, reply = reply, goalMetWhileSpeaking = goalMetWhileSpeaking, receiving = receiving, elapsed = elapsed,
             pending = pending.Select(l => l.Copy()).ToList(), log = log.Select(l => l.Copy()).ToList(), performed = performed.Select(p => p.Copy()).ToList() };
     }
     internal sealed class TerminalCommandTrace
@@ -169,6 +169,7 @@ namespace Codetective.Operations
     public sealed partial class KernelRuntime
     {
         private const string AnswerPromptKey = "terminal.dialogue.answer.options";
+        private const double ReceptionSeconds = 0.45;
         private readonly Dictionary<string, TerminalConversationDefinition> terminalConversations = new Dictionary<string, TerminalConversationDefinition>(StringComparer.Ordinal);
         private readonly Dictionary<string, TerminalConversationProgress> terminalConversationProgress = new Dictionary<string, TerminalConversationProgress>(StringComparer.Ordinal);
         private string activeTerminalConversation;
@@ -195,6 +196,7 @@ namespace Codetective.Operations
             {
                 if (!TerminalCanContinueLine) return false;
                 TerminalConversationProgress progress = Conversation;
+                if (progress.receiving) return false;
                 if (progress.pendingIndex + 1 < progress.pending.Count) return true;
                 TerminalConversationStep step = ConversationStep;
                 if (progress.reply || IsUnanswered(step) || (!progress.goalMetWhileSpeaking && GoalRequiresInput(step.goal))) return false;
@@ -295,7 +297,7 @@ namespace Codetective.Operations
             get
             {
                 TerminalConversationProgress p = Conversation;
-                if (!TerminalLineInProgress || p.pendingIndex >= p.pending.Count || p.log[p.activeLog].complete) return 0;
+                if (!TerminalLineInProgress || p.receiving || p.pendingIndex >= p.pending.Count || p.log[p.activeLog].complete) return 0;
                 TerminalDialogueLine line = p.pending[p.pendingIndex];
                 return line.emotion != TerminalEmotion.Angry || line.effectSeconds <= 0 ? 0 : Math.Max(0, 1 - p.elapsed / line.effectSeconds);
             }
@@ -400,18 +402,18 @@ namespace Codetective.Operations
             }
             p.log.Add(entry); ConversationChanged(false); return p.log.Count - 1;
         }
-        public void AppendTerminalConversationReport(string text)
-        { if (TerminalConversationActive) AddConversationLog(new TerminalConversationLog { text = "[보고] " + text, complete = true }); }
         private void BeginConversationSpeech(IEnumerable<TerminalDialogueLine> lines, bool reply)
         {
-            var p = Conversation; p.pending = lines.Select(l => l.Copy()).ToList(); p.pendingIndex = 0; p.reply = reply; p.activeLog = -1; p.elapsed = 0;
+            var p = Conversation;
+            bool followUp = p.phase == TerminalConversationPhase.Speaking || p.phase == TerminalConversationPhase.AwaitingCommand;
+            p.pending = lines.Select(l => l.Copy()).ToList(); p.pendingIndex = 0; p.reply = reply; p.activeLog = -1;
             if (p.pending.Count == 0) { ReadyForConversationCommand(); return; }
-            p.phase = TerminalConversationPhase.Speaking; BeginConversationLine();
+            p.phase = TerminalConversationPhase.Speaking; BeginConversationLine(followUp);
         }
-        private void BeginConversationLine()
+        private void BeginConversationLine(bool receiving)
         {
             var p = Conversation; TerminalDialogueLine line = p.pending[p.pendingIndex];
-            p.elapsed = 0; p.activeLog = -1;
+            p.elapsed = 0; p.activeLog = -1; p.receiving = receiving;
             bool hasSpeaker = !string.IsNullOrEmpty(line.speaker) || !string.IsNullOrEmpty(line.speakerKey);
             p.activeLog = AddConversationLog(new TerminalConversationLog { text = line.text, textKey = line.textKey,
                 speaker = hasSpeaker ? line.speaker : ConversationDefinition.speaker, speakerKey = hasSpeaker ? line.speakerKey : ConversationDefinition.speakerKey,
@@ -424,7 +426,17 @@ namespace Codetective.Operations
             int budget = 4096;
             while (TerminalLineInProgress && seconds > 0 && budget-- > 0)
             {
-                var p = Conversation; var line = p.pending[p.pendingIndex]; var entry = p.log[p.activeLog];
+                var p = Conversation;
+                if (p.receiving)
+                {
+                    double remaining = Math.Max(0, ReceptionSeconds - p.elapsed);
+                    if (seconds < remaining) { p.elapsed += seconds; break; }
+                    seconds -= remaining;
+                    p.elapsed = 0; p.receiving = false;
+                    ConversationChanged(false);
+                    continue;
+                }
+                var line = p.pending[p.pendingIndex]; var entry = p.log[p.activeLog];
                 if (entry.complete)
                 {
                     if (TerminalLineUsesEnter) break;
@@ -449,6 +461,8 @@ namespace Codetective.Operations
         public bool ContinueTerminalLine()
         {
             if (!TerminalCanContinueLine) return false;
+            // Consume an extra press while the next message is arriving.
+            if (Conversation.receiving) return true;
             TerminalConversationLog line = Conversation.log[Conversation.activeLog];
             if (line.complete || !TerminalLineUsesEnter)
             {
@@ -463,7 +477,7 @@ namespace Codetective.Operations
         {
             TerminalConversationProgress p = Conversation;
             p.activeLog = -1; p.pendingIndex++;
-            if (p.pendingIndex < p.pending.Count) BeginConversationLine();
+            if (p.pendingIndex < p.pending.Count) BeginConversationLine(receiving: true);
             else ReadyForConversationCommand();
         }
         private bool ConversationGoalSatisfied(TerminalCommandGoal goal)
@@ -482,7 +496,7 @@ namespace Codetective.Operations
 
         private void ReadyForConversationCommand()
         {
-            var p = Conversation; p.pending.Clear(); p.pendingIndex = 0; p.activeLog = -1; p.elapsed = 0;
+            var p = Conversation; p.pending.Clear(); p.pendingIndex = 0; p.activeLog = -1; p.elapsed = 0; p.receiving = false;
             if (p.reply)
             {
                 p.reply = false;
@@ -586,9 +600,17 @@ namespace Codetective.Operations
         {
             var p = Conversation; if (p == null) return new ObjectReferenceText("");
             var lines = new List<ObjectReferenceText>();
-            foreach (TerminalConversationLog entry in p.log)
+            for (int i = 0; i < p.log.Count; i++)
             {
+                TerminalConversationLog entry = p.log[i];
+                // Earlier saves put runtime notifications directly in the conversation journal.
+                if (!entry.authored && !entry.commandResult && entry.text.StartsWith("[보고] ", StringComparison.Ordinal)) continue;
                 if (!includeAnswerPrompts && entry.textKey == AnswerPromptKey) continue;
+                if (p.phase == TerminalConversationPhase.Speaking && p.receiving && i == p.activeLog)
+                {
+                    lines.Add(new ObjectReferenceText(DisplayLanguage == "en" ? "Receiving.." : "수신중.."));
+                    continue;
+                }
                 ObjectReferenceText line = ConversationText(entry, p);
                 if (!entry.complete)
                 {

@@ -136,9 +136,9 @@ namespace Codetective.Terminal
             base.ApplyCompletionText(completion);
         }
 
-        protected override void ApplyCompositionText(int start, int end, string composition)
+        protected override void ReplaceCommittedRange(int start, int end, string replacement)
         {
-            base.ApplyCompositionText(start, end, composition);
+            base.ReplaceCommittedRange(start, end, replacement);
             draft.Update(text, start);
         }
 
