@@ -23,24 +23,31 @@ namespace Codetective.Terminal
         private RectTransform answerRow, answerChoices, questionPanel;
         private Text answerOptions, answerQuestion;
         private string[] visibleAnswerKeys = Array.Empty<string>();
-        private Vector2 logBottom, scrollbarBottom, completionPosition;
+        private float logBottom, scrollbarBottom, completionY;
 
         private void ResetConversationPresentation()
-        { mergedConversations.Clear(); renderedConversationRevision = -1; renderedConversationLocale = null; renderedConversationId = null; conversationInputLocked = false; restoreCommandFocus = false; ClearConversationDisturbance(); }
+        {
+            mergedConversations.Clear(); renderedConversationRevision = -1; renderedConversationLocale = null; renderedConversationId = null;
+            contactRevision = -1; conversationInputLocked = false; restoreCommandFocus = false; ClearConversationDisturbance();
+        }
         private void ClearConversationDisturbance()
         { if (conversationScreen != null) conversationScreen.SetConversationDisturbance(0); }
         private void MergeCompletedConversation()
         {
             KernelRuntime runtime = session.Runtime;
-            if (runtime.TerminalConversationActive || runtime.TerminalConversationId == null || !mergedConversations.Add(runtime.TerminalConversationId)) return;
+            if (!runtime.TerminalConversationCompleted || !mergedConversations.Add(runtime.TerminalConversationId)) return;
             ObjectReferenceText log = runtime.TerminalConversationContent(includeAnswerPrompts: false);
             if (!string.IsNullOrWhiteSpace(log.Text)) AppendHistoryContent(log);
         }
         private ObjectReferenceText ConversationTranscript()
         {
             KernelRuntime runtime = session.Runtime;
-            ObjectReferenceText content = runtime.TerminalConversationActive ? ObjectReferenceText.Join("\n\n",
-                new[] { history.Content, runtime.TerminalConversationContent(includeAnswerPrompts: false) }) : history.Content;
+            ObjectReferenceText content = history.Content;
+            if (runtime.TerminalConversationActive || runtime.TerminalConversationSuspended)
+            {
+                ObjectReferenceText log = runtime.TerminalConversationContent(includeAnswerPrompts: false);
+                if (log.Text.Length > 0) content = content.Text.Length > 0 ? ObjectReferenceText.Join("\n\n", new[] { content, log }) : log;
+            }
             // Keep the combined uGUI Text mesh within the same budget as ordinary scrollback.
             if (content.Text.Length > 12000)
             {
@@ -60,13 +67,13 @@ namespace Codetective.Terminal
             KernelRuntime runtime = session.Runtime;
             bool visible = pageVisible && interactionEnabled && isActiveAndEnabled && Time.timeScale > 0;
             runtime.AdvanceTerminalConversation(Time.deltaTime, visible);
+            RefreshConnectionPresentation();
             if (runtime.TerminalConversationActive && renderedConversationId != runtime.TerminalConversationId)
             { renderedConversationId = runtime.TerminalConversationId; QueueTranscriptScroll(toLatest: true); }
-            if (conversationInputLocked != runtime.TerminalInputLocked)
+            if (conversationInputLocked != CommandInputBlocked)
             {
-                if (visible && !runtime.TerminalInputLocked && runtime.TerminalConversationActive)
+                if (visible && !CommandInputBlocked && runtime.TerminalConversationActive)
                     restoreCommandFocus = true;
-                conversationInputLocked = runtime.TerminalInputLocked;
                 ApplyInputInteraction(); runtimeRevision = -1;
             }
             if (conversationScreen == null) conversationScreen = GetComponent<CrtScreen>();
@@ -117,11 +124,16 @@ namespace Codetective.Terminal
             {
                 QueueTranscriptScroll();
                 answerRow.gameObject.SetActive(waiting);
-                Vector2 inset = waiting ? Vector2.up * AnswerInset : Vector2.zero;
-                TranscriptViewport.offsetMin = logBottom + inset;
+                float inset = waiting ? AnswerInset : 0;
+                RectTransform viewport = TranscriptViewport;
+                viewport.offsetMin = new Vector2(viewport.offsetMin.x, logBottom + inset);
                 if (transcriptScroll.verticalScrollbar != null)
-                    ((RectTransform)transcriptScroll.verticalScrollbar.transform).offsetMin = scrollbarBottom + inset;
-                ((RectTransform)completionPanel.transform).anchoredPosition = completionPosition + inset;
+                {
+                    var scrollbar = (RectTransform)transcriptScroll.verticalScrollbar.transform;
+                    scrollbar.offsetMin = new Vector2(scrollbar.offsetMin.x, scrollbarBottom + inset);
+                }
+                var candidates = (RectTransform)completionPanel.transform;
+                candidates.anchoredPosition = new Vector2(candidates.anchoredPosition.x, completionY + inset);
             }
             if (waiting)
             {
@@ -176,10 +188,10 @@ namespace Codetective.Terminal
 
         private void BuildAnswerPrompt()
         {
-            logBottom = TranscriptViewport.offsetMin;
+            logBottom = TranscriptViewport.offsetMin.y;
             if (transcriptScroll.verticalScrollbar != null)
-                scrollbarBottom = ((RectTransform)transcriptScroll.verticalScrollbar.transform).offsetMin;
-            completionPosition = ((RectTransform)completionPanel.transform).anchoredPosition;
+                scrollbarBottom = ((RectTransform)transcriptScroll.verticalScrollbar.transform).offsetMin.y;
+            completionY = ((RectTransform)completionPanel.transform).anchoredPosition.y;
             RectTransform field = (RectTransform)input.transform;
             field.SetAsLastSibling();
             Font font = input.textComponent.font;

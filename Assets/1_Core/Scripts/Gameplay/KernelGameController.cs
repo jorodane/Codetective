@@ -187,6 +187,7 @@ namespace Codetective.Gameplay
         {
             if (!presentationInitialized || !IsSessionActive || changingScene || terminalIntroductionPlaying || inspection.Mode == InspectionMode.Menu || ui.SummaryVisible) return;
             Runtime.AdvanceDayMailDelay(Time.unscaledDeltaTime);
+            Runtime.AdvanceTerminalRedial(Time.unscaledDeltaTime);
             if (Transitions.IsBusy) return;
             if (Runtime.TerminalIntroductionTitle != null && !IsDateTransitioning && !IsVisitPresenting && Monitor is MonitorPageHost host &&
                 !host.SystemMenuVisible && host.CurrentPage?.TerminalPage == true && host.GetComponent<TerminalController>()?.InteractionEnabled == true)
@@ -547,6 +548,7 @@ namespace Codetective.Gameplay
             HoldableItem item = cup.GetComponent<HoldableItem>();
             if (item == null) item = cup.AddComponent<HoldableItem>();
             item.Configure(id, label, HeldItemUse.Custom, description: description);
+            if (!item.HasAlternateView) item.ConfigureInspectionView("밑면 보기", new Vector3(105, 0, 0));
             if (cup.GetComponentsInChildren<Collider>().Length == 0)
             {
                 BoxCollider collider = cup.AddComponent<BoxCollider>(); Bounds local = LocalBounds(cup.transform, cup.GetComponentsInChildren<Renderer>());

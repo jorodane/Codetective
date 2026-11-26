@@ -21,7 +21,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: ''
   conversation:
     id: kernel-onboarding
-    requiredMailRead: government-intro
+    connectionMode: 1
+    redialSeconds: 3
+    legacyReadMailToSkip: government-intro
     pageId: kernel
     variableBase: practice
     koreanVariableBase: 연습
@@ -33,7 +35,6 @@ MonoBehaviour:
     replacesStartupGuide: 1
     unlockCommandsByStep: 1
     advanceWithEnter: 1
-    skipIfMailAlreadyReadOnExistingSave: 1
     condition:
       triggersOn: []
       triggersOff:
@@ -48,7 +49,7 @@ MonoBehaviour:
         pauseAfter: 0.7
         effectSeconds: 0.55
         emotion: 0
-      - text: 현장지원과입니다. 메일은 확인하셨겠지요. 먼저 작전망의 기본 사용법부터 확인하겠습니다.
+      - text: 현장지원과입니다. 연결을 확인했습니다. 작전망의 기본 사용법부터 안내하겠습니다.
         textKey: onboarding.connection
         charactersPerSecond: 32
         pauseAfter: 0.7

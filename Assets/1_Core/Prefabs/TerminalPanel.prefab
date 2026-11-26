@@ -556,7 +556,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "CODETECTIVE / KERNEL\n작전망 연결 대기"
+  m_Text: ''
 --- !u!114 &100034
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1019,7 +1019,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1.15
-  m_Text: "Tab/Enter/Space 완성 · 다음 Enter 실행 · ↑↓ 후보 · Q 전체 보기 (입력 중 제외) · ESC 메뉴"
+  m_Text: "Tab/Enter/Space 완성 · 다음 Enter 실행 · ↑↓ 후보"
 --- !u!1 &100068
 GameObject:
   m_ObjectHideFlags: 0

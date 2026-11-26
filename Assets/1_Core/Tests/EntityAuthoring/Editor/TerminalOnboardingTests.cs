@@ -24,7 +24,7 @@ namespace Codetective.Tests.Operations
         {
             KernelRuntime r = ClinicScenario.Create(); r.Language = commands; r.DisplayLanguage = display; ContentTextTableAsset.Install(r, asset.textTables);
             r.RegisterMail(new StoryMail { id = "government-intro", mailbox = Mailbox.Kernel }); r.RegisterTerminalConversation(asset.conversation);
-            r.ReadMail("government-intro"); r.EnterTerminalPage("kernel"); return r;
+            r.EnterTerminalPage("kernel"); Assert.That(r.AcceptTerminalConnection("kernel-onboarding"), Is.True); return r;
         }
         [TestCase(CommandLocale.Korean, "ko", "y")]
         [TestCase(CommandLocale.English, "en", "y")]
@@ -121,7 +121,7 @@ namespace Codetective.Tests.Operations
             {
                 mail.message.id = "government-intro"; mail.message.mailbox = Mailbox.Kernel;
                 scenario.mail = new[] { mail }; scenario.terminalConversations = new[] { asset }; KernelRuntime r = scenario.CreateRuntime();
-                r.ReadMail("government-intro"); r.EnterTerminalPage("kernel"); r.AdvanceTerminalConversation(0.5);
+                r.EnterTerminalPage("kernel"); Assert.That(r.AcceptTerminalConnection("kernel-onboarding"), Is.True); r.AdvanceTerminalConversation(0.5);
                 KernelRuntime restored = scenario.CreateRuntime(); restored.Restore(r.Capture());
                 Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(r.TerminalConversationTranscript()));
                 restored.DisplayLanguage = "en"; restored.AdvanceTerminalConversation(1000);

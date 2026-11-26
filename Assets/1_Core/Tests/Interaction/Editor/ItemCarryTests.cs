@@ -54,7 +54,7 @@ namespace Codetective.Tests.Interaction
             GameObject cup = GameObject.CreatePrimitive(PrimitiveType.Cube); var desk = new GameObject("Desk");
             try
             {
-                Camera view = camera.GetComponent<Camera>(); view.fieldOfView = fov; view.aspect = 16f / 9f;
+                Camera view = camera.GetComponent<Camera>(); view.fieldOfView = fov; view.aspect = 16f / 9f; view.nearClipPlane = 0.05f;
                 cup.transform.localScale = new Vector3(0.08f, 0.12f, 0.08f);
                 HoldableItem item = cup.AddComponent<HoldableItem>();
                 ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
@@ -75,6 +75,16 @@ namespace Codetective.Tests.Interaction
                 Assert.That(Vector3.Distance(cup.transform.localPosition, position), Is.LessThan(0.001f));
                 carry.ResetInspectionRotation(); frame.Invoke(carry, null);
                 Assert.That(Quaternion.Angle(front, cup.transform.localRotation), Is.LessThan(0.1f));
+                var alternate = new Vector3(105, 0, 0);
+                item.ConfigureInspectionView("밑면 보기", alternate);
+                carry.ShowAlternateInspectionView(); frame.Invoke(carry, null);
+                Assert.That(Quaternion.Angle(Quaternion.Euler(alternate) * front, cup.transform.localRotation), Is.LessThan(0.1f));
+                for (int i = 0; i < 20; i++) carry.ZoomInspection(120f);
+                frame.Invoke(carry, null);
+                Assert.That(cup.transform.localScale.x / scale.x, Is.EqualTo(1.12f).Within(0.001f));
+                for (int i = 0; i < 20; i++) carry.ZoomInspection(-120f);
+                frame.Invoke(carry, null);
+                Assert.That(cup.transform.localScale.x / scale.x, Is.EqualTo(0.90f).Within(0.001f));
                 ItemPlacementSurface surface = desk.AddComponent<ItemPlacementSurface>(); surface.Initialize("desk.top", null, new Bounds(new Vector3(4, 0, 0), Vector3.one));
                 Assert.That(carry.BeginPlacement(), Is.True); Assert.That(carry.TryPlaceOn(surface), Is.True);
                 Assert.That(Vector3.Distance(cup.transform.lossyScale, new Vector3(0.08f, 0.12f, 0.08f)), Is.LessThan(0.001f));

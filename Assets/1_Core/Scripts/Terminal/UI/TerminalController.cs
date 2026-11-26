@@ -27,13 +27,14 @@ namespace Codetective.Terminal
             (GetComponent<MonitorPageHost>()?.IsCompositionProtected ?? false);
         private bool pageVisible = true;
         private bool restoreCommandFocus;
-        private bool AcceptsInput => interactionEnabled && pageVisible && !session.Runtime.TerminalInputLocked;
+        private bool AcceptsInput => interactionEnabled && pageVisible && !CommandInputBlocked;
 
         public void SetPageVisible(bool visible)
         {
             if (pageVisible == visible) return;
             pageVisible = visible;
             if (!visible) { restoreCommandFocus = false; ClearConversationDisturbance(); }
+            RefreshConnectionPresentation();
             ApplyInputInteraction();
             RefreshAnswerPrompt();
         }
@@ -59,7 +60,7 @@ namespace Codetective.Terminal
 
         private void ApplyInputInteraction()
         {
-            conversationInputLocked = session.Runtime.TerminalInputLocked;
+            conversationInputLocked = CommandInputBlocked;
             if (!AcceptsInput)
             {
                 var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
@@ -161,7 +162,7 @@ namespace Codetective.Terminal
             if (canvas != null && canvas.worldCamera == null)
                 canvas.worldCamera = Camera.main;
 
-            history.Append(session.Runtime.TerminalUsesGuidedStartup ? "CODETECTIVE / KERNEL\n" + session.Runtime.Text("terminal.dialogue.standby", "작전망 연결 대기") : "CODETECTIVE 메모리 터미널 준비 완료\n\n" +
+            if (!session.Runtime.TerminalUsesGuidedStartup) history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
                            "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
                            "입력창 클릭 후 명령 입력 · Tab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정 · 다음 Enter 실행\n" +
                            "입력하지 않을 때 Tab 다음 페이지 / Shift+Tab 이전 페이지\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");

@@ -39,12 +39,6 @@ MonoBehaviour:
   - key: profile.regularVisitor.name
     language: en
     text: Han Jeong-woo
-  - key: terminal.dialogue.standby
-    language: ko
-    text: 작전망 연결 대기
-  - key: terminal.dialogue.standby
-    language: en
-    text: Operations network standby
   - key: terminal.dialogue.answer.options
     language: ko
     text: 대답>
@@ -77,10 +71,10 @@ MonoBehaviour:
     text: You found Kernel.
   - key: onboarding.connection
     language: ko
-    text: 현장지원과입니다. 메일은 확인하셨겠지요. 먼저 작전망의 기본 사용법부터 확인하겠습니다.
+    text: 현장지원과입니다. 연결을 확인했습니다. 작전망의 기본 사용법부터 안내하겠습니다.
   - key: onboarding.connection
     language: en
-    text: Field Support here. You have read the mail. Let's check the basics of the operations network.
+    text: Field Support here. The line is open. Let's go through the basics of the operations network.
   - key: onboarding.listen
     language: ko
     text: "입력창이 비어 있을 때 Enter를 누르면 다음 안내로 넘어갑니다. 다음 명령을 실행해 보십시오.\n{command}"

@@ -65,7 +65,9 @@ namespace Codetective.Interaction
             else if (IsExamining) HeldItem.FrameForInspection(ViewCamera, Time.unscaledDeltaTime);
         }
         public void RotateInspection(Vector2 degrees) { if (CanManipulate && IsExamining) HeldItem.RotateInspection(degrees); }
+        public void ZoomInspection(float wheel) { if (CanManipulate && IsExamining) HeldItem.ZoomInspection(wheel); }
         public void ResetInspectionRotation() { if (CanManipulate && IsExamining) HeldItem.ResetInspectionRotation(); }
+        public void ShowAlternateInspectionView() { if (CanManipulate && IsExamining) HeldItem.ShowAlternateInspectionView(); }
         public bool TryPickup(HoldableItem item)
         {
             if (!PickUp(item)) return false;

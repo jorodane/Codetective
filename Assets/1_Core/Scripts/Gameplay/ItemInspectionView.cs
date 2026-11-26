@@ -6,13 +6,13 @@ using UnityEngine.UI;
 namespace Codetective.Gameplay
 {
     /// <summary>The left side handles picking a printed area or dragging the held object.</summary>
-    internal sealed class ItemInspectionView : MonoBehaviour, IPointerDownHandler, IPointerClickHandler, IDragHandler
+    internal sealed class ItemInspectionView : MonoBehaviour, IPointerDownHandler, IPointerClickHandler, IDragHandler, IScrollHandler
     {
         private ItemCarryController carry;
         private RectTransform panel;
         private CanvasGroup panelVisibility;
-        private Text title, description, hint;
-        private Button use, reset, place, close;
+        private Text title, description, hint, alternateLabel;
+        private Button use, reset, alternate, place, close;
         private HoldableItem displayed;
         private bool dragged;
 
@@ -42,12 +42,18 @@ namespace Codetective.Gameplay
 
             title = Label("ItemName", font, 32, new Vector2(0, 0.78f), new Vector2(1, 1), new Vector2(24, 8), new Vector2(-24, -22));
             title.color = new Color(0.95f, 0.92f, 0.80f);
-            description = Label("ItemDescription", font, 20, new Vector2(0, 0.40f), new Vector2(1, 0.78f), new Vector2(24, 0), new Vector2(-24, 0));
-            hint = Label("InspectionHint", font, 16, new Vector2(0, 0.25f), new Vector2(1, 0.44f), new Vector2(24, 0), new Vector2(-24, 0));
+            description = Label("ItemDescription", font, 20, new Vector2(0, 0.49f), new Vector2(1, 0.78f), new Vector2(24, 0), new Vector2(-24, 0));
+            hint = Label("InspectionHint", font, 16, new Vector2(0, 0.32f), new Vector2(1, 0.48f), new Vector2(24, 0), new Vector2(-24, 0));
             hint.color = new Color(0.60f, 0.73f, 0.64f);
 
-            use = Action(font, "사용하기", 0, 0.5f, 68, () => carry.TryUse(false));
-            reset = Action(font, "정면으로", 0.5f, 1, 68, () => carry.ResetInspectionRotation());
+            use = Action(font, "사용하기", 0, 1, 116, () => carry.TryUse(false));
+            reset = Action(font, "정면으로", 0, 0.5f, 68, () => carry.ResetInspectionRotation());
+            alternate = Action(font, "", 0.5f, 1, 68, () => carry.ShowAlternateInspectionView());
+            alternate.name = "ItemAlternateView";
+            alternateLabel = alternate.GetComponentInChildren<Text>();
+            alternateLabel.resizeTextForBestFit = true;
+            alternateLabel.resizeTextMinSize = 13;
+            alternateLabel.resizeTextMaxSize = alternateLabel.fontSize;
             close = Action(font, "닫기", 0, 0.5f, 20, game.CloseItemInspection);
             place = Action(font, "배치하기", 0.5f, 1, 20, game.BeginItemPlacement);
             place.image.color = new Color(0.20f, 0.31f, 0.24f);
@@ -90,11 +96,13 @@ namespace Codetective.Gameplay
                 panel.SetAsLastSibling();
                 title.text = item.DisplayName;
                 description.text = item.Description;
-                hint.text = item.Use == HeldItemUse.Newspaper ? "기사를 클릭해 전문 보기\n드래그로 신문 회전" : "드래그로 물건 회전";
+                hint.text = (item.Use == HeldItemUse.Newspaper ? "기사를 클릭해 전문 보기\n" : "") + "드래그로 회전 · 휠로 확대/축소";
                 use.gameObject.SetActive(item.HasUseAction);
+                alternate.gameObject.SetActive(item.HasAlternateView);
+                alternateLabel.text = item.AlternateViewLabel;
             }
             panelVisibility.alpha = Application.isPlaying ? Mathf.MoveTowards(panelVisibility.alpha, 1, Time.unscaledDeltaTime / 0.22f) : 1;
-            use.interactable = reset.interactable = place.interactable = close.interactable = carry.CanManipulate;
+            use.interactable = reset.interactable = alternate.interactable = place.interactable = close.interactable = carry.CanManipulate;
         }
 
         private Button PrintedButton(PointerEventData pointer) => carry.CanManipulate && carry.IsExamining &&
@@ -113,7 +121,9 @@ namespace Codetective.Gameplay
         {
             if (pointer.button != PointerEventData.InputButton.Left || displayed != carry.HeldItem) return;
             dragged = true;
-            carry.RotateInspection(pointer.delta * (235f / Mathf.Max(1, Screen.height)));
+            carry.RotateInspection(new Vector2(-pointer.delta.x, pointer.delta.y) * (235f / Mathf.Max(1, Screen.height)));
         }
+
+        public void OnScroll(PointerEventData pointer) { if (displayed == carry.HeldItem) carry.ZoomInspection(pointer.scrollDelta.y); }
     }
 }

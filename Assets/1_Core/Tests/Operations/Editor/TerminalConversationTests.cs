@@ -25,6 +25,70 @@ namespace Codetective.Tests.Operations
         private static void Listen(KernelRuntime r) => r.AdvanceTerminalConversation(1000);
 
         [Test]
+        public void IncomingConnectionWaitsForAcceptanceAndRedialsTheSavedLineAfterDisconnecting()
+        {
+            TerminalConversationDefinition definition = Definition();
+            definition.connectionMode = TerminalConnectionMode.Incoming;
+            definition.requiredMailRead = "";
+            definition.replacesStartupGuide = true;
+            definition.redialSeconds = 3;
+            KernelRuntime runtime = World(definition, false);
+            runtime.DeferDayMailUntilIntro();
+            Assert.That(runtime.TerminalIncomingConnectionId, Is.Null);
+            runtime.MarkDayIntroSeen(5);
+            Assert.That(runtime.Inbox(Mailbox.Kernel), Is.Empty);
+            Assert.That(runtime.TerminalIncomingConnectionId, Is.EqualTo("tutorial"));
+            runtime.EnterTerminalPage("kernel");
+            Assert.That(runtime.TerminalConversationActive, Is.False);
+            Assert.That(runtime.AcceptTerminalConnection("wrong"), Is.False);
+            Assert.That(runtime.AcceptTerminalConnection("tutorial"), Is.True);
+            Assert.That(runtime.TerminalIncomingConnectionId, Is.Null);
+
+            runtime.AdvanceTerminalConversation(0.006);
+            string line = runtime.TerminalConversationTranscript();
+            Assert.That(runtime.DisconnectTerminalConversation("tutorial"), Is.True);
+            Assert.That(runtime.TerminalLineInProgress, Is.False);
+            runtime.AdvanceTerminalConversation(100);
+            runtime.AdvanceTerminalRedial(1);
+            Assert.That(runtime.TerminalIncomingConnectionId, Is.Null);
+            KernelRuntime restored = World(definition, false);
+            restored.Restore(runtime.Capture());
+            Assert.That(restored.TerminalConversationPausesWorld, Is.True);
+            Assert.That(restored.AcceptTerminalConnection("tutorial"), Is.False);
+            restored.AdvanceTerminalRedial(2);
+            Assert.That(restored.AcceptTerminalConnection("tutorial"), Is.True);
+            Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(line));
+            Listen(restored);
+            Assert.That(restored.Execute("help").Success, Is.True);
+            Listen(restored);
+            Assert.That(restored.GetTrigger("tutorial.complete"), Is.True);
+            Assert.That(restored.TerminalIncomingConnectionId, Is.Null);
+        }
+
+        [Test]
+        public void AnOutgoingConversationConnectsOnlyOnRequestAndCanBeResumedWithoutRedial()
+        {
+            TerminalConversationDefinition definition = Definition();
+            definition.connectionMode = TerminalConnectionMode.Outgoing;
+            definition.speaker = "[[client|Witness]]";
+            definition.contactId = "client";
+            KernelRuntime runtime = World(definition, false);
+            Assert.That(runtime.TryPlaceTerminalCall("tutorial"), Is.False);
+            runtime.ReadMail("intro"); runtime.EnterTerminalPage("kernel");
+            Assert.That(runtime.TerminalConversationActive, Is.False);
+            Assert.That(runtime.TryPlaceTerminalCall("tutorial"), Is.True);
+            TerminalContact contact = runtime.ContactForTerminalConversation("tutorial");
+            Assert.That(contact.Name, Is.EqualTo("Witness"));
+            Assert.That(contact.ProfileId, Is.EqualTo("client"));
+            Assert.That(runtime.DisconnectTerminalConversation("tutorial"), Is.True);
+            runtime.AdvanceTerminalRedial(60);
+            Assert.That(runtime.TerminalIncomingConnectionId, Is.Null);
+            Assert.That(runtime.TerminalReconnectId, Is.EqualTo("tutorial"));
+            Assert.That(runtime.ResumeTerminalConnection("tutorial"), Is.True);
+            Assert.That(runtime.TerminalConversationActive, Is.True);
+        }
+
+        [Test]
         public void ManualDialogueWaitsOnTheCurrentLineAfterTypingAndAfterLoading()
         {
             TerminalConversationDefinition definition = Definition();

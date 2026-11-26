@@ -329,6 +329,7 @@ namespace Codetective.Tests.Operations
         private static void FinishTutorialAndReceiveFirstMission(KernelRuntime runtime)
         {
             runtime.ReadMail("government-intro"); runtime.EnterTerminalPage("kernel");
+            Assert.That(runtime.AcceptTerminalConnection("kernel-onboarding"), Is.True);
             Assert.That(runtime.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
             for (int i = 0; i < 16 && runtime.TerminalConversationActive; i++)
             {

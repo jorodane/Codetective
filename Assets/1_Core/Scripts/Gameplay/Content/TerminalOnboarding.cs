@@ -25,7 +25,6 @@ namespace Codetective.Gameplay
             Text("onboarding.speaker", "현장지원과", "Field Support");
             Text("onboarding.office", "사무국", "Secretariat");
             Text("profile.regularVisitor.name", "한정우", "Han Jeong-woo");
-            Text("terminal.dialogue.standby", "작전망 연결 대기", "Operations network standby");
             Text("terminal.dialogue.answer.options", "대답>", "Answer>");
             Text("terminal.dialogue.answer.none", "지금 답할 질문이 없습니다.", "There is no question to answer right now.");
             Text("terminal.dialogue.answer.invalid", "표시된 선택지 중 하나를 입력하세요.", "Enter one of the displayed options.");
@@ -33,7 +32,7 @@ namespace Codetective.Gameplay
             var steps = new[] {
                 new TerminalConversationStep { id = "help", lines = new[] {
                     Line("welcome", "Kernel을 찾으셨군요.", "You found Kernel."),
-                    Line("connection", "현장지원과입니다. 메일은 확인하셨겠지요. 먼저 작전망의 기본 사용법부터 확인하겠습니다.", "Field Support here. You have read the mail. Let's check the basics of the operations network."),
+                    Line("connection", "현장지원과입니다. 연결을 확인했습니다. 작전망의 기본 사용법부터 안내하겠습니다.", "Field Support here. The line is open. Let's go through the basics of the operations network."),
                     Line("listen", "입력창이 비어 있을 때 Enter를 누르면 다음 안내로 넘어갑니다. 다음 명령을 실행해 보십시오.\n{command}", "Press Enter with an empty input to continue the briefing. Try entering {command}.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
                 new TerminalConversationStep { id = "reference", previousIds = new[] { "allocate" }, lines = new[] {
@@ -79,10 +78,11 @@ namespace Codetective.Gameplay
                     OfficeLine("finish", "곧 아홉 시 예약 손님이 들어옵니다. 말풍선을 눌러 적당히 맞장구만 치시면 됩니다. 상담을 마치고 잠시 쉬시면 첫 임무를 메일로 보내겠습니다.", "Your nine o'clock client is about to arrive. Click the speech bubble to chime in now and then. Take a short break after the session and we will send your first assignment by mail.") } }
             };
             var asset = ScriptableObject.CreateInstance<TerminalConversationAsset>(); asset.name = "KernelOnboarding";
-            asset.conversation = new TerminalConversationDefinition { id = "kernel-onboarding", requiredMailRead = "government-intro", firstDay = 1, lastDay = 1,
+            asset.conversation = new TerminalConversationDefinition { id = "kernel-onboarding", firstDay = 1, lastDay = 1,
+                connectionMode = TerminalConnectionMode.Incoming, redialSeconds = 3, legacyReadMailToSkip = "government-intro",
                 koreanVariableBase = "연습",
                 speaker = "현장지원과", speakerKey = "onboarding.speaker", pauseWorld = true, replacesStartupGuide = true, unlockCommandsByStep = true, advanceWithEnter = true,
-                skipIfMailAlreadyReadOnExistingSave = true, angryAfter = 3, steps = steps,
+                angryAfter = 3, steps = steps,
                 condition = new StoryCondition { triggersOff = new[] { "terminal.onboarding.complete" } },
                 forgivingReplies = new[] {
                     Line("detour1", "그 명령도 유효합니다만, 지금은 다음 명령을 확인하는 중입니다:\n{command}\n계속해 볼까요?", "That command is valid, but we're checking {command} right now. Shall we continue?"),

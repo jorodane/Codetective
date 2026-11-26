@@ -38,17 +38,40 @@ namespace Codetective.Terminal.Tests.UI
         }
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
         [Test]
-        public void ReturningFromAssignmentMailStartsDialogueWithAnEditableCommandField()
+        public void AcceptingTheOpeningCallMakesRoomForTheContactAndHangingUpReturnsTheConsole()
         {
             var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
             Assert.That(scenario, Is.Not.Null); KernelRuntime r = scenario.CreateRuntime(); terminal.AttachRuntime(r); terminal.SetInteractionEnabled(true);
-            r.ReadMail("government-intro"); host.ShowPage("kernel");
+            var tab = Field<Dictionary<string, Button>>(host, "tabs")["kernel"];
+            Assert.That(tab.GetComponentInChildren<Text>().text, Does.EndWith(" (1)"));
+            host.ShowPage("kernel");
+            Assert.That(r.IsMailRead("government-intro"), Is.False);
+            Assert.That(r.TerminalLineInProgress, Is.False); Assert.That(input.interactable, Is.False);
+            Transform page = host.CurrentPage.transform;
+            var commandField = (RectTransform)input.transform;
+            float fullWidth = commandField.rect.width;
+            Transform request = page.Find("TerminalConnectionRequest");
+            Assert.That(request.gameObject.activeSelf, Is.True);
+            request.GetComponentInChildren<Button>().onClick.Invoke();
             Assert.That(r.TerminalLineInProgress, Is.True); Assert.That(input.interactable, Is.True); Assert.That(input.readOnly, Is.False);
             Assert.That(input.isFocused, Is.False);
+            var contact = (RectTransform)page.Find("TerminalContact");
+            Assert.That(contact.rect.width, Is.EqualTo(fullWidth * 0.25f).Within(1f));
+            Assert.That(commandField.rect.width, Is.LessThan(fullWidth * 0.75f));
+            Assert.That(contact.GetComponentsInChildren<Text>().Any(text => text.text == "현장지원과"), Is.True);
+            Invoke(host, "RefreshHeader"); Assert.That(tab.GetComponentInChildren<Text>().text, Does.Not.EndWith(" (1)"));
             Assert.That(terminal.InteractionEnabled, Is.True); Assert.That(host.TryNavigate("mail"), Is.True);
             host.ShowPage("kernel"); r.AdvanceTerminalConversation(1000);
-            typeof(TerminalController).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(terminal, null);
+            Invoke(terminal, "LateUpdate");
             Assert.That(input.interactable, Is.True); Assert.That(input.isFocused, Is.False);
+            contact.GetComponentInChildren<Button>().onClick.Invoke();
+            Assert.That(contact.gameObject.activeSelf, Is.False);
+            Assert.That(commandField.rect.width, Is.EqualTo(fullWidth).Within(0.1f));
+            r.AdvanceTerminalRedial(3); Invoke(terminal, "LateUpdate"); Invoke(host, "RefreshHeader");
+            Assert.That(tab.GetComponentInChildren<Text>().text, Does.EndWith(" (1)"));
+            Assert.That(request.gameObject.activeSelf, Is.True);
+            request.GetComponentInChildren<Button>().onClick.Invoke();
+            Assert.That(contact.gameObject.activeSelf, Is.True);
             Assert.That(r.ConversationProgress("kernel-onboarding").deviations, Is.Zero);
         }
         [Test]

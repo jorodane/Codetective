@@ -16,6 +16,8 @@ namespace Codetective.Terminal
     public sealed class MonitorPageHost : MonoBehaviour
     {
         private static readonly Color UnreadMailColor = Color.Lerp(MonitorWidgets.SelectedButtonColor, MonitorWidgets.Foreground, 0.30f);
+        private static readonly Color IncomingConnectionColor = new Color(0.48f, 0.36f, 0.17f);
+        private const float ConnectionBlinkSeconds = 0.55f;
         [SerializeField] private TerminalController terminal;
         [SerializeField] private Text heading;
         [SerializeField] private Graphic headerRule;
@@ -42,6 +44,8 @@ namespace Codetective.Terminal
         private int unreadMailCount;
         private float mailBlinkSeconds = 0.55f;
         private float mailBlinkStarted;
+        private string pendingConnection;
+        private float connectionBlinkStarted;
         private readonly HashSet<object> overlays = new HashSet<object>();
         private readonly object legacyOverlay = new object();
         public MonitorPage CurrentPage { get; private set; }
@@ -144,6 +148,7 @@ namespace Codetective.Terminal
             if (!initialized) return;
             foreach (MonitorPage page in pages.Values) InitializeContent(page);
             RefreshUnreadMail();
+            RefreshHeader();
         }
         public void Register(MonitorPage page)
         {
@@ -269,14 +274,25 @@ namespace Codetective.Terminal
         }
         private void RefreshHeader()
         {
+            string request = runtime?.TerminalIncomingConnectionId;
+            if (pendingConnection != request)
+            {
+                pendingConnection = request;
+                connectionBlinkStarted = Time.unscaledTime;
+                if (tabs.TryGetValue("kernel", out Button kernelTab))
+                    kernelTab.GetComponentInChildren<Text>().text = pages["kernel"].Title + (request != null ? " (1)" : "");
+            }
             bool blinkMail = !SystemMenuVisible && unreadMailCount > 0 &&
                 Mathf.Repeat(Time.unscaledTime - mailBlinkStarted, mailBlinkSeconds * 2) < mailBlinkSeconds;
+            bool blinkConnection = !SystemMenuVisible && request != null &&
+                Mathf.Repeat(Time.unscaledTime - connectionBlinkStarted, ConnectionBlinkSeconds * 2) < ConnectionBlinkSeconds;
             Color selected = MonitorWidgets.SelectedButtonColor;
             if (heading != null) heading.text = "CODETECTIVE / " + (CurrentPage != null ? CurrentPage.Title : "");
             foreach (var tab in tabs)
             {
                 Color color = tab.Key == CurrentMenuId ? selected : MonitorWidgets.ButtonColor;
                 if (blinkMail && tab.Key == "mail") color = UnreadMailColor;
+                if (blinkConnection && tab.Key == "kernel") color = IncomingConnectionColor;
                 tab.Value.image.color = color;
             }
         }

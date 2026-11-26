@@ -21,6 +21,7 @@ MonoBehaviour:
     introductionTitle: Case.1
     introductionSubtitle: Victor Hale 실종 사건
     speaker: "[[Maggie|Maggie]]"
+    contactId: Maggie
     useSpeakerPrompt: 1
     firstDay: 1
     lastDay: 2147483647

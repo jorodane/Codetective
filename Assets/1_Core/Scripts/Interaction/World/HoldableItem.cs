@@ -19,6 +19,9 @@ namespace Codetective.Interaction
         [SerializeField] private string profileId;
         [SerializeField] private Vector3 heldPosition = new Vector3(0, 0, 0.55f);
         [SerializeField] private Vector3 heldEuler = new Vector3(-15, -20, 0);
+        [SerializeField] private string alternateViewLabel;
+        [Tooltip("Camera-relative rotation from the item's front inspection pose.")]
+        [SerializeField] private Vector3 alternateViewEuler;
         [SerializeField] private Vector3 placementSize = new Vector3(0.2f, 0.06f, 0.2f);
         [SerializeField] private UnityEvent onUse = new UnityEvent();
         private ItemCarryController owner;
@@ -44,12 +47,14 @@ namespace Codetective.Interaction
         private bool[] canvasInteractable, canvasRaycasts;
         private Vector3 liftPosition, liftScale;
         private Quaternion liftRotation, inspectionFront;
-        private Vector2 inspectionAngles;
-        private float liftElapsed;
+        private Vector3 inspectionAngles;
+        private float liftElapsed, inspectionZoom;
         private Bounds inspectionBounds;
         public string Id => itemId;
         public string DisplayName => displayName;
         public string Description => description;
+        public string AlternateViewLabel => alternateViewLabel;
+        public bool HasAlternateView => !string.IsNullOrWhiteSpace(alternateViewLabel);
         public bool HasUseAction => onUse != null && onUse.GetPersistentEventCount() > 0;
         public HeldItemUse Use => use;
         public string ProfileId => profileId;
@@ -79,6 +84,8 @@ namespace Codetective.Interaction
         { itemId = id; displayName = label; use = action; profileId = personId; if (description != null) this.description = description; }
         public void ConfigurePaper(Vector3 size)
         { placementSize = size; heldPosition = new Vector3(0, -0.02f, 0.55f); heldEuler = new Vector3(-90, 0, 0); }
+        public void ConfigureInspectionView(string label, Vector3 euler)
+        { alternateViewLabel = label; alternateViewEuler = euler; }
         public void SetPlacementVisual(Transform visual) => PlacementVisual = visual;
         public void Register(ItemCarryController controller)
         {
@@ -121,7 +128,7 @@ namespace Codetective.Interaction
             transform.SetParent(hand, true);
             liftPosition = transform.localPosition; liftRotation = transform.localRotation; liftScale = transform.localScale;
             inspectionFront = Quaternion.Euler(heldEuler) * PlacementRotation;
-            inspectionAngles = Vector2.zero; liftElapsed = 0;
+            inspectionAngles = Vector3.zero; inspectionZoom = 1f; liftElapsed = 0;
             PoseChanged?.Invoke();
             inspectionBounds = MeasureInspectionBounds();
             Camera camera = hand.GetComponent<Camera>();
@@ -131,11 +138,13 @@ namespace Codetective.Interaction
 
         internal void RotateInspection(Vector2 degrees)
         {
-            inspectionAngles.x = Mathf.Repeat(inspectionAngles.x + degrees.x, 360f);
-            inspectionAngles.y = Mathf.Repeat(inspectionAngles.y + degrees.y, 360f);
+            inspectionAngles.x = Mathf.Repeat(inspectionAngles.x + degrees.y, 360f);
+            inspectionAngles.y = Mathf.Repeat(inspectionAngles.y + degrees.x, 360f);
         }
 
-        internal void ResetInspectionRotation() => inspectionAngles = Vector2.zero;
+        internal void ZoomInspection(float wheel) => inspectionZoom = Mathf.Clamp(inspectionZoom + Mathf.Clamp(wheel, -1f, 1f) * 0.035f, 0.9f, 1.12f);
+        internal void ResetInspectionRotation() => inspectionAngles = Vector3.zero;
+        internal void ShowAlternateInspectionView() { if (HasAlternateView) inspectionAngles = alternateViewEuler; }
 
         internal void FrameForInspection(Camera camera, float deltaTime)
         {
@@ -162,9 +171,9 @@ namespace Codetective.Interaction
                 float factor = Mathf.Min(halfHeight * camera.aspect * width / Mathf.Max(0.001f, widthLimit),
                     halfHeight * 0.76f / Mathf.Max(0.001f, heightLimit));
                 // Keep the entire item clear of the near plane at any rotation.
-                scale *= Mathf.Min(factor, (distance - camera.nearClipPlane - 0.02f) / extents.magnitude);
+                scale *= Mathf.Min(factor * inspectionZoom, (distance - camera.nearClipPlane - 0.02f) / extents.magnitude);
             }
-            Quaternion rotation = Quaternion.Euler(inspectionAngles.y, inspectionAngles.x, 0) * inspectionFront;
+            Quaternion rotation = Quaternion.Euler(inspectionAngles) * inspectionFront;
             Vector3 center = camera.transform.InverseTransformPoint(camera.ViewportToWorldPoint(new Vector3(InspectionLaneWidth * 0.5f, 0.52f, distance)));
             Vector3 target = center - rotation * Vector3.Scale(inspectionBounds.center, scale);
             float blend = Mathf.SmoothStep(0, 1, liftElapsed / LiftSeconds);

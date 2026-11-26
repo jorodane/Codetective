@@ -73,6 +73,7 @@ namespace Codetective.Gameplay
             HoldableItem item = paper.AddComponent<HoldableItem>();
             item.Configure(EditionIdPrefix + day.ToString(CultureInfo.InvariantCulture), date.ToString("M월 d일 조간신문", NewspaperCulture),
                 HeldItemUse.Newspaper, description: "상담소에 아침마다 배달되는 신문. 사회면과 지역·생활면이 한 장에 펼쳐진다.");
+            item.ConfigureInspectionView("뒷면 보기", new Vector3(0, 180, 0));
             copy = paper.AddComponent<PaperDocument>();
             copy.Initialize(item, carry, carry.ViewCamera, font, new Vector2(0.52f, 0.35f));
             if (desk != null && (desk.TryGetPosition(item, deliveryPosition, out Vector3 slot, false) ||
