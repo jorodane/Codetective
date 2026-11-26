@@ -1,3 +1,4 @@
+using System.Reflection;
 using Codetective.Interaction;
 using NUnit.Framework;
 using UnityEngine;
@@ -47,13 +48,13 @@ namespace Codetective.Tests.Interaction
         }
         [TestCase(16)]
         [TestCase(60)]
-        public void ExaminedObjectsFitTheCameraAndRetainTheirPhysicalSizeOnPlacement(float fov)
+        public void ExaminedObjectsFitTheLeftSideAndRotateWithoutChangingTheirPlacementSize(float fov)
         {
             var system = new GameObject("Carry"); var camera = new GameObject("Camera", typeof(Camera));
             GameObject cup = GameObject.CreatePrimitive(PrimitiveType.Cube); var desk = new GameObject("Desk");
             try
             {
-                Camera view = camera.GetComponent<Camera>(); view.fieldOfView = fov;
+                Camera view = camera.GetComponent<Camera>(); view.fieldOfView = fov; view.aspect = 16f / 9f;
                 cup.transform.localScale = new Vector3(0.08f, 0.12f, 0.08f);
                 HoldableItem item = cup.AddComponent<HoldableItem>();
                 ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(camera.transform);
@@ -62,9 +63,18 @@ namespace Codetective.Tests.Interaction
                 for (int x = -1; x <= 1; x += 2) for (int y = -1; y <= 1; y += 2) for (int z = -1; z <= 1; z += 2)
                 {
                     Vector3 point = view.WorldToViewportPoint(cup.transform.TransformPoint(local.center + Vector3.Scale(local.extents, new Vector3(x, y, z))));
-                    Assert.That(point.x, Is.InRange(0.17f, 0.83f)); Assert.That(point.y, Is.InRange(0.17f, 0.83f));
+                    Assert.That(point.x, Is.InRange(0.035f, 0.61f)); Assert.That(point.y, Is.InRange(0.13f, 0.91f));
                     Assert.That(point.z, Is.GreaterThan(view.nearClipPlane));
                 }
+                Quaternion front = cup.transform.localRotation;
+                Vector3 scale = cup.transform.localScale, position = cup.transform.localPosition;
+                var frame = typeof(ItemCarryController).GetMethod("LateUpdate", BindingFlags.NonPublic | BindingFlags.Instance);
+                carry.RotateInspection(new Vector2(75f, 25f)); frame.Invoke(carry, null);
+                Assert.That(Quaternion.Angle(front, cup.transform.localRotation), Is.GreaterThan(60));
+                Assert.That(Vector3.Distance(cup.transform.localScale, scale), Is.LessThan(0.001f));
+                Assert.That(Vector3.Distance(cup.transform.localPosition, position), Is.LessThan(0.001f));
+                carry.ResetInspectionRotation(); frame.Invoke(carry, null);
+                Assert.That(Quaternion.Angle(front, cup.transform.localRotation), Is.LessThan(0.1f));
                 ItemPlacementSurface surface = desk.AddComponent<ItemPlacementSurface>(); surface.Initialize("desk.top", null, new Bounds(new Vector3(4, 0, 0), Vector3.one));
                 Assert.That(carry.BeginPlacement(), Is.True); Assert.That(carry.TryPlaceOn(surface), Is.True);
                 Assert.That(Vector3.Distance(cup.transform.lossyScale, new Vector3(0.08f, 0.12f, 0.08f)), Is.LessThan(0.001f));

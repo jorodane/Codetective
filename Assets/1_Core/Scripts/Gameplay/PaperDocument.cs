@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Codetective.Interaction;
 using Codetective.Operations;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Codetective.Gameplay
@@ -16,6 +17,8 @@ namespace Codetective.Gameplay
     {
         public string title;
         public string text;
+        public string rubric;
+        public string printSummary;
         public PaperLayout layout;
         public PersonProfile profile;
         public Sprite portrait;
@@ -32,7 +35,9 @@ namespace Codetective.Gameplay
         public event Action<int> PageChanged;
         public int PageIndex { get; private set; }
         public int ContentRevision { get; private set; }
+        public Font Typeface => font;
         private bool paginated;
+        private string issueLine;
         private ItemCarryController carry;
         private Font font;
         private RectTransform ink;
@@ -43,6 +48,8 @@ namespace Codetective.Gameplay
         private Vector2 pageSize;
         private string contentKey;
         private CanvasGroup inkInteraction;
+        private GraphicRaycaster inkRaycaster;
+        private readonly List<RaycastResult> pointerHits = new List<RaycastResult>();
         private Button previousPage, nextPage;
         private Text pageLabel;
 
@@ -67,9 +74,10 @@ namespace Codetective.Gameplay
             ink.sizeDelta = pageSize; ink.localScale = Vector3.one * 0.0004f;
             Canvas canvas = ink.GetComponent<Canvas>(); canvas.renderMode = RenderMode.WorldSpace; canvas.worldCamera = camera;
             inkInteraction = ink.GetComponent<CanvasGroup>();
+            inkRaycaster = ink.GetComponent<GraphicRaycaster>();
             title = OverlayWidgets.Label(ink, font, new Vector2(26, -20), new Vector2(pageSize.x - 52, 100), "", 36);
             title.color = new Color(0.1f, 0.08f, 0.06f);
-            if (item.Use == HeldItemUse.Profile)
+            if (item.Use == HeldItemUse.Profile || item.Use == HeldItemUse.Newspaper)
             {
                 previousPage = PageCorner(new Vector2(26, -pageSize.y + 66), "‹", () => TurnPage(-1));
                 nextPage = PageCorner(new Vector2(pageSize.x - 90, -pageSize.y + 66), "›", () => TurnPage(1));
@@ -83,31 +91,47 @@ namespace Codetective.Gameplay
             => SetContentCore(heading, sections, false, 0);
         public void SetPagedContent(string heading, IReadOnlyList<PaperSection> pages, int pageIndex)
             => SetContentCore(heading, pages, true, pageIndex);
+        public void SetNewspaperContent(string masthead, string issue, IReadOnlyList<PaperSection> articles)
+            => SetContentCore(masthead, articles, false, 0, issue ?? "");
+
+        private int PageCount(int sectionCount) => issueLine != null ? (sectionCount + NewspaperSpreadView.ArticlesPerSpread - 1) / NewspaperSpreadView.ArticlesPerSpread : sectionCount;
+
         public void SetPageIndex(int index)
         {
-            int next = Mathf.Clamp(index, 0, Mathf.Max(0, Sections.Count - 1));
-            if (!paginated || PageIndex == next) return;
-            SetContentCore(Title, Sections, true, next); PageChanged?.Invoke(PageIndex);
+            int next = Mathf.Clamp(index, 0, Mathf.Max(0, PageCount(Sections.Count) - 1));
+            if ((!paginated && issueLine == null) || PageIndex == next) return;
+            SetContentCore(Title, Sections, paginated, next, issueLine); PageChanged?.Invoke(PageIndex);
         }
-        private void SetContentCore(string heading, IReadOnlyList<PaperSection> sections, bool pageMode, int index)
+        private void SetContentCore(string heading, IReadOnlyList<PaperSection> sections, bool pageMode, int index, string issue = null)
         {
-            paginated = pageMode; PageIndex = Mathf.Clamp(index, 0, Mathf.Max(0, sections.Count - 1));
-            string key = heading + "|" + paginated + "|" + PageIndex;
+            paginated = pageMode; issueLine = issue;
+            int pages = PageCount(sections.Count);
+            PageIndex = Mathf.Clamp(index, 0, Mathf.Max(0, pages - 1));
+            string key = heading + "|" + paginated + "|" + PageIndex + "|" + issue;
             foreach (PaperSection section in sections)
             {
                 key += "\n" + section.title + "\n" + section.text + "|" + (section.portrait != null ? section.portrait.GetInstanceID() : 0);
+                if (issue != null) key += "|" + section.rubric + "|" + section.printSummary;
                 if (section.profile != null) key += "|" + section.profile.Name + "|" + section.profile.Gender + "|" + section.profile.Age + "|" + section.profile.Birthday + "|" + section.profile.Occupation + "|" + section.profile.Family;
             }
             Title = heading; Sections = sections;
             if (contentKey == key) return; contentKey = key; ContentRevision++;
             title.text = heading;
+            title.gameObject.SetActive(issue == null);
+            bool pageTurns = (paginated || issue != null) && pages > 1;
             if (previousPage != null)
             {
-                previousPage.gameObject.SetActive(paginated && sections.Count > 1); nextPage.gameObject.SetActive(paginated && sections.Count > 1);
-                previousPage.interactable = PageIndex > 0; nextPage.interactable = PageIndex + 1 < sections.Count;
-                pageLabel.text = paginated ? (PageIndex + 1) + " / " + Mathf.Max(1, sections.Count) : "";
+                previousPage.gameObject.SetActive(pageTurns); nextPage.gameObject.SetActive(pageTurns);
+                previousPage.interactable = PageIndex > 0; nextPage.interactable = PageIndex + 1 < pages;
+                pageLabel.text = pageTurns ? (PageIndex + 1) + " / " + pages : "";
             }
             foreach (GameObject old in regions) { old.SetActive(false); Discard(old); } regions.Clear();
+            if (issue != null)
+            {
+                regions.Add(NewspaperSpreadView.Create(ink, font, pageSize, heading, issue, sections,
+                    PageIndex * NewspaperSpreadView.ArticlesPerSpread, pageTurns, sectionIndex => AreaClicked?.Invoke(this, sectionIndex)));
+                return;
+            }
             int count = paginated ? Mathf.Min(1, sections.Count) : sections.Count;
             float height = (pageSize.y - (paginated ? 215 : 150)) / Mathf.Max(1, count);
             for (int i = 0; i < count; i++)
@@ -144,8 +168,17 @@ namespace Codetective.Gameplay
         private void Update()
         {
             if (Item == null || inkInteraction == null) return;
-            bool accessible = carry.CanManipulate && !carry.IsPlacing && (carry.HeldItem == null || Item.IsHeld) && (!Item.IsStored || Item.Storage.CanRetrieve);
+            bool accessible = carry.CanManipulate && (carry.HeldItem == null || Item.IsHeld && carry.IsExamining) && (!Item.IsStored || Item.Storage.CanRetrieve);
             inkInteraction.interactable = inkInteraction.blocksRaycasts = accessible;
+        }
+        internal Button PrintedButtonAt(PointerEventData pointer)
+        {
+            if (inkRaycaster == null || !inkRaycaster.isActiveAndEnabled || !inkInteraction.blocksRaycasts) return null;
+            pointerHits.Clear();
+            inkRaycaster.Raycast(pointer, pointerHits);
+            foreach (RaycastResult hit in pointerHits)
+                if (hit.gameObject.TryGetComponent(out Button button) && button.IsActive() && button.IsInteractable()) return button;
+            return null;
         }
         private void OnDestroy()
         {

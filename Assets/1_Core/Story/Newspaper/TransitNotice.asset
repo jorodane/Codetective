@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e324e603b6e3eaf6a2eb41ad35022c85, type: 3}
+  m_Name: TransitNotice
+  m_EditorClassIdentifier:
+  article:
+    id: old-town-transit
+    headline: "구도심 순환버스 임시 우회"
+    body: "중앙로 보도 정비가 끝날 때까지 구도심 순환버스가 시장 뒤편 도로로 우회한다. 시청 앞 정류장은 공사 기간 임시로 폐쇄된다.\n\n승객은 우체국 건너편 임시 정류장을 이용하면 된다. 첫차와 막차 시간은 종전과 같다. 운수사 측은 출근 시간대 도로가 혼잡할 때에는 버스가 몇 분 늦을 수 있다고 밝혔다."
+    firstDay: 1
+    lastDay: 2147483647
+    priority: 0
+    condition: {triggersOn: [], triggersOff: [], quests: []}
+    readFacts: []
+    onRead: {triggers: [], quests: []}
+    clues: []
+  sectionLabel: 교통
+  printSummary: "중앙로 보도 정비로 순환버스가 시장 뒤편 도로를 지난다.\n\n기존 시청 앞 정류장 대신 우체국 건너편에서 승하차할 수 있다. 첫차와 막차 시간은 종전과 같다."
+  supplemental: 1
+  layout: {width: 900, height: 1100, blocks: []}

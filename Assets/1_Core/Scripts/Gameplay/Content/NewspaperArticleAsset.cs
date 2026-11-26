@@ -8,6 +8,10 @@ namespace Codetective.Gameplay
     public sealed class NewspaperArticleAsset : ScriptableObject
     {
         public NewsArticle article = new NewsArticle();
+        public string sectionLabel = "사회";
+        [TextArea(3, 6)] public string printSummary;
+        [Tooltip("Prints a dated local story without adding evidence or changing case progress.")]
+        public bool supplemental;
         public PaperLayout layout = new PaperLayout();
     }
 
@@ -15,7 +19,7 @@ namespace Codetective.Gameplay
     {
         [Min(1)] public float width = 900;
         [Min(1)] public float height = 1100;
-        [Tooltip("Empty uses the full headline and body. The same layout is printed and magnified.")]
+        [Tooltip("Empty uses the full headline and body. A newspaper spread can use the first photo, and the reader displays the full authored layout.")]
         public PaperLayoutBlock[] blocks = Array.Empty<PaperLayoutBlock>();
     }
     public enum PaperBlockKind { Headline, Body, Text, Image }

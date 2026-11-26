@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e324e603b6e3eaf6a2eb41ad35022c85, type: 3}
+  m_Name: MarketRepairs
+  m_EditorClassIdentifier:
+  article:
+    id: market-repairs
+    headline: "중앙시장 공동 수리창구 운영"
+    body: "중앙시장 상인회가 시장 북쪽 공동 작업대에 수리 접수 창구를 마련했다. 라디오나 전기주전자처럼 집에서 쓰는 작은 가전의 상태를 살펴보고 수리가 가능한 점포를 안내한다.\n\n접수할 때 고장 증상과 연락 가능한 전화번호를 적는다. 점검 자체에 드는 비용은 없으며 부품을 교체해야 할 때에는 먼저 견적을 알려준다. 수리가 끝난 물건은 접수증을 가져와 찾을 수 있다."
+    firstDay: 1
+    lastDay: 2147483647
+    priority: 0
+    condition: {triggersOn: [], triggersOff: [], quests: []}
+    readFacts: []
+    onRead: {triggers: [], quests: []}
+    clues: []
+  sectionLabel: 생활
+  printSummary: "시장 상인회가 고장 난 라디오와 소형 가전의 점검을 받는다.\n\n이용자는 물건을 가져와 고장 증상을 적으면 된다. 부품 교체가 필요한 경우 수리 전에 견적을 알려준다."
+  supplemental: 1
+  layout: {width: 900, height: 1100, blocks: []}

@@ -137,6 +137,7 @@ namespace Codetective.Gameplay
             Carry = GetComponent<ItemCarryController>();
             if (Carry == null) Carry = gameObject.AddComponent<ItemCarryController>();
             Carry.Initialize(views.ControlledCamera.transform); inspection.Carry = Carry;
+            gameObject.AddComponent<ItemInspectionPresentation>().Initialize(Carry, views.ControlledCamera);
             Carry.ManipulationAllowed = () => !IsDateTransitioning && !IsVisitPresenting && !IsViewTransitioning &&
                 inspection.Mode != InspectionMode.Menu && !inspection.ModalInputBlocked && !inspection.NavigationBlocked && !inspection.TextInputFocused;
             Carry.PickedUp += PickedUpItem; Carry.Placed += StoredItem;
@@ -537,15 +538,15 @@ namespace Codetective.Gameplay
                 foreach (Renderer renderer in cupRenderers) bounds.Encapsulate(renderer.bounds);
                 ownCoffee.transform.position += Vector3.up * (position.y - bounds.min.y);
             }
-            RegisterCoffeeItem(ownCoffee, "desk.coffee", "커피");
-            RegisterCoffeeItem(guestCoffeeTemplate.gameObject, "desk.guest-coffee", "손님용 커피");
+            RegisterCoffeeItem(ownCoffee, "desk.coffee", "커피", "Thread가 지휘소 요청을 받고 가져다준 커피. 상담소의 잔에 담겨 있다.");
+            RegisterCoffeeItem(guestCoffeeTemplate.gameObject, "desk.guest-coffee", "손님용 커피", "상담을 기다리는 손님에게 내놓는 커피와 받침.");
             ownCoffee.SetActive(Runtime.CoffeeReceived);
         }
-        private void RegisterCoffeeItem(GameObject cup, string id, string label)
+        private void RegisterCoffeeItem(GameObject cup, string id, string label, string description)
         {
             HoldableItem item = cup.GetComponent<HoldableItem>();
             if (item == null) item = cup.AddComponent<HoldableItem>();
-            item.Configure(id, label, HeldItemUse.Custom);
+            item.Configure(id, label, HeldItemUse.Custom, description: description);
             if (cup.GetComponentsInChildren<Collider>().Length == 0)
             {
                 BoxCollider collider = cup.AddComponent<BoxCollider>(); Bounds local = LocalBounds(cup.transform, cup.GetComponentsInChildren<Renderer>());

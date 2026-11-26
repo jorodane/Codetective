@@ -49,7 +49,7 @@ namespace Codetective.Gameplay
             runtime.ApplyStoryEffects(initialStoryState);
             runtime.RefreshInitialKnowledge();
             worldData?.ApplyInformation(runtime);
-            foreach (NewspaperArticleAsset item in newspaper) if (item != null) runtime.RegisterNews(item.article);
+            foreach (NewspaperArticleAsset item in newspaper) if (item != null && !item.supplemental) runtime.RegisterNews(item.article);
             runtime.DeliverNewspaper();
             foreach (ConsultationPoolAsset pool in consultationPools ?? Array.Empty<ConsultationPoolAsset>())
                 if (pool != null) runtime.RegisterConsultationPool(pool.poolId, pool.episodes);

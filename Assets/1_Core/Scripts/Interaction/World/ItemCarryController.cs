@@ -18,7 +18,7 @@ namespace Codetective.Interaction
         public event Action<HoldableItem> Placed;
         public bool IsPlacing { get; private set; }
         public bool IsDragging { get; private set; }
-        public bool IsExamining => isActiveAndEnabled && !sessionEnded && HeldItem != null && !IsPlacing;
+        public bool IsExamining => isActiveAndEnabled && !sessionEnded && presentationVisible && HeldItem != null && !IsPlacing;
         public Camera ViewCamera => hand != null ? hand.GetComponent<Camera>() : null;
         public bool PlacementValid { get; private set; }
         public Func<bool> ManipulationAllowed { get; set; }
@@ -29,6 +29,7 @@ namespace Codetective.Interaction
         private ItemPlacementSurface destination;
         private ItemPlacementSurface.Placement destinationPlacement;
         private bool sessionEnded;
+        private bool presentationVisible = true;
         private bool returnDragOnUpdate;
         public void Initialize(Transform camera)
         {
@@ -49,7 +50,11 @@ namespace Codetective.Interaction
             if (!string.IsNullOrEmpty(item.Id) && registeredItems.TryGetValue(item.Id, out HoldableItem registered) &&
                 ReferenceEquals(registered, item)) registeredItems.Remove(item.Id);
         }
-        public void SetPresentationVisible(bool visible) { if (HeldItem != null) HeldItem.SetPresentationVisible(visible && isActiveAndEnabled && !sessionEnded); }
+        public void SetPresentationVisible(bool visible)
+        {
+            presentationVisible = visible && isActiveAndEnabled && !sessionEnded;
+            if (HeldItem != null) HeldItem.SetPresentationVisible(presentationVisible);
+        }
         private void LateUpdate()
         {
             if (returnDragOnUpdate)
@@ -57,8 +62,10 @@ namespace Codetective.Interaction
                 returnDragOnUpdate = false;
                 PutDown();
             }
-            else if (IsExamining) HeldItem.FrameForInspection(ViewCamera);
+            else if (IsExamining) HeldItem.FrameForInspection(ViewCamera, Time.unscaledDeltaTime);
         }
+        public void RotateInspection(Vector2 degrees) { if (CanManipulate && IsExamining) HeldItem.RotateInspection(degrees); }
+        public void ResetInspectionRotation() { if (CanManipulate && IsExamining) HeldItem.ResetInspectionRotation(); }
         public bool TryPickup(HoldableItem item)
         {
             if (!PickUp(item)) return false;
@@ -68,7 +75,9 @@ namespace Codetective.Interaction
         private bool PickUp(HoldableItem item)
         {
             if (!CanManipulate || hand == null || HeldItem != null || item == null || !item.isActiveAndEnabled || (item.IsStored && !item.Storage.CanRetrieve)) return false;
-            Register(item); HeldItem = item; item.PickUp(hand); return true;
+            Register(item); HeldItem = item; item.PickUp(hand);
+            if (!presentationVisible) item.SetPresentationVisible(false);
+            return true;
         }
         public bool TryUse(bool textInputFocused)
         {

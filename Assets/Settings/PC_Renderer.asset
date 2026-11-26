@@ -36,7 +36,8 @@ MonoBehaviour:
   m_RendererFeatures:
   - {fileID: 7833122117494664109}
   - {fileID: 11400140}
-  m_RendererFeatureMap: ad6b866f10d7b46cccf3ad0000000000
+  - {fileID: 11400141}
+  m_RendererFeatureMap: ad6b866f10d7b46cccf3ad0000000000cdf3ad0000000000
   m_UseNativeRenderPass: 1
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 2
@@ -108,3 +109,17 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   m_Active: 1
   shader: {fileID: 4800000, guid: b6b7dba3f4e24e2a9606a835944cb882, type: 3}
+--- !u!114 &11400141
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b68a99eaddca47cab7e4ddb8b82be6d0, type: 3}
+  m_Name: Evidence Background Blur
+  m_EditorClassIdentifier:
+  m_Active: 1
+  shader: {fileID: 4800000, guid: bcc00272d828402a967fa5b14b4a3f70, type: 3}

@@ -49,6 +49,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: abf57bc08d7dcd35d7a2010223d0a78c, type: 2}
   - {fileID: 11400000, guid: fbf5ae086b65e6810237bb457cd0a20d, type: 2}
   - {fileID: 11400000, guid: 1ebd659b713a49d9a01ecc2e03eafe17, type: 2}
+  - {fileID: 11400000, guid: 06f9518107ee4f33be065db058784beb, type: 2}
+  - {fileID: 11400000, guid: 4f25647014f34e30a57c4e5806fafff4, type: 2}
+  - {fileID: 11400000, guid: 0b10c1ce7ede4e11a22845fb401f63a0, type: 2}
   storyStartFact: kernel_assignment_accepted
   consultationPools:
   - {fileID: 11400000, guid: 2379aa787d2d4de3b21c1045e071a3e4, type: 2}

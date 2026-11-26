@@ -13,6 +13,7 @@ namespace Codetective.Gameplay
     {
         private const string LegacyItemId = "desk.newspaper";
         private const string EditionIdPrefix = LegacyItemId + ".day.";
+        private static readonly CultureInfo NewspaperCulture = CultureInfo.GetCultureInfo("ko-KR");
         private readonly Dictionary<int, PaperDocument> copies = new Dictionary<int, PaperDocument>();
         private Vector3 deliveryPosition;
         private Quaternion deliveryRotation;
@@ -29,7 +30,7 @@ namespace Codetective.Gameplay
         {
             deliveryPosition = anchor != null ? anchor.position : new Vector3(-0.15f, 0.9f, -2.57f);
             deliveryRotation = anchor != null ? anchor.rotation : Quaternion.identity;
-            desk = desktop; font = typeface; carry = controller;
+            desk = desktop; font = Resources.Load<Font>("NanumMyeongjo-Regular") ?? typeface; carry = controller;
             layouts = articles ?? Array.Empty<NewspaperArticleAsset>();
         }
 
@@ -68,27 +69,38 @@ namespace Codetective.Gameplay
             var paper = new GameObject("DailyNewspaper_" + day);
             paper.transform.SetParent(transform, false);
             paper.transform.SetPositionAndRotation(deliveryPosition, deliveryRotation);
+            DateTime date = runtime.DateAt(day, 0).Value;
             HoldableItem item = paper.AddComponent<HoldableItem>();
-            item.Configure(EditionIdPrefix + day.ToString(CultureInfo.InvariantCulture), $"신문 · Day {day:00}", HeldItemUse.Newspaper);
+            item.Configure(EditionIdPrefix + day.ToString(CultureInfo.InvariantCulture), date.ToString("M월 d일 조간신문", NewspaperCulture),
+                HeldItemUse.Newspaper, description: "상담소에 아침마다 배달되는 신문. 사회면과 지역·생활면이 한 장에 펼쳐진다.");
             copy = paper.AddComponent<PaperDocument>();
-            copy.Initialize(item, carry, carry.ViewCamera, font, new Vector2(0.44f, 0.28f));
+            copy.Initialize(item, carry, carry.ViewCamera, font, new Vector2(0.52f, 0.35f));
             if (desk != null && (desk.TryGetPosition(item, deliveryPosition, out Vector3 slot, false) ||
                 desk.TryGetPosition(item, out slot, false)))
                 paper.transform.SetPositionAndRotation(desk.transform.TransformPoint(slot), desk.transform.rotation);
             carry.Register(item);
             copy.AreaClicked += (document, index) => AreaClicked?.Invoke(document, index);
-            PaperSection[] sections = runtime.NewspaperArticles(day).Select(article => new PaperSection
-            {
-                title = article.headline, text = article.body,
-                layout = layouts.FirstOrDefault(asset => asset != null && asset.article.id == article.id)?.layout,
-                clues = article.clues.Select(clue => new PaperClue { label = clue.keyword,
-                    collect = () => runtime.RecordNewspaperClue(day, article.id, clue.id) }).ToArray()
-            }).ToArray();
-            if (sections.Length == 0) sections = new[] { new PaperSection { title = "조간 · 사회 / 지역", text = "오늘의 추가 보도는 없습니다." } };
-            copy.SetContent("CODETECTIVE DAILY / DAY " + day.ToString("D2"), sections);
+            var sections = runtime.NewspaperArticles(day).Select(article => Section(article,
+                layouts.FirstOrDefault(asset => asset != null && !asset.supplemental && asset.article.id == article.id), runtime, day)).ToList();
+            foreach (NewspaperArticleAsset supplement in layouts)
+                if (supplement != null && supplement.supplemental && day >= supplement.article.firstDay && day <= supplement.article.lastDay)
+                    sections.Add(Section(supplement.article, supplement, runtime, day));
+            if (sections.Count == 0) sections.Add(new PaperSection { title = "오늘의 조간", text = "오늘의 추가 보도는 없습니다." });
+            copy.SetNewspaperContent("CODETECTIVE DAILY", date.ToString("yyyy년 M월 d일 dddd", NewspaperCulture), sections);
             copies.Add(day, copy);
             return copy;
         }
+
+        private static PaperSection Section(NewsArticle article, NewspaperArticleAsset asset, KernelRuntime runtime, int day) => new PaperSection
+        {
+            title = article.headline,
+            text = article.body,
+            rubric = asset != null ? asset.sectionLabel : "사회",
+            printSummary = asset != null ? asset.printSummary : null,
+            layout = asset != null ? asset.layout : null,
+            clues = asset != null && asset.supplemental ? Array.Empty<PaperClue>() : article.clues.Select(clue => new PaperClue
+            { label = clue.keyword, collect = () => runtime.RecordNewspaperClue(day, article.id, clue.id) }).ToArray()
+        };
 
         private static int DayForItem(string itemId)
         {

@@ -44,7 +44,8 @@ namespace Codetective.Gameplay
         private Image suspicionImage;
         private RectTransform heldBar, newspaperReader;
         private Text heldLabel;
-        private Button closeItem, placeItem;
+        private Button closeItem;
+        private ItemInspectionView itemInspection;
         private PaperDocument openedDocument;
         private int documentSection;
         private int documentRevision;
@@ -118,7 +119,6 @@ namespace Codetective.Gameplay
         private void Update()
         {
             if (!IsInitialized) return;
-            if (profileArchive.IsVisible) profileArchive.SetTopInset(dialogue.TopInset);
             if (saveNoticeRoot.activeSelf && Time.unscaledTime >= saveNoticeUntil) saveNoticeRoot.SetActive(false);
             bool inMenu = inspection.Mode == InspectionMode.Menu || inspection.PresentingOnTerminal || DayStartVisible || game.IsDateTransitioning;
             interfaceInteraction.alpha = inMenu ? 0 : 1;
@@ -129,17 +129,19 @@ namespace Codetective.Gameplay
                 if (openedDocument.Sections.Count == 0) Back();
                 else { documentSection = Mathf.Clamp(documentSection, 0, openedDocument.Sections.Count - 1); BuildDocumentReader(); }
             }
-            HoldableItem held = game.Carry.HeldItem;
-            bool showHeldControls = held != null && !game.Carry.IsDragging && modal == null &&
-                inspection.Mode != InspectionMode.Menu && !game.IsDateTransitioning;
-            heldBar.gameObject.SetActive(showHeldControls);
-            if (showHeldControls)
+            bool showItem = !inMenu && modal == null && game.Carry.IsExamining;
+            itemInspection.Show(showItem ? game.Carry.HeldItem : null);
+            bool showArchive = !inMenu && modal == null && context == "profile" && game.Carry.HeldItem == null;
+            if (showArchive != profileArchive.IsVisible) { if (showArchive) profileArchive.Show(); else profileArchive.Hide(); }
+            if (showArchive) profileArchive.SetTopInset(dialogue.TopInset);
+            bool showPlacement = !inMenu && modal == null && game.Carry.IsPlacing && !game.Carry.IsDragging;
+            heldBar.gameObject.SetActive(showPlacement);
+            if (showPlacement)
             {
-                heldLabel.text = game.Carry.IsPlacing ? game.Carry.PlacementHint : held.DisplayName;
-                placeItem.gameObject.SetActive(!game.Carry.IsPlacing);
-                closeItem.interactable = placeItem.interactable = game.Carry.CanManipulate;
+                heldLabel.text = game.Carry.PlacementHint;
+                closeItem.interactable = game.Carry.CanManipulate;
             }
-            nextDayButton.SetActive(game.Runtime.IsDayEnded && !game.IsDateTransitioning && modal == null && inspection.Mode != InspectionMode.Menu);
+            nextDayButton.SetActive(game.Runtime.IsDayEnded && !inMenu && modal == null && game.Carry.HeldItem == null);
             if (modal == "protocol" && protocolSource != null && protocolSource.isFocused) RefreshProtocolCompletions();
             if (Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + 0.2f;
@@ -163,7 +165,7 @@ namespace Codetective.Gameplay
         {
             context = id;
             if (!IsInitialized) return;
-            if (id == "profile") profileArchive.Show(); else profileArchive.Hide();
+            if (id == "profile" && game.Carry.HeldItem == null) profileArchive.Show(); else profileArchive.Hide();
             if (id == "monitor" || id == "counsel" || id == "drawer" || id == "profile" || id == "gramophone") { HidePanel(); return; }
             BuildContext();
         }
@@ -274,11 +276,11 @@ namespace Codetective.Gameplay
         public void RefreshCommandLanguage() { if (languageLabel != null) RefreshLanguageLabel(); }
         private void BuildItemControls()
         {
+            itemInspection = ItemInspectionView.Create(root.transform, font, game);
             heldBar = Box("HeldObject", root.transform, new Vector2(0, 24), new Vector2(1040, 54), new Vector2(0.5f, 0));
             heldBar.GetComponent<Image>().raycastTarget = false;
-            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(748, 32), "", 15);
-            closeItem = Button(heldBar, new Vector2(768, -8), new Vector2(120, 38), "닫기", game.CloseItemInspection);
-            placeItem = Button(heldBar, new Vector2(896, -8), new Vector2(128, 38), "배치하기", game.BeginItemPlacement);
+            heldLabel = Label(heldBar, new Vector2(12, -12), new Vector2(874, 32), "", 15);
+            closeItem = Button(heldBar, new Vector2(896, -8), new Vector2(128, 38), "닫기", game.CloseItemInspection);
             heldBar.gameObject.SetActive(false);
         }
         public void ShowNewspaper() => ShowDocument(game.NewspaperDocument, 0);
@@ -303,7 +305,7 @@ namespace Codetective.Gameplay
             ScrollRect scroll = viewport.gameObject.AddComponent<ScrollRect>();
             scroll.viewport = viewport; scroll.horizontal = false; scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 32;
-            scroll.content = PaperContentView.Create(viewport, font, openedDocument.Sections[documentSection], 922, true);
+            scroll.content = PaperContentView.Create(viewport, openedDocument.Typeface, openedDocument.Sections[documentSection], 922, true);
             scroll.content.anchoredPosition = new Vector2(4, -4); scroll.verticalNormalizedPosition = 1;
             newspaperReader.gameObject.SetActive(true);
         }

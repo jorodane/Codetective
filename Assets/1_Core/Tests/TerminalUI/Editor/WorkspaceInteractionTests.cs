@@ -733,11 +733,66 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void TheShippedNewspaperHasFourArticleAreasAndClickingTheRightPageOpensItsOwnStory()
+        {
+            var system = new GameObject("Game"); system.SetActive(false);
+            var navigation = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); navigation.SetActive(false);
+            var view = new GameObject("Paper Camera", typeof(Camera));
+            var desk = new GameObject("Desk");
+            Component ui = null;
+            try
+            {
+                var scenario = AssetDatabase.LoadAssetAtPath<Codetective.Gameplay.KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
+                KernelRuntime runtime = scenario.CreateRuntime();
+                Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController")); Call(inspection, "Awake");
+                Component game = system.AddComponent(FindType("Codetective.Gameplay.KernelGameController"));
+                Set(game, "<Runtime>k__BackingField", runtime);
+                var carry = view.AddComponent<ItemCarryController>(); carry.Initialize(view.transform);
+                Set(game, "<Carry>k__BackingField", carry);
+                Camera camera = view.GetComponent<Camera>();
+                Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                ui = system.GetComponent(FindType("Codetective.Gameplay.KernelGameUI"));
+                Call(ui, "Initialize", game, inspection, font, camera, null);
+                Component news = desk.AddComponent(FindType("Codetective.Gameplay.DeskNewspaper"));
+                Call(news, "Initialize", desk.transform, null, font, carry, scenario.newspaper); Call(news, "Deliver", runtime);
+                var areaClicks = news.GetType().GetEvent("AreaClicked");
+                areaClicks.AddEventHandler(news, Delegate.CreateDelegate(areaClicks.EventHandlerType, ui, ui.GetType().GetMethod("ShowDocument")));
+
+                var item = (HoldableItem)news.GetType().GetProperty("Item").GetValue(news);
+                Assert.That(carry.TryPickup(item), Is.True);
+                Button[] articles = item.GetComponentsInChildren<Button>().Where(button => button.name.StartsWith("PrintedArea_", StringComparison.Ordinal)).ToArray();
+                Assert.That(articles, Has.Length.EqualTo(4));
+                Assert.That(((RectTransform)articles[1].transform).anchoredPosition.x, Is.GreaterThan(((RectTransform)articles[0].transform).anchoredPosition.x));
+                runtime.ReadNewspaper();
+                Assert.That(runtime.NewspaperArticles(1).Select(article => article.id), Is.EqualTo(new[] { "research-funding" }));
+
+                var overlay = (GameObject)ui.GetType().GetField("root", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(ui);
+                Component pointer = overlay.transform.Find("InspectItemPointer").GetComponent(FindType("Codetective.Gameplay.ItemInspectionView"));
+                Call(pointer, "Show", item);
+                Canvas.ForceUpdateCanvases();
+                RectTransform rightArticle = (RectTransform)articles[1].transform;
+                var click = new PointerEventData(null) { position = camera.WorldToScreenPoint(rightArticle.TransformPoint(rightArticle.rect.center)) };
+                FieldInfo readerField = ui.GetType().GetField("newspaperReader", BindingFlags.NonPublic | BindingFlags.Instance);
+                ((IPointerDownHandler)pointer).OnPointerDown(click);
+                ((IDragHandler)pointer).OnDrag(click);
+                ((IPointerClickHandler)pointer).OnPointerClick(click);
+                Assert.That(readerField.GetValue(ui), Is.Null);
+                ((IPointerDownHandler)pointer).OnPointerDown(click);
+                ((IPointerClickHandler)pointer).OnPointerClick(click);
+                var reader = (RectTransform)readerField.GetValue(ui);
+                Assert.That(reader, Is.Not.Null);
+                Assert.That(reader.GetComponentsInChildren<Text>().Any(text => text.text.StartsWith("시립도서관은 이번 달부터")), Is.True);
+                Assert.That(reader.GetComponentsInChildren<Button>(), Has.Length.EqualTo(1));
+            }
+            finally { DestroyKernelInterface(ui); Object.DestroyImmediate(system); Object.DestroyImmediate(navigation); Object.DestroyImmediate(desk); Object.DestroyImmediate(view); }
+        }
+
+        [Test]
         public void EvidenceReaderPreservesThePrintLayoutAndHasOnlyACloseButton()
         {
             var system = new GameObject("Game"); system.SetActive(false);
             var navigation = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); navigation.SetActive(false);
-            var paper = new GameObject("Paper"); var texture = new Texture2D(4, 4);
+            var carryRoot = new GameObject("Carry", typeof(Camera)); var paper = new GameObject("Paper"); var texture = new Texture2D(4, 4);
             Sprite picture = Sprite.Create(texture, new Rect(0, 0, 4, 4), Vector2.zero);
             Component ui = null;
             try
@@ -745,7 +800,7 @@ namespace Codetective.Terminal.Tests.UI
                 Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController")); Call(inspection, "Awake");
                 Component game = system.AddComponent(FindType("Codetective.Gameplay.KernelGameController"));
                 Set(game, "<Runtime>k__BackingField", ClinicScenario.Create());
-                ItemCarryController carry = system.AddComponent<ItemCarryController>(); carry.Initialize(navigation.transform);
+                ItemCarryController carry = carryRoot.AddComponent<ItemCarryController>(); carry.Initialize(carryRoot.transform);
                 Set(game, "<Carry>k__BackingField", carry);
                 ui = system.GetComponent(FindType("Codetective.Gameplay.KernelGameUI"));
                 Call(ui, "Initialize", game, inspection, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), navigation.GetComponent<Camera>(), null);
@@ -757,7 +812,7 @@ namespace Codetective.Terminal.Tests.UI
                 Assert.That(notice.transform.GetChild(0).GetComponent<RectTransform>().anchorMax, Is.EqualTo(Vector2.one));
                 HoldableItem item = paper.AddComponent<HoldableItem>(); item.Configure("paper", "신문", HeldItemUse.Newspaper);
                 Component document = paper.AddComponent(FindType("Codetective.Gameplay.PaperDocument"));
-                Call(document, "Initialize", item, carry, navigation.GetComponent<Camera>(), Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), new Vector2(0.44f, 0.28f));
+                Call(document, "Initialize", item, carry, carryRoot.GetComponent<Camera>(), Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), new Vector2(0.44f, 0.28f));
                 Type sectionType = FindType("Codetective.Gameplay.PaperSection"); object section = Activator.CreateInstance(sectionType);
                 sectionType.GetField("title").SetValue(section, "기사 제목"); sectionType.GetField("text").SetValue(section, "본문 전체\n둘째 문단");
                 Type layoutType = sectionType.GetField("layout").FieldType; object layout = Activator.CreateInstance(layoutType);
@@ -789,17 +844,20 @@ namespace Codetective.Terminal.Tests.UI
             }
             finally
             {
-                if (ui != null)
-                {
-                    Component morning = (Component)ui.GetType().GetField("dayStart", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(ui);
-                    if (morning != null) Object.DestroyImmediate((GameObject)morning.GetType().GetField("root", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(morning));
-                }
-                if (ui != null) foreach (string name in new[] { "root", "saveNoticeRoot" })
-                {
-                    var field = ui.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
-                    Object.DestroyImmediate((GameObject)field.GetValue(ui)); field.SetValue(ui, null);
-                }
-                Object.DestroyImmediate(system); Object.DestroyImmediate(paper); Object.DestroyImmediate(navigation); Object.DestroyImmediate(picture); Object.DestroyImmediate(texture);
+                DestroyKernelInterface(ui);
+                Object.DestroyImmediate(system); Object.DestroyImmediate(carryRoot); Object.DestroyImmediate(paper); Object.DestroyImmediate(navigation); Object.DestroyImmediate(picture); Object.DestroyImmediate(texture);
+            }
+        }
+
+        private static void DestroyKernelInterface(Component ui)
+        {
+            if (ui == null) return;
+            Component morning = (Component)ui.GetType().GetField("dayStart", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(ui);
+            if (morning != null) Object.DestroyImmediate((GameObject)morning.GetType().GetField("root", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(morning));
+            foreach (string name in new[] { "root", "saveNoticeRoot" })
+            {
+                var field = ui.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
+                Object.DestroyImmediate((GameObject)field.GetValue(ui)); field.SetValue(ui, null);
             }
         }
     }
