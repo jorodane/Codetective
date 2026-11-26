@@ -33,16 +33,16 @@ namespace Codetective.Gameplay
                 new TerminalConversationStep { id = "help", lines = new[] {
                     Line("welcome", "Kernel을 찾으셨군요.", "You found Kernel."),
                     Line("connection", "현장지원과입니다. 연결을 확인했습니다. 작전망의 기본 사용법부터 안내하겠습니다.", "Field Support here. The line is open. Let's go through the basics of the operations network."),
-                    Line("listen", "입력창이 비어 있을 때 Enter를 누르면 다음 안내로 넘어갑니다. 다음 명령을 실행해 보십시오.\n{command}", "Press Enter with an empty input to continue the briefing. Try entering {command}.") },
+                    Line("listen", "입력창이 비어 있을 때 Next를 눌러 안내를 넘길 수 있습니다. 다음 명령을 입력하고 Send를 누르십시오.\n{command}", "Use Next to continue the briefing while the input is empty. Enter {command} and select Send.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
                 new TerminalConversationStep { id = "reference", previousIds = new[] { "allocate" }, lines = new[] {
                     Line("permissions", "잘하셨습니다. 권한 목록은 현재 사용할 수 있는 정보와 행동을 보여줍니다.", "Good. The permissions list shows the information and actions currently available to you."),
-                    Line("reference", "{slot} = 까지 입력한 뒤 색으로 표시된 [[hq|지휘소]]를 눌러 넣으십시오. Enter로 보내면 {slot}으로 그 대상을 부를 수 있습니다.",
-                        "Type {slot} =, then click [[hq|headquarters]] to insert it. Press Enter to register {slot} as its name.") },
+                    Line("reference", "{slot} = 까지 입력한 뒤 색으로 표시된 [[hq|지휘소]]를 눌러 넣으십시오. Send를 누르면 {slot}으로 그 대상을 부를 수 있습니다.",
+                        "Type {slot} =, then click [[hq|headquarters]] to insert it. Select Send to register {slot} as its name.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.BindReference, targetId = "hq" } },
                 new TerminalConversationStep { id = "invoke", lines = new[] {
                     Line("substitution", "이제 지휘소를 가리키는 이름은 {slot}입니다.", "Now you can use {slot} to refer to headquarters."),
-                    Line("dot", "대상 뒤에 마침표를 입력하면 권한 목록이 나옵니다. Tab이나 Enter로 후보를 확정하십시오. 후보 이름을 쓰기 시작하면 Space로도 확정할 수 있습니다. 다음 Enter로 명령을 보냅니다.", "Type a dot after a target to see its permissions. Accept a suggestion with Tab or Enter. Space also accepts after you start typing its name. Press Enter again to send the command."),
+                    Line("dot", "대상 뒤에 마침표를 입력하면 권한 목록이 나옵니다. 목록에서 작업을 선택한 뒤 Send를 눌러 명령을 보내십시오.", "Type a dot after a target to see its permissions. Select an action from the list, then select Send to run the command."),
                     Line("invoke", "연결 상태를 확인하겠습니다. 다음 명령을 입력하십시오:\n{command}", "Let's check the connection. Enter {command}.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Invoke, targetId = "hq", operation = "checkComms" } },
                 new TerminalConversationStep { id = "release", lines = new[] {

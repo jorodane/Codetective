@@ -8,14 +8,15 @@ namespace Codetective.Terminal
 {
     public sealed partial class TerminalController
     {
-        private static readonly Color ConnectionBackground = new Color(0.027f, 0.054f, 0.042f);
+        private const float ColumnGap = 24f;
+        private static readonly Color ConnectionRuleColor = new Color(0.22f, 0.35f, 0.27f);
         private static readonly Color RequestColor = new Color(0.91f, 0.79f, 0.49f);
         private readonly List<(RectTransform rect, float left)> consoleLeftEdges = new List<(RectTransform, float)>();
         private readonly List<(RectTransform rect, float right)> candidateRightEdges = new List<(RectTransform, float)>();
-        private RectTransform contactPanel, requestPanel;
-        private Text contactStatus, contactName, requestTitle, requestName, acceptLabel, disconnectLabel, reconnectLabel;
+        private RectTransform contactPanel;
+        private Text contactStatus, contactName, unknownPortrait, contactActionLabel;
         private Image contactPortrait;
-        private Button acceptConnection, disconnectConnection, reconnectConnection;
+        private Button contactAction;
         private MonitorPageHost contactHost;
         private float contactWidth;
         private bool consoleSplit;
@@ -27,15 +28,14 @@ namespace Codetective.Terminal
         {
             string connected = Runtime.TerminalConversationActive ? Runtime.TerminalConversationId : null;
             string incoming = Runtime.TerminalIncomingConnectionId;
-            string reconnect = incoming == null ? Runtime.TerminalReconnectId : null;
-            if (contactPanel == null && (!pageVisible || connected == null && incoming == null && reconnect == null || !BuildConnectionView())) return;
+            string reconnect = incoming == null && connected == null ? Runtime.TerminalReconnectId : null;
+            string contactId = incoming ?? connected ?? reconnect;
+            bool split = contactId != null;
+            if (contactPanel == null && (!pageVisible || !split || !BuildConnectionView())) return;
 
-            bool split = connected != null;
             if (consoleSplit != split) LayoutConnectedConsole(split);
             contactPanel.gameObject.SetActive(pageVisible && split);
-            requestPanel.gameObject.SetActive(pageVisible && incoming != null);
-            reconnectConnection.gameObject.SetActive(pageVisible && reconnect != null);
-            acceptConnection.interactable = disconnectConnection.interactable = reconnectConnection.interactable = interactionEnabled;
+            contactAction.interactable = interactionEnabled;
 
             int nextPortraitRevision = contactHost != null ? contactHost.ProfilePageRevision : 0;
             string locale = Runtime.DisplayLanguage;
@@ -44,22 +44,31 @@ namespace Codetective.Terminal
             shownConnectionId = connected; shownRequestId = incoming; shownReconnectId = reconnect; connectionLocale = locale;
             contactRevision = Runtime.Revision; portraitRevision = nextPortraitRevision;
 
+            if (!split) return;
             bool english = locale == "en";
+            TerminalContact contact = Runtime.ContactForTerminalConversation(contactId);
+            contactName.text = contact.Name;
+            contactStatus.color = incoming != null ? RequestColor : MonitorWidgets.Foreground;
+            contactAction.image.color = incoming != null ? MonitorWidgets.SelectedButtonColor : MonitorWidgets.ButtonColor;
             if (incoming != null)
             {
-                requestPanel.SetAsLastSibling();
-                requestTitle.text = english ? "Incoming connection" : "연결 요청";
-                requestName.text = Runtime.ContactForTerminalConversation(incoming).Name;
-                acceptLabel.text = english ? "Accept" : "수락";
+                contactStatus.text = english ? "Incoming connection" : "연결 요청";
+                contactActionLabel.text = english ? "Accept" : "수락";
             }
-            if (reconnect != null) reconnectLabel.text = english ? "Reconnect" : "다시 연결";
-            if (!split) return;
-            TerminalContact contact = Runtime.ContactForTerminalConversation(connected);
-            contactName.text = contact.Name;
-            contactStatus.text = english ? "Connected" : "연결됨";
-            disconnectLabel.text = english ? "Disconnect" : "연결 끊기";
-            contactPortrait.sprite = string.IsNullOrEmpty(contact.ProfileId) || contactHost == null ? null : contactHost.PortraitFor(contact.ProfileId);
-            contactPortrait.gameObject.SetActive(contactPortrait.sprite != null);
+            else if (connected != null)
+            {
+                contactStatus.text = english ? "Connected" : "연결됨";
+                contactActionLabel.text = english ? "Disconnect" : "연결 끊기";
+            }
+            else
+            {
+                contactStatus.text = english ? "Disconnected" : "연결 끊김";
+                contactActionLabel.text = english ? "Reconnect" : "다시 연결";
+            }
+            Sprite portrait = contactHost != null && !string.IsNullOrEmpty(contact.ProfileId) ? contactHost.PortraitFor(contact.ProfileId) : null;
+            contactPortrait.sprite = portrait;
+            contactPortrait.enabled = portrait != null;
+            unknownPortrait.gameObject.SetActive(portrait == null);
         }
 
         private bool BuildConnectionView()
@@ -71,68 +80,67 @@ namespace Codetective.Terminal
 
             contactHost = GetComponent<MonitorPageHost>();
             contactWidth = Mathf.Round(width * 0.25f);
-            foreach (RectTransform rect in new[] { field, (RectTransform)transcriptScroll.transform, (RectTransform)completionPanel.transform,
-                page.Find("LogHeading") as RectTransform, page.Find("Help") as RectTransform })
-                if (rect != null) consoleLeftEdges.Add((rect, rect.offsetMin.x));
+            RectTransform log = (RectTransform)transcriptScroll.transform;
+            foreach (RectTransform rect in new[] { field, log, (RectTransform)completionPanel.transform })
+                consoleLeftEdges.Add((rect, rect.offsetMin.x));
             foreach (RectTransform rect in completionPanel.transform) candidateRightEdges.Add((rect, rect.offsetMax.x));
             foreach (Text label in completionLabels)
                 if (label != null && label.rectTransform.parent != completionPanel.transform && label.rectTransform.anchorMax.x == label.rectTransform.anchorMin.x)
                     candidateRightEdges.Add((label.rectTransform, label.rectTransform.offsetMax.x));
 
             Font font = input.textComponent.font;
-            RectTransform heading = page.Find("LogHeading") as RectTransform;
-            float left = field.anchoredPosition.x, top = heading != null ? heading.anchoredPosition.y : -86;
-            float height = page.rect.height + top - 20;
-            contactPanel = ConnectionBox("TerminalContact", page, new Vector2(left, top), new Vector2(contactWidth, height));
-            contactStatus = MonitorWidgets.Label(contactPanel, font, new Vector2(20, -20), new Vector2(contactWidth - 40, 28), "", 20);
-            RectTransform rule = ConnectionBox("ContactRule", contactPanel, new Vector2(20, -54), new Vector2(contactWidth - 40, 2));
-            Image line = rule.GetComponent<Image>(); line.color = MonitorWidgets.SelectedButtonColor; line.raycastTarget = false;
-            contactName = ContactLabel(contactPanel, font, new Vector2(20, -72), new Vector2(contactWidth - 40, 84), 32);
-            var photo = MonitorWidgets.Rect("ContactPortrait", contactPanel, new Vector2(20, -174), new Vector2(contactWidth - 40, 250));
-            contactPortrait = photo.gameObject.AddComponent<Image>();
-            contactPortrait.preserveAspect = true; contactPortrait.raycastTarget = false;
-            photo.gameObject.AddComponent<CrtMeshEffect>();
-            disconnectConnection = MonitorWidgets.Button(contactPanel, font, new Vector2(20, -height + 66), new Vector2(contactWidth - 40, 44), "", Disconnect);
-            disconnectConnection.name = "Disconnect";
-            disconnectLabel = disconnectConnection.GetComponentInChildren<Text>();
+            float left = field.anchoredPosition.x, top = log.anchoredPosition.y;
+            float height = top - field.anchoredPosition.y + field.rect.height;
+            const float padding = 14f;
+            const float portraitTop = 66f;
+            float innerWidth = contactWidth - padding * 2;
+            Vector2 portraitSize = new Vector2(innerWidth, innerWidth * 3f / 4f);
 
-            requestPanel = ConnectionBox("TerminalConnectionRequest", page, new Vector2(left, top), new Vector2(width, height));
-            RectTransform card = ConnectionBox("IncomingCaller", requestPanel, new Vector2(width * 0.5f - 235, -height * 0.5f + 124), new Vector2(470, 248));
-            card.GetComponent<Image>().color = new Color(0.054f, 0.108f, 0.08f);
-            requestTitle = MonitorWidgets.Label(card, font, new Vector2(24, -26), new Vector2(422, 34), "", 25);
-            requestTitle.color = RequestColor;
-            requestName = ContactLabel(card, font, new Vector2(24, -72), new Vector2(422, 75), 38);
-            acceptConnection = MonitorWidgets.Button(card, font, new Vector2(24, -170), new Vector2(422, 52), "", AcceptConnection);
-            acceptConnection.name = "AcceptConnection";
-            acceptConnection.image.color = MonitorWidgets.SelectedButtonColor;
-            acceptLabel = acceptConnection.GetComponentInChildren<Text>();
+            contactPanel = MonitorWidgets.Rect("TerminalContact", page, new Vector2(left, top), new Vector2(contactWidth, height));
+            ContactGraphic("ContactDivider", contactPanel, new Vector2(contactWidth + ColumnGap * 0.5f, 0), new Vector2(2, height), ConnectionRuleColor);
+            contactStatus = MonitorWidgets.Label(contactPanel, font, new Vector2(padding, -8), new Vector2(innerWidth, 32), "", 22);
+            contactStatus.name = "ContactStatus";
+            contactStatus.resizeTextForBestFit = true;
+            contactStatus.resizeTextMinSize = 16;
+            contactStatus.resizeTextMaxSize = contactStatus.fontSize;
+            ContactGraphic("ContactRule", contactPanel, new Vector2(padding, -48), new Vector2(innerWidth, 2), ConnectionRuleColor);
 
-            reconnectConnection = MonitorWidgets.Button(page, font, new Vector2(left + width - 208, top + 4), new Vector2(208, 36), "", ResumeConnection);
-            reconnectConnection.name = "Reconnect";
-            reconnectLabel = reconnectConnection.GetComponentInChildren<Text>();
+            var frame = ContactGraphic("PortraitFrame", contactPanel, new Vector2(padding, -portraitTop), portraitSize, ConnectionRuleColor);
+            Vector2 innerSize = portraitSize - new Vector2(4, 4);
+            var portraitBacking = ContactGraphic("PortraitBacking", frame.transform, new Vector2(2, -2), innerSize, new Color(0.04f, 0.075f, 0.058f));
+            contactPortrait = ContactGraphic("ContactPortrait", portraitBacking.transform, Vector2.zero, innerSize, Color.white);
+            contactPortrait.preserveAspect = true;
+            unknownPortrait = MonitorWidgets.Label(portraitBacking.transform, font, Vector2.zero, innerSize, "?", 64);
+            unknownPortrait.name = "UnknownPortrait";
+            unknownPortrait.color = ConnectionRuleColor;
+            unknownPortrait.alignment = TextAnchor.MiddleCenter;
+
+            contactName = MonitorWidgets.Label(contactPanel, font, new Vector2(padding, -portraitTop - portraitSize.y - 16), new Vector2(innerWidth, 80), "", 32);
+            contactName.name = "ContactName";
+            contactName.alignment = TextAnchor.UpperCenter;
+            contactName.resizeTextForBestFit = true;
+            contactName.resizeTextMinSize = 20;
+            contactName.resizeTextMaxSize = contactName.fontSize;
+            contactAction = MonitorWidgets.Button(contactPanel, font, new Vector2(padding, -height + 56), new Vector2(innerWidth, 44), "", UseContactAction);
+            contactAction.name = "ContactAction";
+            contactActionLabel = contactAction.GetComponentInChildren<Text>();
             return true;
         }
 
-        private static Text ContactLabel(RectTransform panel, Font font, Vector2 position, Vector2 size, int fontSize)
-        {
-            Text label = MonitorWidgets.Label(panel, font, position, size, "", fontSize);
-            label.resizeTextForBestFit = true;
-            label.resizeTextMinSize = 20; label.resizeTextMaxSize = fontSize;
-            return label;
-        }
-
-        private static RectTransform ConnectionBox(string name, Transform parent, Vector2 position, Vector2 size)
+        private static Image ContactGraphic(string name, Transform parent, Vector2 position, Vector2 size, Color color)
         {
             RectTransform rect = MonitorWidgets.Rect(name, parent, position, size);
-            rect.gameObject.AddComponent<Image>().color = ConnectionBackground;
+            Image image = rect.gameObject.AddComponent<Image>();
+            image.color = color;
+            image.raycastTarget = false;
             rect.gameObject.AddComponent<CrtMeshEffect>();
-            return rect;
+            return image;
         }
 
         private void LayoutConnectedConsole(bool split)
         {
             consoleSplit = split;
-            float inset = split ? contactWidth + 14 : 0;
+            float inset = split ? contactWidth + ColumnGap : 0;
             foreach (var (rect, left) in consoleLeftEdges)
                 rect.offsetMin = new Vector2(left + inset, rect.offsetMin.y);
             foreach (var (rect, right) in candidateRightEdges)
@@ -149,15 +157,15 @@ namespace Codetective.Terminal
             QueueTranscriptScroll(toLatest: true);
         }
 
-        private void AcceptConnection()
-        { if (pageVisible && interactionEnabled && Runtime.AcceptTerminalConnection(shownRequestId)) RefreshAfterConnectionAction(); }
-        private void ResumeConnection()
-        { if (pageVisible && interactionEnabled && Runtime.ResumeTerminalConnection(shownReconnectId)) RefreshAfterConnectionAction(); }
-        private void Disconnect()
-        { if (pageVisible && interactionEnabled && Runtime.DisconnectTerminalConversation(shownConnectionId)) RefreshAfterConnectionAction(); }
-
-        private void RefreshAfterConnectionAction()
+        private void UseContactAction()
         {
+            if (!pageVisible || !interactionEnabled) return;
+            bool changed;
+            if (shownRequestId != null) changed = Runtime.AcceptTerminalConnection(shownRequestId);
+            else if (shownConnectionId != null) changed = Runtime.DisconnectTerminalConversation(shownConnectionId);
+            else changed = Runtime.ResumeTerminalConnection(shownReconnectId);
+            if (!changed) return;
+
             RefreshConnectionPresentation();
             ApplyInputInteraction();
             RefreshCommandPrompt();

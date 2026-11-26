@@ -38,7 +38,7 @@ namespace Codetective.Terminal.Tests.UI
         }
         [TearDown] public void Cleanup() { if (canvas != null) Object.DestroyImmediate(canvas); }
         [Test]
-        public void AcceptingTheOpeningCallMakesRoomForTheContactAndHangingUpReturnsTheConsole()
+        public void TheOpeningRequestAndConnectedCallShareTheSameContactPanel()
         {
             var scenario = AssetDatabase.LoadAssetAtPath<KernelScenarioDefinition>("Assets/1_Core/Operations/ClinicScenario.asset");
             Assert.That(scenario, Is.Not.Null); KernelRuntime r = scenario.CreateRuntime(); terminal.AttachRuntime(r); terminal.SetInteractionEnabled(true);
@@ -49,29 +49,50 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(r.TerminalLineInProgress, Is.False); Assert.That(input.interactable, Is.False);
             Transform page = host.CurrentPage.transform;
             var commandField = (RectTransform)input.transform;
-            float fullWidth = commandField.rect.width;
-            Transform request = page.Find("TerminalConnectionRequest");
-            Assert.That(request.gameObject.activeSelf, Is.True);
-            request.GetComponentInChildren<Button>().onClick.Invoke();
+            var contact = (RectTransform)page.Find("TerminalContact");
+            var status = contact.Find("ContactStatus").GetComponent<Text>();
+            var action = contact.Find("ContactAction").GetComponent<Button>();
+            var actionLabel = action.GetComponentInChildren<Text>();
+            var frame = (RectTransform)contact.Find("PortraitFrame");
+            var divider = (RectTransform)contact.Find("ContactDivider");
+            var name = (RectTransform)contact.Find("ContactName");
+            float splitWidth = commandField.rect.width;
+            Assert.That(contact.gameObject.activeSelf, Is.True);
+            Assert.That(contact.GetComponent<Image>(), Is.Null);
+            Assert.That(status.text, Is.EqualTo("연결 요청"));
+            Assert.That(actionLabel.text, Is.EqualTo("수락"));
+            Assert.That(name.GetComponent<Text>().text, Is.EqualTo("현장지원과"));
+            Assert.That(frame.rect.width / frame.rect.height, Is.EqualTo(4f / 3f).Within(0.001f));
+            Assert.That(frame.anchoredPosition.y, Is.LessThan(((RectTransform)contact.Find("ContactRule")).anchoredPosition.y));
+            Assert.That(name.anchoredPosition.y, Is.LessThan(frame.anchoredPosition.y - frame.rect.height));
+            Assert.That(divider.anchoredPosition.x, Is.GreaterThan(contact.rect.width));
+            Assert.That(contact.anchoredPosition.x + divider.anchoredPosition.x + divider.rect.width, Is.LessThan(commandField.anchoredPosition.x));
+            Assert.That(frame.Find("PortraitBacking/UnknownPortrait").gameObject.activeSelf, Is.True);
+            Assert.That(page.Find("LogHeading"), Is.Null); Assert.That(page.Find("Help"), Is.Null);
+
+            action.onClick.Invoke();
             Assert.That(r.TerminalLineInProgress, Is.True); Assert.That(input.interactable, Is.True); Assert.That(input.readOnly, Is.False);
             Assert.That(input.isFocused, Is.False);
-            var contact = (RectTransform)page.Find("TerminalContact");
-            Assert.That(contact.rect.width, Is.EqualTo(fullWidth * 0.25f).Within(1f));
-            Assert.That(commandField.rect.width, Is.LessThan(fullWidth * 0.75f));
-            Assert.That(contact.GetComponentsInChildren<Text>().Any(text => text.text == "현장지원과"), Is.True);
+            Assert.That(status.text, Is.EqualTo("연결됨")); Assert.That(actionLabel.text, Is.EqualTo("연결 끊기"));
+            Assert.That(commandField.rect.width, Is.EqualTo(splitWidth).Within(0.1f));
+            var send = (RectTransform)input.transform.Find("CommandAction");
+            Assert.That(send.anchorMax.x, Is.EqualTo(1f));
+            Assert.That(input.textComponent.rectTransform.offsetMax.x, Is.LessThan(send.offsetMin.x));
             Invoke(host, "RefreshHeader"); Assert.That(tab.GetComponentInChildren<Text>().text, Does.Not.EndWith(" (1)"));
             Assert.That(terminal.InteractionEnabled, Is.True); Assert.That(host.TryNavigate("mail"), Is.True);
             host.ShowPage("kernel"); r.AdvanceTerminalConversation(1000);
             Invoke(terminal, "LateUpdate");
             Assert.That(input.interactable, Is.True); Assert.That(input.isFocused, Is.False);
-            contact.GetComponentInChildren<Button>().onClick.Invoke();
+            action.onClick.Invoke();
             Assert.That(contact.gameObject.activeSelf, Is.False);
-            Assert.That(commandField.rect.width, Is.EqualTo(fullWidth).Within(0.1f));
+            Assert.That(commandField.rect.width, Is.GreaterThan(splitWidth));
+            Assert.That(contact.rect.width, Is.EqualTo(commandField.rect.width * 0.25f).Within(1f));
             r.AdvanceTerminalRedial(3); Invoke(terminal, "LateUpdate"); Invoke(host, "RefreshHeader");
             Assert.That(tab.GetComponentInChildren<Text>().text, Does.EndWith(" (1)"));
-            Assert.That(request.gameObject.activeSelf, Is.True);
-            request.GetComponentInChildren<Button>().onClick.Invoke();
             Assert.That(contact.gameObject.activeSelf, Is.True);
+            Assert.That(status.text, Is.EqualTo("연결 요청"));
+            action.onClick.Invoke();
+            Assert.That(status.text, Is.EqualTo("연결됨"));
             Assert.That(r.ConversationProgress("kernel-onboarding").deviations, Is.Zero);
         }
         [Test]

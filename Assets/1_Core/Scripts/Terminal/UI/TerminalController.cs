@@ -27,6 +27,8 @@ namespace Codetective.Terminal
             (GetComponent<MonitorPageHost>()?.IsCompositionProtected ?? false);
         private bool pageVisible = true;
         private bool restoreCommandFocus;
+        private Button commandAction;
+        private Text commandActionLabel;
         private bool AcceptsInput => interactionEnabled && pageVisible && !CommandInputBlocked;
 
         public void SetPageVisible(bool visible)
@@ -70,6 +72,7 @@ namespace Codetective.Terminal
             }
             input.interactable = AcceptsInput;
             input.readOnly = !AcceptsInput;
+            RefreshCommandAction(input.CompletionInput);
         }
 
         public bool TryFocusCommandInput()
@@ -163,9 +166,7 @@ namespace Codetective.Terminal
                 canvas.worldCamera = Camera.main;
 
             if (!session.Runtime.TerminalUsesGuidedStartup) history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
-                           "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide + "\n\n" +
-                           "입력창 클릭 후 명령 입력 · Tab / Enter로 자동완성 확정 · 후보 이름 입력 중 Space 확정 · 다음 Enter 실행\n" +
-                           "입력하지 않을 때 Tab 다음 페이지 / Shift+Tab 이전 페이지\n휠이나 스크롤바로 이전 기록을 볼 수 있습니다.");
+                           "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide);
             DrawTranscript(history.Content);
             RefreshCommandPrompt();
             completionPanel.SetActive(false);
@@ -200,6 +201,7 @@ namespace Codetective.Terminal
                 RefreshCompletions();
             }
             TerminalCompletionInput current = input.CompletionInput;
+            RefreshCommandAction(current);
             bool textChanged = current.Text != lastText || current.IsComposing != lastComposing;
             if (textChanged || current.Caret != lastCaret || current.Anchor != lastAnchor ||
                 input.isFocused != lastFocus)
@@ -230,6 +232,48 @@ namespace Codetective.Terminal
                 transcriptScroll.Rebuild(CanvasUpdate.PostLayout);
                 scrollTranscript = false;
             }
+        }
+
+        private void BuildCommandAction()
+        {
+            var field = (RectTransform)input.transform;
+            const float buttonWidth = 108f;
+            const float inset = 6f;
+            float reservedWidth = buttonWidth + inset;
+            commandAction = MonitorWidgets.Button(field, input.textComponent.font, new Vector2(-reservedWidth, -inset),
+                new Vector2(buttonWidth, field.rect.height - inset * 2), "CommandAction", ClickCommandAction);
+            var buttonRect = (RectTransform)commandAction.transform;
+            buttonRect.anchorMin = buttonRect.anchorMax = Vector2.one;
+            buttonRect.anchoredPosition = new Vector2(-reservedWidth, -inset);
+            commandActionLabel = commandAction.GetComponentInChildren<Text>();
+            input.textComponent.rectTransform.offsetMax -= new Vector2(reservedWidth, 0);
+            if (input.placeholder != null) input.placeholder.rectTransform.offsetMax -= new Vector2(reservedWidth, 0);
+        }
+
+        private void RefreshCommandAction(TerminalCompletionInput current)
+        {
+            if (commandAction == null)
+            {
+                if (!pageVisible) return;
+                BuildCommandAction();
+            }
+            bool next = current.Text.Length == 0 && !input.IsCompositionProtected && Runtime.TerminalCanContinueLine;
+            bool enabled = AcceptsInput && isActiveAndEnabled && Time.timeScale > 0f && (next || !string.IsNullOrWhiteSpace(current.Text));
+            commandAction.interactable = enabled;
+            commandActionLabel.text = next ? "Next" : "Send";
+            commandActionLabel.color = enabled ? MonitorWidgets.Foreground : new Color(0.34f, 0.51f, 0.41f);
+        }
+
+        private void ClickCommandAction()
+        {
+            if (!AcceptsInput || !isActiveAndEnabled || Time.timeScale <= 0f) return;
+            string visibleDraft = input.CompletionInput.Text;
+            if (visibleDraft.Length == 0) { TryContinueConversation(); return; }
+            if (string.IsNullOrWhiteSpace(visibleDraft)) return;
+
+            // Commit any remaining IME text and cancel a queued keyboard submit before sending the draft.
+            input.ReleaseFocus();
+            Submit(input.text);
         }
 
         private void Submit(string line)
@@ -295,6 +339,7 @@ namespace Codetective.Terminal
             // Preserve the visible choices until that button's click can be delivered.
             if (input.IsLosingFocus)
                 return;
+            RefreshCommandAction(input.CompletionInput);
             visibility.Edit();
             selectedCompletion = 0;
             RefreshCompletions();

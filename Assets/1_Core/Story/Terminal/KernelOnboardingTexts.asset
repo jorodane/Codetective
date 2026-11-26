@@ -77,10 +77,10 @@ MonoBehaviour:
     text: Field Support here. The line is open. Let's go through the basics of the operations network.
   - key: onboarding.listen
     language: ko
-    text: "입력창이 비어 있을 때 Enter를 누르면 다음 안내로 넘어갑니다. 다음 명령을 실행해 보십시오.\n{command}"
+    text: "입력창이 비어 있을 때 Next를 눌러 안내를 넘길 수 있습니다. 다음 명령을 입력하고 Send를 누르십시오.\n{command}"
   - key: onboarding.listen
     language: en
-    text: Press Enter with an empty input to continue the briefing. Try entering {command}.
+    text: Use Next to continue the briefing while the input is empty. Enter {command} and select Send.
   - key: onboarding.permissions
     language: ko
     text: 잘하셨습니다. 권한 목록은 현재 사용할 수 있는 정보와 행동을 보여줍니다.
@@ -89,10 +89,10 @@ MonoBehaviour:
     text: Good. The permissions list shows the information and actions currently available to you.
   - key: onboarding.reference
     language: ko
-    text: "{slot} = 까지 입력한 뒤 색으로 표시된 [[hq|지휘소]]를 눌러 넣으십시오. Enter로 보내면 {slot}으로 그 대상을 부를 수 있습니다."
+    text: "{slot} = 까지 입력한 뒤 색으로 표시된 [[hq|지휘소]]를 눌러 넣으십시오. Send를 누르면 {slot}으로 그 대상을 부를 수 있습니다."
   - key: onboarding.reference
     language: en
-    text: "Type {slot} =, then click [[hq|headquarters]] to insert it. Press Enter to register {slot} as its name."
+    text: "Type {slot} =, then click [[hq|headquarters]] to insert it. Select Send to register {slot} as its name."
   - key: onboarding.substitution
     language: ko
     text: 이제 지휘소를 가리키는 이름은 {slot}입니다.
@@ -101,10 +101,10 @@ MonoBehaviour:
     text: Now you can use {slot} to refer to headquarters.
   - key: onboarding.dot
     language: ko
-    text: 대상 뒤에 마침표를 입력하면 권한 목록이 나옵니다. Tab이나 Enter로 후보를 확정하십시오. 후보 이름을 쓰기 시작하면 Space로도 확정할 수 있습니다. 다음 Enter로 명령을 보냅니다.
+    text: 대상 뒤에 마침표를 입력하면 권한 목록이 나옵니다. 목록에서 작업을 선택한 뒤 Send를 눌러 명령을 보내십시오.
   - key: onboarding.dot
     language: en
-    text: Type a dot after a target to see its permissions. Accept a suggestion with Tab or Enter. Space also accepts after you start typing its name. Press Enter again to send the command.
+    text: Type a dot after a target to see its permissions. Select an action from the list, then select Send to run the command.
   - key: onboarding.invoke
     language: ko
     text: '연결 상태를 확인하겠습니다. 다음 명령을 입력하십시오:

@@ -90,12 +90,8 @@ namespace Codetective.Terminal
 
         private void RefreshCommandPrompt()
         {
-            if (!(input.placeholder is Text placeholder)) return;
-            bool english = session.Runtime.DisplayLanguage == "en";
-            KernelRuntime runtime = session.Runtime;
-            placeholder.text = runtime.TerminalLineUsesEnter ? (english ? "Press Enter on an empty line.." : "빈 입력창에서 Enter로 넘기기..") :
-                runtime.TerminalInputLocked ? (english ? "Receiving.." : "수신중..") :
-                (english ? "Awaiting input.." : "입력 대기중..");
+            if (input.placeholder is Text placeholder)
+                placeholder.text = Runtime.DisplayLanguage == "en" ? "Awaiting input.." : "입력 대기중..";
         }
 
         private bool CanContinueConversation() => AcceptsInput && isActiveAndEnabled && Time.timeScale > 0f && Runtime.TerminalCanContinueLine;
@@ -105,6 +101,7 @@ namespace Codetective.Terminal
             if (!CanContinueConversation() || input.IsCompositionProtected || input.CompletionInput.Text.Length != 0 ||
                 !Runtime.ContinueTerminalLine()) return false;
             QueueTranscriptScroll(toLatest: true);
+            RefreshCommandAction(input.CompletionInput);
             // The Enter that advances the dialogue must not also reach the selected button or input.
             if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject != input.gameObject)
                 EventSystem.current.SetSelectedGameObject(null);

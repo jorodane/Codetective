@@ -377,6 +377,53 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void CommandButtonAdvancesAnEmptyDialogueAndSendsTheComposedDraft()
+        {
+            var runtime = new KernelRuntime { Language = CommandLocale.Korean };
+            runtime.RegisterTerminalConversation(new TerminalConversationDefinition
+            {
+                id = "command-button",
+                advanceWithEnter = true,
+                steps = new[] { new TerminalConversationStep
+                {
+                    id = "help",
+                    lines = new[] { new TerminalDialogueLine { text = "연결되었습니다." }, new TerminalDialogueLine { text = "도움말을 입력하십시오." } },
+                    goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help }
+                } },
+                onComplete = new StoryEffects { triggers = new[] { new TriggerValue { id = "command-button.complete", value = true } } }
+            });
+            TerminalController controller = Controller(runtime, out _);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            var action = field.transform.Find("CommandAction").GetComponent<Button>();
+            var label = action.GetComponentInChildren<Text>();
+            Assert.That(label.text, Is.EqualTo("Send")); Assert.That(action.interactable, Is.False);
+
+            runtime.EnterTerminalPage("kernel"); runtime.AdvanceTerminalConversation(1000);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Assert.That(placeholder.text, Is.EqualTo("입력 대기중.."));
+            Assert.That(label.text, Is.EqualTo("Next")); Assert.That(action.interactable, Is.True);
+            field.text = "도움말";
+            Assert.That(label.text, Is.EqualTo("Send")); Assert.That(action.interactable, Is.True);
+            field.text = "";
+            action.onClick.Invoke();
+            Assert.That(runtime.ConversationProgress("command-button").pendingIndex, Is.EqualTo(1));
+            runtime.AdvanceTerminalConversation(1000);
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Assert.That(label.text, Is.EqualTo("Send")); Assert.That(action.interactable, Is.False);
+            Assert.That(runtime.TerminalExpectedGoal, Is.EqualTo(TerminalGoalKind.Help));
+
+            field.text = "도움"; Focus(); Compose("말");
+            Invoke(typeof(TerminalController), controller, "LateUpdate");
+            Assert.That(field.CompletionInput.Text, Is.EqualTo("도움말")); Assert.That(action.interactable, Is.True);
+            action.onClick.Invoke();
+            Assert.That(runtime.GetTrigger("command-button.complete"), Is.True);
+            Assert.That(field.text, Is.Empty);
+            Assert.That(action.interactable, Is.False);
+            Invoke(typeof(CompletingInputField), field, "LateUpdate");
+            Assert.That(field.isFocused, Is.True);
+        }
+
+        [Test]
         public void ClickingAnAnswerFillsTheOrdinaryTerminalFieldAndEnterSendsIt()
         {
             var runtime = new KernelRuntime { Language = CommandLocale.Korean };
