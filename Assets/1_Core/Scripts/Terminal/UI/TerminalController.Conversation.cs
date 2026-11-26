@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Codetective.Operations;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -18,6 +19,10 @@ namespace Codetective.Terminal
         private bool conversationInputLocked;
         private CrtScreen conversationScreen;
         private ObjectReferenceTextView transcriptLinks;
+        private const int TranscriptCharacterLimit = 12000;
+        private const string ResponseIndent = " │ ";
+        private readonly Dictionary<string, string> responseLayouts = new Dictionary<string, string>(StringComparer.Ordinal);
+        private float renderedTranscriptWidth = -1f, responseLayoutWidth = -1f;
         private const float AnswerInset = 40f;
         private static readonly Vector2 QuestionPadding = new Vector2(12, 9);
         private RectTransform answerRow, answerChoices, questionPanel;
@@ -36,31 +41,81 @@ namespace Codetective.Terminal
         {
             KernelRuntime runtime = session.Runtime;
             if (!runtime.TerminalConversationCompleted || !mergedConversations.Add(runtime.TerminalConversationId)) return;
-            ObjectReferenceText log = runtime.TerminalConversationContent(includeAnswerPrompts: false);
-            if (!string.IsNullOrWhiteSpace(log.Text)) AppendHistoryContent(log);
+            TerminalTranscript log = runtime.TerminalConversationForConsole();
+            if (!string.IsNullOrWhiteSpace(log.Text)) AppendHistoryTranscript(log);
         }
-        private ObjectReferenceText ConversationTranscript()
+        private TerminalTranscript ConversationTranscript()
         {
             KernelRuntime runtime = session.Runtime;
-            ObjectReferenceText content = history.Content;
+            TerminalTranscript content = history.Transcript;
             if (runtime.TerminalConversationActive || runtime.TerminalConversationSuspended)
             {
-                ObjectReferenceText log = runtime.TerminalConversationContent(includeAnswerPrompts: false);
-                if (log.Text.Length > 0) content = content.Text.Length > 0 ? ObjectReferenceText.Join("\n\n", new[] { content, log }) : log;
+                TerminalTranscript log = runtime.TerminalConversationForConsole();
+                if (log.Text.Length > 0) content = content.Text.Length > 0 ? TerminalTranscript.Join("\n\n", new[] { content, log }) : log;
             }
             // Keep the combined uGUI Text mesh within the same budget as ordinary scrollback.
-            if (content.Text.Length > 12000)
-            {
-                int start = content.Text.Length - 12000;
-                if (char.IsLowSurrogate(content.Text[start])) start++;
-                content = content.Slice(start, content.Text.Length - start);
-            }
-            return content;
+            int start = BoundedTranscriptStart(content.Text);
+            return start > 0 ? content.Slice(start, content.Text.Length - start) : content;
         }
-        private void DrawTranscript(ObjectReferenceText content)
+        private static int BoundedTranscriptStart(string text)
+        {
+            int start = Math.Max(0, text.Length - TranscriptCharacterLimit);
+            return start > 0 && char.IsLowSurrogate(text[start]) ? start + 1 : start;
+        }
+        private void DrawTranscript(TerminalTranscript content)
         {
             if (transcriptLinks == null) transcriptLinks = ObjectReferenceTextView.Attach(transcript, (id, label) => TryInsertObjectReference(id, label));
-            transcriptLinks.Show(content, Runtime.CanLinkObject);
+            ObjectReferenceText rendered = FormatTranscript(content);
+            int start = BoundedTranscriptStart(rendered.Text);
+            if (start > 0) rendered = rendered.Slice(start, rendered.Text.Length - start);
+            if (rendered.Text != transcript.text) QueueTranscriptScroll();
+            transcriptLinks.Show(rendered, Runtime.CanLinkObject);
+            renderedTranscriptWidth = transcript.rectTransform.rect.width;
+        }
+
+        private ObjectReferenceText FormatTranscript(TerminalTranscript transcriptContent)
+        {
+            if (transcriptContent.Responses.Count == 0) return transcriptContent.Content;
+            float width = transcript.rectTransform.rect.width;
+            if (!Mathf.Approximately(responseLayoutWidth, width) || responseLayouts.Count >= 256)
+            { responseLayouts.Clear(); responseLayoutWidth = width; }
+
+            var parts = new List<ObjectReferenceText>();
+            int offset = 0;
+            foreach ((int start, int length) in transcriptContent.Responses)
+            {
+                if (start > offset) parts.Add(transcriptContent.Content.Slice(offset, start - offset));
+                string response = transcriptContent.Text.Substring(start, length);
+                if (!responseLayouts.TryGetValue(response, out string formatted))
+                    responseLayouts.Add(response, formatted = WrapResponse(response, width));
+                parts.Add(new ObjectReferenceText(formatted));
+                offset = start + length;
+            }
+            if (offset < transcriptContent.Text.Length) parts.Add(transcriptContent.Content.Slice(offset, transcriptContent.Text.Length - offset));
+            return ObjectReferenceText.Join("", parts);
+        }
+
+        private string WrapResponse(string response, float width)
+        {
+            string text = response.Replace("\r\n", "\n").Replace('\r', '\n').TrimEnd('\n');
+            var settings = transcript.GetGenerationSettings(new Vector2(width, 0));
+            TextGenerator layout = transcript.cachedTextGeneratorForLayout;
+            float indent = (layout.GetPreferredWidth(ResponseIndent + "X", settings) - layout.GetPreferredWidth("X", settings)) / transcript.pixelsPerUnit;
+            settings.generationExtents.x = Mathf.Max(1, width - indent - 2);
+            settings.horizontalOverflow = HorizontalWrapMode.Wrap;
+            settings.verticalOverflow = VerticalWrapMode.Overflow;
+            if (!layout.Populate(text, settings)) return ResponseIndent + text.Replace("\n", "\n" + ResponseIndent);
+
+            var wrapped = new StringBuilder();
+            int start = 0;
+            foreach (UILineInfo line in layout.lines)
+            {
+                int next = line.startCharIdx;
+                if (next <= start || next >= text.Length) continue;
+                wrapped.Append(ResponseIndent).Append(text.Substring(start, next - start).TrimEnd(' ', '\t', '\n')).Append('\n');
+                start = next;
+            }
+            return wrapped.Append(ResponseIndent).Append(text.Substring(start)).ToString();
         }
         private void UpdateConversationPresentation()
         {
@@ -83,9 +138,7 @@ namespace Codetective.Terminal
             renderedConversationRevision = runtime.TerminalConversationRevision; renderedConversationLocale = runtime.DisplayLanguage; renderedConversationCommandLocale = runtime.Language;
             RefreshCommandPrompt();
             RefreshAnswerPrompt();
-            ObjectReferenceText content = ConversationTranscript();
-            if (transcript.text != content.Text) QueueTranscriptScroll();
-            DrawTranscript(content);
+            DrawTranscript(ConversationTranscript());
         }
 
         private void RefreshCommandPrompt()

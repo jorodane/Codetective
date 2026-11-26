@@ -8,12 +8,13 @@ namespace Codetective.Terminal
     /// <summary>Bounded scrollback; the character budget also keeps uGUI Text below its mesh vertex limit.</summary>
     public sealed class TerminalHistory
     {
-        private readonly Queue<ObjectReferenceText> entries = new Queue<ObjectReferenceText>();
+        private readonly Queue<TerminalTranscript> entries = new Queue<TerminalTranscript>();
         private readonly int entryLimit;
         private readonly int characterLimit;
         private int characters;
 
-        public ObjectReferenceText Content { get; private set; } = new ObjectReferenceText("");
+        public TerminalTranscript Transcript { get; private set; } = new TerminalTranscript("");
+        public ObjectReferenceText Content => Transcript.Content;
         public string Text => Content.Text;
         public int Count => entries.Count;
 
@@ -23,10 +24,11 @@ namespace Codetective.Terminal
             this.characterLimit = Math.Max(1, characterLimit);
         }
 
-        /// <returns>The removed prefix, so a reader's scroll position can be preserved when old entries expire.</returns>
         public string Append(string entry) => AppendContent(new ObjectReferenceText(entry));
+        public string AppendContent(ObjectReferenceText entry) => AppendTranscript(new TerminalTranscript(entry));
 
-        public string AppendContent(ObjectReferenceText entry)
+        /// <returns>The removed prefix, so a reader's scroll position can be preserved when old entries expire.</returns>
+        public string AppendTranscript(TerminalTranscript entry)
         {
             if (entry.Text.Length > characterLimit)
                 entry = entry.Slice(entry.Text.Length - characterLimit, characterLimit);
@@ -39,7 +41,7 @@ namespace Codetective.Terminal
                 characters -= oldest.Length + 2;
                 removed.Append(oldest).Append("\n\n");
             }
-            Content = ObjectReferenceText.Join("\n\n", entries);
+            Transcript = TerminalTranscript.Join("\n\n", entries);
             return removed.ToString();
         }
 

@@ -23,7 +23,8 @@ namespace Codetective.Tests.Operations
         private KernelRuntime World(CommandLocale commands = CommandLocale.Korean, string display = "ko")
         {
             KernelRuntime r = ClinicScenario.Create(); r.Language = commands; r.DisplayLanguage = display; ContentTextTableAsset.Install(r, asset.textTables);
-            r.RegisterMail(new StoryMail { id = "government-intro", mailbox = Mailbox.Kernel }); r.RegisterTerminalConversation(asset.conversation);
+            r.RegisterMail(new StoryMail { id = "government-intro", mailbox = Mailbox.Kernel, requiresAcceptance = true }); r.RegisterTerminalConversation(asset.conversation);
+            r.ReadMail("government-intro"); r.AcceptMail("government-intro");
             r.EnterTerminalPage("kernel"); Assert.That(r.AcceptTerminalConnection("kernel-onboarding"), Is.True); return r;
         }
         [TestCase(CommandLocale.Korean, "ko", "y")]
@@ -119,8 +120,9 @@ namespace Codetective.Tests.Operations
             var scenario = ScriptableObject.CreateInstance<KernelScenarioDefinition>(); var mail = ScriptableObject.CreateInstance<StoryMailAsset>();
             try
             {
-                mail.message.id = "government-intro"; mail.message.mailbox = Mailbox.Kernel;
+                mail.message.id = "government-intro"; mail.message.mailbox = Mailbox.Kernel; mail.message.requiresAcceptance = true;
                 scenario.mail = new[] { mail }; scenario.terminalConversations = new[] { asset }; KernelRuntime r = scenario.CreateRuntime();
+                r.ReadMail("government-intro"); r.AcceptMail("government-intro");
                 r.EnterTerminalPage("kernel"); Assert.That(r.AcceptTerminalConnection("kernel-onboarding"), Is.True); r.AdvanceTerminalConversation(0.5);
                 KernelRuntime restored = scenario.CreateRuntime(); restored.Restore(r.Capture());
                 Assert.That(restored.TerminalConversationTranscript(), Is.EqualTo(r.TerminalConversationTranscript()));

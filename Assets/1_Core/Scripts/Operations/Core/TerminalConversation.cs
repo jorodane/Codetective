@@ -224,8 +224,11 @@ namespace Codetective.Operations
         {
             if (!definition.pauseWorld || !definition.replacesStartupGuide) return false;
             TerminalConversationProgress progress = terminalConversationProgress[definition.id];
-            return progress.disconnected || progress.phase == TerminalConversationPhase.Dormant && CanOpenNewConversation(definition) &&
-                (definition.connectionMode == TerminalConnectionMode.Incoming || !string.IsNullOrEmpty(definition.requiredMailRead));
+            if (progress.disconnected) return true;
+            if (progress.phase != TerminalConversationPhase.Dormant) return false;
+            // Keep the first appointment waiting while the player acknowledges the introductory mail.
+            if (definition.connectionMode == TerminalConnectionMode.Incoming) return ConversationScheduled(definition);
+            return !string.IsNullOrEmpty(definition.requiredMailRead) && CanOpenNewConversation(definition);
         }
         public bool TerminalUsesGuidedStartup => terminalConversations.Values.Any(d => d.replacesStartupGuide);
         public string TerminalExpectedCommand => ConversationStep == null ? "" : ExpectedCommand(ConversationStep.goal, Conversation, Language);
@@ -338,9 +341,11 @@ namespace Codetective.Operations
         public TerminalConversationProgress ConversationProgress(string id) => id != null && terminalConversationProgress.TryGetValue(id, out var state) ? state.Copy() : null;
         private bool TerminalConversationRequirementMet(string id) => string.IsNullOrEmpty(id) ||
             terminalConversationProgress.TryGetValue(id, out TerminalConversationProgress progress) && progress.phase == TerminalConversationPhase.Completed;
-        private bool CanOpenNewConversation(TerminalConversationDefinition definition) => Day >= definition.firstDay && Day <= definition.lastDay &&
+        private bool ConversationScheduled(TerminalConversationDefinition definition) =>
+            Day >= definition.firstDay && Day <= definition.lastDay && definition.condition.Matches(this);
+        private bool CanOpenNewConversation(TerminalConversationDefinition definition) => ConversationScheduled(definition) &&
             (string.IsNullOrEmpty(definition.requiredMailRead) || IsMailRead(definition.requiredMailRead)) &&
-            (string.IsNullOrEmpty(definition.requiredMailAccepted) || IsMailAccepted(definition.requiredMailAccepted)) && definition.condition.Matches(this);
+            (string.IsNullOrEmpty(definition.requiredMailAccepted) || IsMailAccepted(definition.requiredMailAccepted));
 
         public void EnterTerminalPage(string pageId)
         {
@@ -611,10 +616,26 @@ namespace Codetective.Operations
         }
         public string TerminalConversationTranscript(bool includeAnswerPrompts = true) => TerminalConversationContent(includeAnswerPrompts).Text;
 
-        public ObjectReferenceText TerminalConversationContent(bool includeAnswerPrompts = true)
+        public ObjectReferenceText TerminalConversationContent(bool includeAnswerPrompts = true) =>
+            ObjectReferenceText.Join("\n\n", TerminalConversationLines(includeAnswerPrompts, false).Select(entry => entry.line));
+
+        public TerminalTranscript TerminalConversationForConsole()
         {
-            var p = Conversation; if (p == null) return new ObjectReferenceText("");
-            var lines = new List<ObjectReferenceText>();
+            var parts = new List<TerminalTranscript>();
+            foreach ((ObjectReferenceText line, bool response) in TerminalConversationLines(false, true))
+            {
+                if (line.Text.Length == 0) continue;
+                if (parts.Count > 0) parts.Add(new TerminalTranscript(response ? "\n" : "\n\n"));
+                parts.Add(response ? TerminalTranscript.Response(line.Text) : new TerminalTranscript(line));
+            }
+            return TerminalTranscript.Join("", parts);
+        }
+
+        private IEnumerable<(ObjectReferenceText line, bool response)> TerminalConversationLines(bool includeAnswerPrompts, bool omitContactName)
+        {
+            var p = Conversation;
+            if (p == null) yield break;
+            string contactName = omitContactName ? ContactForTerminalConversation(p.id).Name : null;
             for (int i = 0; i < p.log.Count; i++)
             {
                 TerminalConversationLog entry = p.log[i];
@@ -624,7 +645,7 @@ namespace Codetective.Operations
                 if (p.disconnected && i == p.activeLog && !entry.complete) continue;
                 if (p.phase == TerminalConversationPhase.Speaking && p.receiving && i == p.activeLog)
                 {
-                    lines.Add(new ObjectReferenceText(DisplayLanguage == "en" ? "Receiving.." : "수신중.."));
+                    yield return (new ObjectReferenceText(DisplayLanguage == "en" ? "Receiving.." : "수신중.."), false);
                     continue;
                 }
                 ObjectReferenceText line = ConversationText(entry, p);
@@ -636,14 +657,19 @@ namespace Codetective.Operations
                 var parts = new List<ObjectReferenceText>();
                 if (!string.IsNullOrEmpty(entry.speaker) || !string.IsNullOrEmpty(entry.speakerKey))
                 {
-                    string speaker = Texts.Resolve(entry.speakerKey, entry.speaker, DisplayLanguage);
-                    parts.Add(ObjectReferenceText.Parse(ConversationDefinition.useSpeakerPrompt ? speaker + "> " : "[" + speaker + "] "));
+                    ObjectReferenceText speaker = ObjectReferenceText.Parse(Texts.Resolve(entry.speakerKey, entry.speaker, DisplayLanguage));
+                    if (speaker.Spans.Count != 0 || speaker.Text != contactName)
+                    {
+                        bool prompt = ConversationDefinition.useSpeakerPrompt;
+                        if (!prompt) parts.Add(new ObjectReferenceText("["));
+                        parts.Add(speaker);
+                        parts.Add(new ObjectReferenceText(prompt ? "> " : "] "));
+                    }
                 }
                 parts.Add(line);
                 if (!entry.complete) parts.Add(new ObjectReferenceText("▌"));
-                lines.Add(ObjectReferenceText.Join("", parts));
+                yield return (ObjectReferenceText.Join("", parts), entry.commandResult);
             }
-            return ObjectReferenceText.Join("\n\n", lines);
         }
         private void RestoreTerminalConversations(KernelSnapshot snapshot)
         {

@@ -32,7 +32,7 @@ namespace Codetective.Gameplay
             var steps = new[] {
                 new TerminalConversationStep { id = "help", lines = new[] {
                     Line("welcome", "Kernel을 찾으셨군요.", "You found Kernel."),
-                    Line("connection", "현장지원과입니다. 연결을 확인했습니다. 작전망의 기본 사용법부터 안내하겠습니다.", "Field Support here. The line is open. Let's go through the basics of the operations network."),
+                    Line("connection", "연결을 확인했습니다. 작전망의 기본 사용법부터 안내하겠습니다.", "The line is open. Let's go through the basics of the operations network."),
                     Line("listen", "입력창이 비어 있을 때 Next를 눌러 안내를 넘길 수 있습니다. 다음 명령을 입력하고 Send를 누르십시오.\n{command}", "Use Next to continue the briefing while the input is empty. Enter {command} and select Send.") },
                     goal = new TerminalCommandGoal { kind = TerminalGoalKind.Help } },
                 new TerminalConversationStep { id = "reference", previousIds = new[] { "allocate" }, lines = new[] {
@@ -78,7 +78,7 @@ namespace Codetective.Gameplay
                     OfficeLine("finish", "곧 아홉 시 예약 손님이 들어옵니다. 말풍선을 눌러 적당히 맞장구만 치시면 됩니다. 상담을 마치고 잠시 쉬시면 첫 임무를 메일로 보내겠습니다.", "Your nine o'clock client is about to arrive. Click the speech bubble to chime in now and then. Take a short break after the session and we will send your first assignment by mail.") } }
             };
             var asset = ScriptableObject.CreateInstance<TerminalConversationAsset>(); asset.name = "KernelOnboarding";
-            asset.conversation = new TerminalConversationDefinition { id = "kernel-onboarding", firstDay = 1, lastDay = 1,
+            asset.conversation = new TerminalConversationDefinition { id = "kernel-onboarding", requiredMailAccepted = "government-intro", firstDay = 1, lastDay = 1,
                 connectionMode = TerminalConnectionMode.Incoming, redialSeconds = 3, legacyReadMailToSkip = "government-intro",
                 koreanVariableBase = "연습",
                 speaker = "현장지원과", speakerKey = "onboarding.speaker", pauseWorld = true, replacesStartupGuide = true, unlockCommandsByStep = true, advanceWithEnter = true,

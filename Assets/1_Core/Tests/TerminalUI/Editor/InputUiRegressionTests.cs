@@ -284,7 +284,27 @@ namespace Codetective.Terminal.Tests.UI
             Invoke(typeof(TerminalController), controller, "LateUpdate");
 
             string log = controller.GetComponentInChildren<ScrollRect>().content.GetComponent<Text>().text;
-            Assert.That(log, Does.Contain("> note = 42").And.Contain("\n42").And.Not.Contain("예약 문의").And.Not.Contain("손님 입실"));
+            Assert.That(log, Does.Contain("> note = 42\n │ 42").And.Not.Contain("예약 문의").And.Not.Contain("손님 입실"));
+        }
+
+        [Test]
+        public void WrappedCommandResponsesKeepTheirIndentOnEveryVisibleLine()
+        {
+            var controller = Controller(new KernelRuntime(), out _);
+            Text log = controller.GetComponentInChildren<ScrollRect>().content.GetComponent<Text>();
+            log.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 240);
+            log.verticalOverflow = VerticalWrapMode.Overflow;
+            log.horizontalOverflow = HorizontalWrapMode.Wrap;
+            string longResponse = "The terminal keeps this lengthy response aligned beneath the command.\nA second paragraph follows.";
+            var entry = TerminalTranscript.Join("\n", new[] { new TerminalTranscript("> help"), TerminalTranscript.Response(longResponse) });
+
+            Invoke(typeof(TerminalController), controller, "DrawTranscript", entry);
+            Canvas.ForceUpdateCanvases();
+            string[] visibleLines = log.text.Split('\n');
+            Assert.That(visibleLines.Length, Is.GreaterThan(3));
+            Assert.That(visibleLines[0], Is.EqualTo("> help"));
+            for (int i = 1; i < visibleLines.Length; i++) Assert.That(visibleLines[i], Does.StartWith(" │ "));
+            Assert.That(log.cachedTextGenerator.lines.Count, Is.EqualTo(visibleLines.Length));
         }
 
         [Test]

@@ -141,7 +141,7 @@ namespace Codetective.Terminal
             if (selected != null)
             {
                 accept.interactable = !runtime.IsMailAccepted(selected.id);
-                accept.GetComponentInChildren<Text>(true).text = runtime.IsMailAccepted(selected.id) ? "수락 완료" : selected.acceptLabel;
+                accept.GetComponentInChildren<Text>(true).text = runtime.IsMailAccepted(selected.id) ? selected.acceptLabel + " 완료" : selected.acceptLabel;
             }
         }
         private void AddMessageRow(StoryMail message, int index)
@@ -198,10 +198,13 @@ namespace Codetective.Terminal
             try
             {
                 StoryMail message = runtime.Inbox(mailbox).FirstOrDefault(item => item.id == selectedId);
+                string previousConnection = runtime.TerminalIncomingConnectionId;
+                runtime.ReadMail(selectedId);
                 runtime.AcceptMail(selectedId);
                 if (!string.IsNullOrEmpty(message?.pageOnAccept) &&
                     (GetComponentInParent<MonitorPageHost>()?.TryNavigate(message.pageOnAccept) ?? false)) return;
-                feedback.text = "업무를 수락했습니다. 다음 내용을 확인하세요.";
+                string connection = runtime.TerminalIncomingConnectionId;
+                feedback.text = connection != null && connection != previousConnection ? "커널에 연결 요청이 도착했습니다." : "확인했습니다.";
                 Refresh(false);
             }
             catch (CommandException error) { feedback.text = error.Message; }

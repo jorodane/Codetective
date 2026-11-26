@@ -167,7 +167,7 @@ namespace Codetective.Terminal
 
             if (!session.Runtime.TerminalUsesGuidedStartup) history.Append("CODETECTIVE 메모리 터미널 준비 완료\n\n" +
                            "Kernel 작전망 연결 완료\n" + session.Runtime.StartupGuide);
-            DrawTranscript(history.Content);
+            DrawTranscript(history.Transcript);
             RefreshCommandPrompt();
             completionPanel.SetActive(false);
             SetInteractionEnabled(interactionEnabled);
@@ -200,6 +200,7 @@ namespace Codetective.Terminal
                 DrawTranscript(ConversationTranscript());
                 RefreshCompletions();
             }
+            else if (!Mathf.Approximately(renderedTranscriptWidth, transcript.rectTransform.rect.width)) DrawTranscript(ConversationTranscript());
             TerminalCompletionInput current = input.CompletionInput;
             RefreshCommandAction(current);
             bool textChanged = current.Text != lastText || current.IsComposing != lastComposing;
@@ -286,7 +287,12 @@ namespace Codetective.Terminal
             bool conversation = session.Runtime.TerminalConversationActive;
             MergeCompletedConversation();
             CommandResult result = session.ExecuteLinkedInput(input.EncodeReferences(line), line);
-            if (!conversation) AppendHistory("> " + line + "\n" + (result.Success ? "" : "오류 ") + result.Message);
+            if (!conversation)
+            {
+                var echo = new TerminalTranscript("> " + line);
+                var response = TerminalTranscript.Response((result.Success ? "" : "오류 ") + result.Message);
+                AppendHistoryTranscript(TerminalTranscript.Join("\n", new[] { echo, response }));
+            }
 
             input.ClearDraft();
             ApplyInputInteraction();
@@ -295,16 +301,15 @@ namespace Codetective.Terminal
             RefreshCompletions();
         }
 
-        private void AppendHistory(string entry) => AppendHistoryContent(new ObjectReferenceText(entry));
-
-        private void AppendHistoryContent(ObjectReferenceText entry)
+        private void AppendHistoryTranscript(TerminalTranscript entry)
         {
             QueueTranscriptScroll();
-            string before = history.Text;
-            string removed = history.AppendContent(entry);
+            TerminalTranscript before = history.Transcript;
+            string removed = history.AppendTranscript(entry);
             if (!followTranscript && removed.Length > 0)
             {
-                string remaining = before.Substring(Math.Min(removed.Length, before.Length));
+                int offset = Math.Min(removed.Length, before.Text.Length);
+                TerminalTranscript remaining = before.Slice(offset, before.Text.Length - offset);
                 preservedTranscriptPosition.y -= MeasureHistory(before) - MeasureHistory(remaining);
             }
             DrawTranscript(ConversationTranscript());
@@ -325,12 +330,12 @@ namespace Codetective.Terminal
         private RectTransform TranscriptViewport => transcriptScroll.viewport != null ?
             transcriptScroll.viewport : (RectTransform)transcriptScroll.transform;
 
-        private float MeasureHistory(string value)
+        private float MeasureHistory(TerminalTranscript content)
         {
-            if (string.IsNullOrEmpty(value))
+            if (content.Text.Length == 0)
                 return 0f;
             var settings = transcript.GetGenerationSettings(new Vector2(transcript.rectTransform.rect.width, 0f));
-            return transcript.cachedTextGeneratorForLayout.GetPreferredHeight(value, settings) / transcript.pixelsPerUnit;
+            return transcript.cachedTextGeneratorForLayout.GetPreferredHeight(FormatTranscript(content).Text, settings) / transcript.pixelsPerUnit;
         }
 
         private void InputChanged(string value)

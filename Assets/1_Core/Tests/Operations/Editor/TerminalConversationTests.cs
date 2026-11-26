@@ -17,7 +17,7 @@ namespace Codetective.Tests.Operations
             onComplete = new StoryEffects { triggers = new[] { new TriggerValue { id = "tutorial.complete", value = true } } } };
         private static KernelRuntime World(TerminalConversationDefinition definition = null, bool start = true)
         {
-            KernelRuntime r = ClinicScenario.Create(); r.RegisterMail(new StoryMail { id = "intro", mailbox = Mailbox.Kernel, subject = "Assignment" });
+            KernelRuntime r = ClinicScenario.Create(); r.RegisterMail(new StoryMail { id = "intro", mailbox = Mailbox.Kernel, subject = "Assignment", requiresAcceptance = true });
             r.RegisterTerminalConversation(definition ?? Definition());
             if (start) { r.ReadMail("intro"); r.EnterTerminalPage("kernel"); }
             return r;
@@ -25,11 +25,12 @@ namespace Codetective.Tests.Operations
         private static void Listen(KernelRuntime r) => r.AdvanceTerminalConversation(1000);
 
         [Test]
-        public void IncomingConnectionWaitsForAcceptanceAndRedialsTheSavedLineAfterDisconnecting()
+        public void IncomingConnectionWaitsForMailConfirmationAndRedialsTheSavedLineAfterDisconnecting()
         {
             TerminalConversationDefinition definition = Definition();
             definition.connectionMode = TerminalConnectionMode.Incoming;
             definition.requiredMailRead = "";
+            definition.requiredMailAccepted = "intro";
             definition.replacesStartupGuide = true;
             definition.redialSeconds = 3;
             KernelRuntime runtime = World(definition, false);
@@ -37,6 +38,13 @@ namespace Codetective.Tests.Operations
             Assert.That(runtime.TerminalIncomingConnectionId, Is.Null);
             runtime.MarkDayIntroSeen(5);
             Assert.That(runtime.Inbox(Mailbox.Kernel), Is.Empty);
+            Assert.That(runtime.TerminalIncomingConnectionId, Is.Null);
+            runtime.AdvanceDayMailDelay(5);
+            runtime.ReadMail("intro");
+            Assert.That(runtime.TerminalIncomingConnectionId, Is.Null);
+            runtime.Tick(5);
+            Assert.That(runtime.Minute, Is.EqualTo(540));
+            runtime.AcceptMail("intro");
             Assert.That(runtime.TerminalIncomingConnectionId, Is.EqualTo("tutorial"));
             runtime.EnterTerminalPage("kernel");
             Assert.That(runtime.TerminalConversationActive, Is.False);
@@ -63,6 +71,29 @@ namespace Codetective.Tests.Operations
             Listen(restored);
             Assert.That(restored.GetTrigger("tutorial.complete"), Is.True);
             Assert.That(restored.TerminalIncomingConnectionId, Is.Null);
+        }
+
+        [Test]
+        public void ConsoleTranscriptOmitsTheRepeatedContactAndKeepsSpeakerAndObjectReferences()
+        {
+            TerminalConversationDefinition definition = Definition();
+            TerminalDialogueLine alternate = Line("Contact me later.");
+            alternate.speaker = "Secretariat";
+            definition.steps[0].lines = new[] { Line("Open [[hq|headquarters]]."), alternate };
+            KernelRuntime runtime = World(definition);
+            Listen(runtime);
+            ExecutionResult result = runtime.Execute("help");
+            Listen(runtime);
+
+            TerminalTranscript transcript = runtime.TerminalConversationForConsole();
+            Assert.That(transcript.Text, Does.StartWith("Open headquarters.\n\n[Secretariat] Contact me later.")
+                .And.Contain("> help\n" + result.Message).And.Not.Contain("[Operator]"));
+            Assert.That(runtime.TerminalConversationTranscript(), Does.Contain("[Operator] Open headquarters."));
+            Assert.That(transcript.Responses.Single().Start, Is.EqualTo(transcript.Text.IndexOf("> help\n", StringComparison.Ordinal) + "> help\n".Length));
+            Assert.That(transcript.Responses.Single().Length, Is.EqualTo(result.Message.Length));
+            ObjectReferenceSpan link = transcript.Content.Spans.Single();
+            Assert.That(link.Id, Is.EqualTo("hq"));
+            Assert.That(transcript.Text.Substring(link.Start, link.Length), Is.EqualTo("headquarters"));
         }
 
         [Test]

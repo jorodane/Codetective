@@ -324,11 +324,22 @@ namespace Codetective.Tests.Operations
             Assert.That(restarted.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
             Assert.That(restarted.Inbox(Mailbox.Clinic), Is.Empty);
             Assert.That(restarted.UnreadMailCount(Mailbox.Kernel) + restarted.UnreadMailCount(Mailbox.Clinic), Is.EqualTo(1));
+            Assert.That(restarted.TerminalIncomingConnectionId, Is.Null);
+            restarted.ReadMail("government-intro");
+            restarted.Tick(60);
+            Assert.That(restarted.CurrentAppointment, Is.Null);
+            Assert.That(restarted.Minute, Is.EqualTo(540));
+            Assert.That(restarted.TerminalIncomingConnectionId, Is.Null);
+            restarted.AcceptMail("government-intro");
+            Assert.That(restarted.TerminalIncomingConnectionId, Is.EqualTo("kernel-onboarding"));
+            KernelRuntime waitingForCall = scenario.CreateRuntime();
+            waitingForCall.Restore(JsonUtility.FromJson<KernelSnapshot>(JsonUtility.ToJson(restarted.Capture())));
+            Assert.That(waitingForCall.TerminalIncomingConnectionId, Is.EqualTo("kernel-onboarding"));
         }
 
         private static void FinishTutorialAndReceiveFirstMission(KernelRuntime runtime)
         {
-            runtime.ReadMail("government-intro"); runtime.EnterTerminalPage("kernel");
+            runtime.ReadMail("government-intro"); runtime.AcceptMail("government-intro"); runtime.EnterTerminalPage("kernel");
             Assert.That(runtime.AcceptTerminalConnection("kernel-onboarding"), Is.True);
             Assert.That(runtime.Inbox(Mailbox.Kernel).Single().id, Is.EqualTo("government-intro"));
             for (int i = 0; i < 16 && runtime.TerminalConversationActive; i++)

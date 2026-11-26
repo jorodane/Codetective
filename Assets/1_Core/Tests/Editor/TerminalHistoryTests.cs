@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using Codetective.Operations;
 
 namespace Codetective.Terminal.Tests
 {
@@ -34,6 +35,20 @@ namespace Codetective.Terminal.Tests
             history.Append(new string('x', 100));
             Assert.That(history.Text.Length, Is.EqualTo(40));
             Assert.That(history.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ResponseRangesFollowTheTextWhenScrollbackIsTrimmed()
+        {
+            var history = new TerminalHistory(2, 30);
+            history.Append("previous command");
+            history.AppendTranscript(TerminalTranscript.Join("\n", new[]
+            {
+                new TerminalTranscript("> help"), TerminalTranscript.Response(new string('x', 100))
+            }));
+
+            Assert.That(history.Text, Is.EqualTo(new string('x', 30)));
+            Assert.That(history.Transcript.Responses, Is.EqualTo(new[] { (0, 30) }));
         }
 
         [TestCase(100f, 400f, 0f, true)]
