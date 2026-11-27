@@ -71,28 +71,9 @@ namespace Codetective.Terminal
             areas.Clear();
             if (spans.Length == 0 || mesh.currentVertCount == 0) return;
 
-            IList<UICharInfo> characters = label.cachedTextGenerator.characters;
-            IList<UILineInfo> lines = label.cachedTextGenerator.lines;
-            if (lines.Count == 0) return;
-            float scale = 1f / label.pixelsPerUnit;
-            Vector2 offset = label.PixelAdjustPoint(Vector2.zero);
-            int line = 0;
+            var layout = new TextRangeLayout(label);
             foreach (ObjectReferenceSpan span in spans)
-            {
-                int end = Mathf.Min(span.End, label.text.Length, characters.Count);
-                int start = span.Start;
-                while (start < end)
-                {
-                    while (line + 1 < lines.Count && lines[line + 1].startCharIdx <= start) line++;
-                    int stop = line + 1 < lines.Count ? Mathf.Min(end, lines[line + 1].startCharIdx) : end;
-                    UICharInfo first = characters[start];
-                    UICharInfo last = characters[stop - 1];
-                    float right = last.cursorPos.x + last.charWidth;
-                    areas.Add((new Rect(first.cursorPos.x * scale + offset.x, (lines[line].topY - lines[line].height) * scale + offset.y,
-                        Mathf.Max(1, right - first.cursorPos.x) * scale, lines[line].height * scale), span));
-                    start = stop;
-                }
-            }
+                foreach (Rect bounds in layout.Rects(span.Start, span.End)) areas.Add((bounds, span));
 
             UIVertex vertex = default;
             for (int i = 0; i + 3 < mesh.currentVertCount; i += 4)
@@ -106,6 +87,48 @@ namespace Codetective.Terminal
                     vertex.color = new Color(LinkColor.r, LinkColor.g, LinkColor.b, vertex.color.a / 255f);
                     mesh.SetUIVertex(vertex, i + j);
                 }
+            }
+        }
+    }
+
+    /// <summary>Maps plain-text ranges to the rendered lines of a uGUI label.</summary>
+    internal readonly struct TextRangeLayout
+    {
+        private readonly string text;
+        private readonly IList<UICharInfo> characters;
+        private readonly IList<UILineInfo> lines;
+        private readonly float scale;
+        private readonly Vector2 offset;
+
+        public TextRangeLayout(Text label)
+        {
+            text = label.text;
+            characters = label.cachedTextGenerator.characters;
+            lines = label.cachedTextGenerator.lines;
+            scale = 1f / label.pixelsPerUnit;
+            offset = label.PixelAdjustPoint(Vector2.zero);
+        }
+
+        public IEnumerable<Rect> Rects(int start, int end)
+        {
+            if (lines.Count == 0) yield break;
+            end = Mathf.Min(end, text.Length, characters.Count);
+            int line = 0;
+            while (start < end)
+            {
+                while (line + 1 < lines.Count && lines[line + 1].startCharIdx <= start) line++;
+                int stop = line + 1 < lines.Count ? Mathf.Min(end, lines[line + 1].startCharIdx) : end;
+                int last = stop - 1;
+                while (last >= start && (text[last] == '\r' || text[last] == '\n')) last--;
+                if (last >= start)
+                {
+                    float left = characters[start].cursorPos.x;
+                    float right = characters[last].cursorPos.x + characters[last].charWidth;
+                    UILineInfo metrics = lines[line];
+                    yield return new Rect(left * scale + offset.x, (metrics.topY - metrics.height) * scale + offset.y,
+                        Mathf.Max(1, right - left) * scale, metrics.height * scale);
+                }
+                start = stop;
             }
         }
     }

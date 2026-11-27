@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Codetective.Operations
 {
@@ -399,7 +400,11 @@ namespace Codetective.Operations
             }
             return "";
         }
-        private ObjectReferenceText ConversationText(TerminalConversationLog entry, TerminalConversationProgress p)
+        private const string SlotPlaceholder = "{slot}";
+        private const string CommandPlaceholder = "{command}";
+        private static readonly Regex ExamplePlaceholders = new Regex(@"\{command\}|\{slot\}(?:[ \t]*=)?");
+
+        private TerminalTranscript ConversationText(TerminalConversationLog entry, TerminalConversationProgress p, bool styleForConsole = false)
         {
             bool korean = Language == CommandLocale.Korean;
             string command = (korean ? entry.koreanCommand : entry.englishCommand) ?? "";
@@ -408,9 +413,24 @@ namespace Codetective.Operations
             string keyword = separator >= 0 ? CommandVocabulary.Keyword(command.Substring(0, separator)) : null;
             if (keyword == "save" || keyword == "code")
                 command = command.Contains("=") ? command.Substring(separator + 1) : p.slotName + " =";
-            string text = Texts.Resolve(entry.textKey, entry.text, DisplayLanguage).Replace("{slot}", p.slotName)
-                .Replace("{command}", command.TrimEnd(';')) + entry.suffix;
-            return entry.authored || !string.IsNullOrEmpty(entry.textKey) ? ObjectReferenceText.Parse(text) : new ObjectReferenceText(text);
+            command = command.TrimEnd(';');
+            string slotName = p.slotName ?? "";
+            string template = Texts.Resolve(entry.textKey, entry.text, DisplayLanguage);
+            string text = template.Replace(SlotPlaceholder, slotName).Replace(CommandPlaceholder, command) + entry.suffix;
+            ObjectReferenceText content = entry.authored || !string.IsNullOrEmpty(entry.textKey) ? ObjectReferenceText.Parse(text) : new ObjectReferenceText(text);
+            if (!styleForConsole || !entry.authored) return new TerminalTranscript(content);
+
+            // Locate the examples in visible text so object markup does not offset the frame.
+            var examples = new List<(int, int)>();
+            int offset = 0;
+            foreach (Match token in ExamplePlaceholders.Matches(ObjectReferenceText.PlainText(template)))
+            {
+                bool commandToken = token.Value == CommandPlaceholder;
+                int length = commandToken ? command.Length : slotName.Length + token.Length - SlotPlaceholder.Length;
+                if (length > 0 && (commandToken || token.Length > SlotPlaceholder.Length)) examples.Add((token.Index + offset, length));
+                offset += length - token.Length;
+            }
+            return TerminalTranscript.Spoken(content, examples);
         }
         private int AddConversationLog(TerminalConversationLog entry)
         {
@@ -617,25 +637,25 @@ namespace Codetective.Operations
         public string TerminalConversationTranscript(bool includeAnswerPrompts = true) => TerminalConversationContent(includeAnswerPrompts).Text;
 
         public ObjectReferenceText TerminalConversationContent(bool includeAnswerPrompts = true) =>
-            ObjectReferenceText.Join("\n\n", TerminalConversationLines(includeAnswerPrompts, false).Select(entry => entry.line));
+            ObjectReferenceText.Join("\n\n", TerminalConversationLines(includeAnswerPrompts, false).Select(line => line.Content));
 
         public TerminalTranscript TerminalConversationForConsole()
         {
             var parts = new List<TerminalTranscript>();
-            foreach ((ObjectReferenceText line, bool response) in TerminalConversationLines(false, true))
+            foreach (TerminalTranscript line in TerminalConversationLines(false, true))
             {
                 if (line.Text.Length == 0) continue;
-                if (parts.Count > 0) parts.Add(new TerminalTranscript(response ? "\n" : "\n\n"));
-                parts.Add(response ? TerminalTranscript.Response(line.Text) : new TerminalTranscript(line));
+                if (parts.Count > 0) parts.Add(new TerminalTranscript(line.Responses.Count > 0 ? "\n" : "\n\n"));
+                parts.Add(line);
             }
             return TerminalTranscript.Join("", parts);
         }
 
-        private IEnumerable<(ObjectReferenceText line, bool response)> TerminalConversationLines(bool includeAnswerPrompts, bool omitContactName)
+        private IEnumerable<TerminalTranscript> TerminalConversationLines(bool includeAnswerPrompts, bool styleForConsole)
         {
             var p = Conversation;
             if (p == null) yield break;
-            string contactName = omitContactName ? ContactForTerminalConversation(p.id).Name : null;
+            string contactName = styleForConsole ? ContactForTerminalConversation(p.id).Name : null;
             for (int i = 0; i < p.log.Count; i++)
             {
                 TerminalConversationLog entry = p.log[i];
@@ -645,30 +665,31 @@ namespace Codetective.Operations
                 if (p.disconnected && i == p.activeLog && !entry.complete) continue;
                 if (p.phase == TerminalConversationPhase.Speaking && p.receiving && i == p.activeLog)
                 {
-                    yield return (new ObjectReferenceText(DisplayLanguage == "en" ? "Receiving.." : "수신중.."), false);
+                    yield return new TerminalTranscript(DisplayLanguage == "en" ? "Receiving.." : "수신중..");
                     continue;
                 }
-                ObjectReferenceText line = ConversationText(entry, p);
+                TerminalTranscript line = ConversationText(entry, p, styleForConsole);
                 if (!entry.complete)
                 {
                     int[] elements = StringInfo.ParseCombiningCharacters(line.Text);
                     if (entry.visibleElements < elements.Length) line = line.Slice(0, elements[entry.visibleElements]);
                 }
-                var parts = new List<ObjectReferenceText>();
+                var parts = new List<TerminalTranscript>();
                 if (!string.IsNullOrEmpty(entry.speaker) || !string.IsNullOrEmpty(entry.speakerKey))
                 {
                     ObjectReferenceText speaker = ObjectReferenceText.Parse(Texts.Resolve(entry.speakerKey, entry.speaker, DisplayLanguage));
                     if (speaker.Spans.Count != 0 || speaker.Text != contactName)
                     {
                         bool prompt = ConversationDefinition.useSpeakerPrompt;
-                        if (!prompt) parts.Add(new ObjectReferenceText("["));
-                        parts.Add(speaker);
-                        parts.Add(new ObjectReferenceText(prompt ? "> " : "] "));
+                        if (!prompt) parts.Add(new TerminalTranscript("["));
+                        parts.Add(new TerminalTranscript(speaker));
+                        parts.Add(new TerminalTranscript(prompt ? "> " : "] "));
                     }
                 }
                 parts.Add(line);
-                if (!entry.complete) parts.Add(new ObjectReferenceText("▌"));
-                yield return (ObjectReferenceText.Join("", parts), entry.commandResult);
+                if (!entry.complete) parts.Add(new TerminalTranscript("▌"));
+                TerminalTranscript displayed = parts.Count == 1 ? line : TerminalTranscript.Join("", parts);
+                yield return entry.commandResult && styleForConsole ? TerminalTranscript.Response(displayed.Text) : displayed;
             }
         }
         private void RestoreTerminalConversations(KernelSnapshot snapshot)

@@ -50,6 +50,10 @@ namespace Codetective.Tests.Operations
                 string command = r.TerminalExpectedCommand;
                 Assert.That(sent, Is.LessThan(expected.Length));
                 Assert.That(command, Is.EqualTo(expected[sent]));
+                TerminalTranscript console = r.TerminalConversationForConsole();
+                var example = console.CommandExamples.Last();
+                string framed = r.TerminalExpectedGoal == TerminalGoalKind.BindReference ? command.Substring(0, command.IndexOf('=') + 1) : command;
+                Assert.That(console.Text.Substring(example.Start, example.Length), Is.EqualTo(framed));
                 if (r.TerminalExpectedGoal == TerminalGoalKind.BindReference)
                 {
                     ObjectReferenceText message = r.TerminalConversationContent();

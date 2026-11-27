@@ -308,6 +308,33 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
+        public void CommandExampleUsesATextAlignedFrameWithoutAddingAHitTarget()
+        {
+            var controller = Controller(new KernelRuntime(), out _);
+            Text log = controller.GetComponentInChildren<ScrollRect>().content.GetComponent<Text>();
+            log.verticalOverflow = VerticalWrapMode.Overflow;
+            var speech = TerminalTranscript.Spoken(new ObjectReferenceText("Enter help."), new[] { (6, 4) });
+
+            Invoke(typeof(TerminalController), controller, "DrawTranscript", speech);
+            Canvas.ForceUpdateCanvases();
+            Assert.That(log.text, Is.EqualTo("Enter \u00A0help\u00A0."));
+            Graphic frames = log.transform.Find("CommandExampleFrames").GetComponent<Graphic>();
+            Assert.That(frames.raycastTarget, Is.False);
+            Assert.That(frames.GetComponent<CrtMeshEffect>(), Is.Not.Null);
+            using (var border = new VertexHelper())
+            {
+                Invoke(frames.GetType(), frames, "OnPopulateMesh", border);
+                Assert.That(border.currentVertCount, Is.EqualTo(16));
+            }
+            Invoke(typeof(TerminalController), controller, "DrawTranscript", new TerminalTranscript("> help"));
+            using (var border = new VertexHelper())
+            {
+                Invoke(frames.GetType(), frames, "OnPopulateMesh", border);
+                Assert.That(border.currentVertCount, Is.Zero);
+            }
+        }
+
+        [Test]
         public void SubmittingAComposedNameRestoresFocusAndConsumesTheDelayedImeCommit()
         {
             var runtime = new KernelRuntime(); Controller(runtime, out _);

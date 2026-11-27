@@ -97,6 +97,27 @@ namespace Codetective.Tests.Operations
         }
 
         [Test]
+        public void OnlyAuthoredCommandExamplesAreStyledAndFramesGrowWithTheTypewriter()
+        {
+            TerminalConversationDefinition definition = Definition();
+            definition.steps[0].lines = new[] { Line("The word help, [[hq|HQ]], and {slot}. Enter {command} or type {slot} =", 1) };
+            KernelRuntime runtime = World(definition);
+            const string lead = "The word help, HQ, and practice. Enter ";
+            runtime.AdvanceTerminalConversation(lead.Length + 2.1);
+
+            TerminalTranscript typing = runtime.TerminalConversationForConsole();
+            Assert.That(typing.Text, Is.EqualTo(lead + "he▌"));
+            Assert.That(typing.CommandExamples, Is.EqualTo(new[] { (lead.Length, 2) }));
+            Assert.That(typing.Dialogue, Is.EqualTo(new[] { (0, lead.Length + 2) }));
+            Assert.That(typing.Content.Spans.Single().Id, Is.EqualTo("hq"));
+
+            Listen(runtime);
+            TerminalTranscript complete = runtime.TerminalConversationForConsole();
+            Assert.That(complete.CommandExamples.Select(range => complete.Text.Substring(range.Start, range.Length)),
+                Is.EqualTo(new[] { "help", "practice =" }));
+        }
+
+        [Test]
         public void AnOutgoingConversationConnectsOnlyOnRequestAndCanBeResumedWithoutRedial()
         {
             TerminalConversationDefinition definition = Definition();

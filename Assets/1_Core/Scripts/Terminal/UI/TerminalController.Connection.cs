@@ -9,16 +9,21 @@ namespace Codetective.Terminal
     public sealed partial class TerminalController
     {
         private const float ColumnGap = 24f;
+        private const float CallIconHeight = 180f;
         private static readonly Color ConnectionRuleColor = new Color(0.22f, 0.35f, 0.27f);
         private static readonly Color RequestColor = new Color(0.91f, 0.79f, 0.49f);
+        private static readonly Color DimRequestColor = new Color(0.51f, 0.43f, 0.27f);
+        private static readonly Color RingHighlight = new Color(0.25f, 0.19f, 0.085f, 0.88f);
+        private static readonly Color RingShadow = new Color(0.085f, 0.070f, 0.038f, 0.88f);
         private readonly List<(RectTransform rect, float left)> consoleLeftEdges = new List<(RectTransform, float)>();
         private readonly List<(RectTransform rect, float right)> candidateRightEdges = new List<(RectTransform, float)>();
-        private RectTransform contactPanel;
-        private Text contactStatus, contactName, unknownPortrait, contactActionLabel;
-        private Image contactPortrait;
+        private RectTransform contactPanel, portraitFrame;
+        private Text contactStatus, contactName, unknownPortrait, contactActionLabel, callIcon;
+        private Image contactPortrait, ringBackdrop;
         private Button contactAction;
         private MonitorPageHost contactHost;
         private float contactWidth;
+        private Vector2 connectedNamePosition;
         private bool consoleSplit;
         private string shownConnectionId, shownRequestId, shownReconnectId, connectionLocale;
         private int contactRevision = -1, portraitRevision = -1;
@@ -36,6 +41,12 @@ namespace Codetective.Terminal
             if (consoleSplit != split) LayoutConnectedConsole(split);
             contactPanel.gameObject.SetActive(pageVisible && split);
             contactAction.interactable = interactionEnabled;
+            if (incoming != null && pageVisible)
+            {
+                bool bright = contactHost == null || contactHost.IncomingConnectionBright(incoming);
+                ringBackdrop.color = bright ? RingHighlight : RingShadow;
+                callIcon.color = bright ? RequestColor : DimRequestColor;
+            }
 
             int nextPortraitRevision = contactHost != null ? contactHost.ProfilePageRevision : 0;
             string locale = Runtime.DisplayLanguage;
@@ -44,13 +55,19 @@ namespace Codetective.Terminal
             shownConnectionId = connected; shownRequestId = incoming; shownReconnectId = reconnect; connectionLocale = locale;
             contactRevision = Runtime.Revision; portraitRevision = nextPortraitRevision;
 
+            bool ringing = incoming != null;
+            ringBackdrop.gameObject.SetActive(ringing);
+            callIcon.gameObject.SetActive(ringing);
+            portraitFrame.gameObject.SetActive(!ringing);
             if (!split) return;
             bool english = locale == "en";
             TerminalContact contact = Runtime.ContactForTerminalConversation(contactId);
             contactName.text = contact.Name;
-            contactStatus.color = incoming != null ? RequestColor : MonitorWidgets.Foreground;
-            contactAction.image.color = incoming != null ? MonitorWidgets.SelectedButtonColor : MonitorWidgets.ButtonColor;
-            if (incoming != null)
+            contactName.rectTransform.anchoredPosition = ringing
+                ? new Vector2(connectedNamePosition.x, -(contactPanel.rect.height + CallIconHeight) * 0.5f - 14f) : connectedNamePosition;
+            contactStatus.color = ringing ? RequestColor : MonitorWidgets.Foreground;
+            contactAction.image.color = ringing ? MonitorWidgets.SelectedButtonColor : MonitorWidgets.ButtonColor;
+            if (ringing)
             {
                 contactStatus.text = english ? "Incoming connection" : "연결 요청";
                 contactActionLabel.text = english ? "Accept" : "수락";
@@ -97,6 +114,7 @@ namespace Codetective.Terminal
             Vector2 portraitSize = new Vector2(innerWidth, innerWidth * 3f / 4f);
 
             contactPanel = MonitorWidgets.Rect("TerminalContact", page, new Vector2(left, top), new Vector2(contactWidth, height));
+            ringBackdrop = ContactGraphic("IncomingCallHighlight", contactPanel, Vector2.zero, new Vector2(contactWidth, height), RingHighlight);
             ContactGraphic("ContactDivider", contactPanel, new Vector2(contactWidth + ColumnGap * 0.5f, 0), new Vector2(2, height), ConnectionRuleColor);
             contactStatus = MonitorWidgets.Label(contactPanel, font, new Vector2(padding, -8), new Vector2(innerWidth, 32), "", 22);
             contactStatus.name = "ContactStatus";
@@ -105,9 +123,9 @@ namespace Codetective.Terminal
             contactStatus.resizeTextMaxSize = contactStatus.fontSize;
             ContactGraphic("ContactRule", contactPanel, new Vector2(padding, -48), new Vector2(innerWidth, 2), ConnectionRuleColor);
 
-            var frame = ContactGraphic("PortraitFrame", contactPanel, new Vector2(padding, -portraitTop), portraitSize, ConnectionRuleColor);
+            portraitFrame = ContactGraphic("PortraitFrame", contactPanel, new Vector2(padding, -portraitTop), portraitSize, ConnectionRuleColor).rectTransform;
             Vector2 innerSize = portraitSize - new Vector2(4, 4);
-            var portraitBacking = ContactGraphic("PortraitBacking", frame.transform, new Vector2(2, -2), innerSize, new Color(0.04f, 0.075f, 0.058f));
+            var portraitBacking = ContactGraphic("PortraitBacking", portraitFrame, new Vector2(2, -2), innerSize, new Color(0.04f, 0.075f, 0.058f));
             contactPortrait = ContactGraphic("ContactPortrait", portraitBacking.transform, Vector2.zero, innerSize, Color.white);
             contactPortrait.preserveAspect = true;
             unknownPortrait = MonitorWidgets.Label(portraitBacking.transform, font, Vector2.zero, innerSize, "?", 64);
@@ -115,7 +133,12 @@ namespace Codetective.Terminal
             unknownPortrait.color = ConnectionRuleColor;
             unknownPortrait.alignment = TextAnchor.MiddleCenter;
 
+            callIcon = MonitorWidgets.Label(contactPanel, font, new Vector2(padding, (CallIconHeight - height) * 0.5f), new Vector2(innerWidth, CallIconHeight), "☎", 144);
+            callIcon.name = "IncomingCallIcon";
+            callIcon.alignment = TextAnchor.MiddleCenter;
+            callIcon.verticalOverflow = VerticalWrapMode.Overflow;
             contactName = MonitorWidgets.Label(contactPanel, font, new Vector2(padding, -portraitTop - portraitSize.y - 16), new Vector2(innerWidth, 80), "", 32);
+            connectedNamePosition = contactName.rectTransform.anchoredPosition;
             contactName.name = "ContactName";
             contactName.alignment = TextAnchor.UpperCenter;
             contactName.resizeTextForBestFit = true;

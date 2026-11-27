@@ -272,6 +272,9 @@ namespace Codetective.Terminal
             unreadMailCount = runtime != null ? runtime.UnreadMailCount(Mailbox.Kernel) + runtime.UnreadMailCount(Mailbox.Clinic) : 0;
             tab.GetComponentInChildren<Text>(true).text = pages["mail"].Title + (unreadMailCount > 0 ? " (" + unreadMailCount + ")" : "");
         }
+        internal bool IncomingConnectionBright(string requestId) => !SystemMenuVisible && requestId != null &&
+            (pendingConnection != requestId || Mathf.Repeat(Time.unscaledTime - connectionBlinkStarted, ConnectionBlinkSeconds * 2) < ConnectionBlinkSeconds);
+
         private void RefreshHeader()
         {
             string request = runtime?.TerminalIncomingConnectionId;
@@ -284,8 +287,7 @@ namespace Codetective.Terminal
             }
             bool blinkMail = !SystemMenuVisible && unreadMailCount > 0 &&
                 Mathf.Repeat(Time.unscaledTime - mailBlinkStarted, mailBlinkSeconds * 2) < mailBlinkSeconds;
-            bool blinkConnection = !SystemMenuVisible && request != null &&
-                Mathf.Repeat(Time.unscaledTime - connectionBlinkStarted, ConnectionBlinkSeconds * 2) < ConnectionBlinkSeconds;
+            bool blinkConnection = IncomingConnectionBright(request);
             Color selected = MonitorWidgets.SelectedButtonColor;
             if (heading != null) heading.text = "CODETECTIVE / " + (CurrentPage != null ? CurrentPage.Title : "");
             foreach (var tab in tabs)

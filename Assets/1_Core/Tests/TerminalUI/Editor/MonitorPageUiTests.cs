@@ -70,6 +70,8 @@ namespace Codetective.Terminal.Tests.UI
             var frame = (RectTransform)contact.Find("PortraitFrame");
             var divider = (RectTransform)contact.Find("ContactDivider");
             var name = (RectTransform)contact.Find("ContactName");
+            var ringingIcon = contact.Find("IncomingCallIcon").GetComponent<Text>();
+            var ringingBackground = contact.Find("IncomingCallHighlight").GetComponent<Image>();
             float splitWidth = commandField.rect.width;
             Assert.That(contact.gameObject.activeSelf, Is.True);
             Assert.That(contact.GetComponent<Image>(), Is.Null);
@@ -81,13 +83,30 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(name.anchoredPosition.y, Is.LessThan(frame.anchoredPosition.y - frame.rect.height));
             Assert.That(divider.anchoredPosition.x, Is.GreaterThan(contact.rect.width));
             Assert.That(contact.anchoredPosition.x + divider.anchoredPosition.x + divider.rect.width, Is.LessThan(commandField.anchoredPosition.x));
-            Assert.That(frame.Find("PortraitBacking/UnknownPortrait").gameObject.activeSelf, Is.True);
+            Assert.That(frame.gameObject.activeSelf, Is.False);
+            Assert.That(ringingIcon.gameObject.activeSelf, Is.True);
+            Assert.That(ringingIcon.text, Is.EqualTo("☎"));
+            Assert.That(ringingIcon.font.HasCharacter('☎'), Is.True);
+            Assert.That(ringingIcon.fontSize, Is.GreaterThan(name.GetComponent<Text>().fontSize * 3));
+            float iconCenterY = ringingIcon.rectTransform.anchoredPosition.y - ringingIcon.rectTransform.rect.height * 0.5f;
+            Assert.That(iconCenterY, Is.EqualTo(-contact.rect.height * 0.5f).Within(0.1f));
+            Assert.That(ringingBackground.gameObject.activeSelf, Is.True);
+            SetField(host, "connectionBlinkStarted", Time.unscaledTime - 0.25f);
+            Invoke(terminal, "LateUpdate");
+            float bright = ringingBackground.color.grayscale;
+            SetField(host, "connectionBlinkStarted", Time.unscaledTime - 0.75f);
+            Invoke(terminal, "LateUpdate");
+            Assert.That(ringingBackground.color.grayscale, Is.LessThan(bright));
             Assert.That(page.Find("LogHeading"), Is.Null); Assert.That(page.Find("Help"), Is.Null);
 
             action.onClick.Invoke();
             Assert.That(r.TerminalLineInProgress, Is.True); Assert.That(input.interactable, Is.True); Assert.That(input.readOnly, Is.False);
             Assert.That(input.isFocused, Is.False);
             Assert.That(status.text, Is.EqualTo("연결됨")); Assert.That(actionLabel.text, Is.EqualTo("연결 끊기"));
+            Assert.That(ringingIcon.gameObject.activeSelf, Is.False);
+            Assert.That(ringingBackground.gameObject.activeSelf, Is.False);
+            Assert.That(frame.gameObject.activeSelf, Is.True);
+            Assert.That(frame.Find("PortraitBacking/UnknownPortrait").gameObject.activeInHierarchy, Is.True);
             Assert.That(commandField.rect.width, Is.EqualTo(splitWidth).Within(0.1f));
             var send = (RectTransform)input.transform.Find("CommandAction");
             Assert.That(send.anchorMax.x, Is.EqualTo(1f));
@@ -106,6 +125,7 @@ namespace Codetective.Terminal.Tests.UI
             Assert.That(tab.GetComponentInChildren<Text>().text, Does.EndWith(" (1)"));
             Assert.That(contact.gameObject.activeSelf, Is.True);
             Assert.That(status.text, Is.EqualTo("연결 요청"));
+            Assert.That(ringingIcon.gameObject.activeSelf, Is.True);
             action.onClick.Invoke();
             Assert.That(status.text, Is.EqualTo("연결됨"));
             Assert.That(r.ConversationProgress("kernel-onboarding").deviations, Is.Zero);

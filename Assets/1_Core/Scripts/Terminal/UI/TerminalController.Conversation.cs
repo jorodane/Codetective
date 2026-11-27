@@ -19,6 +19,7 @@ namespace Codetective.Terminal
         private bool conversationInputLocked;
         private CrtScreen conversationScreen;
         private ObjectReferenceTextView transcriptLinks;
+        private TerminalTranscriptStyleView transcriptStyle;
         private const int TranscriptCharacterLimit = 12000;
         private const string ResponseIndent = " │ ";
         private readonly Dictionary<string, string> responseLayouts = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -64,35 +65,65 @@ namespace Codetective.Terminal
         }
         private void DrawTranscript(TerminalTranscript content)
         {
-            if (transcriptLinks == null) transcriptLinks = ObjectReferenceTextView.Attach(transcript, (id, label) => TryInsertObjectReference(id, label));
-            ObjectReferenceText rendered = FormatTranscript(content);
+            if (transcriptLinks == null)
+            {
+                transcriptLinks = ObjectReferenceTextView.Attach(transcript, (id, label) => TryInsertObjectReference(id, label));
+                transcriptStyle = TerminalTranscriptStyleView.Attach(transcript);
+            }
+            TerminalTranscript rendered = FormatTranscript(content);
             int start = BoundedTranscriptStart(rendered.Text);
             if (start > 0) rendered = rendered.Slice(start, rendered.Text.Length - start);
             if (rendered.Text != transcript.text) QueueTranscriptScroll();
-            transcriptLinks.Show(rendered, Runtime.CanLinkObject);
+            transcriptLinks.Show(rendered.Content, Runtime.CanLinkObject);
+            transcriptStyle.Show(rendered);
             renderedTranscriptWidth = transcript.rectTransform.rect.width;
         }
 
-        private ObjectReferenceText FormatTranscript(TerminalTranscript transcriptContent)
+        private TerminalTranscript FormatTranscript(TerminalTranscript transcriptContent) =>
+            PadCommandExamples(IndentResponses(transcriptContent));
+
+        private TerminalTranscript IndentResponses(TerminalTranscript transcriptContent)
         {
-            if (transcriptContent.Responses.Count == 0) return transcriptContent.Content;
+            if (transcriptContent.Responses.Count == 0) return transcriptContent;
             float width = transcript.rectTransform.rect.width;
             if (!Mathf.Approximately(responseLayoutWidth, width) || responseLayouts.Count >= 256)
             { responseLayouts.Clear(); responseLayoutWidth = width; }
 
-            var parts = new List<ObjectReferenceText>();
+            var parts = new List<TerminalTranscript>();
             int offset = 0;
             foreach ((int start, int length) in transcriptContent.Responses)
             {
-                if (start > offset) parts.Add(transcriptContent.Content.Slice(offset, start - offset));
+                if (start > offset) parts.Add(transcriptContent.Slice(offset, start - offset));
                 string response = transcriptContent.Text.Substring(start, length);
                 if (!responseLayouts.TryGetValue(response, out string formatted))
                     responseLayouts.Add(response, formatted = WrapResponse(response, width));
-                parts.Add(new ObjectReferenceText(formatted));
+                parts.Add(new TerminalTranscript(formatted));
                 offset = start + length;
             }
-            if (offset < transcriptContent.Text.Length) parts.Add(transcriptContent.Content.Slice(offset, transcriptContent.Text.Length - offset));
-            return ObjectReferenceText.Join("", parts);
+            if (offset < transcriptContent.Text.Length) parts.Add(transcriptContent.Slice(offset, transcriptContent.Text.Length - offset));
+            return TerminalTranscript.Join("", parts);
+        }
+
+        private static TerminalTranscript PadCommandExamples(TerminalTranscript content)
+        {
+            if (content.CommandExamples.Count == 0) return content;
+            var parts = new List<TerminalTranscript>();
+            var space = new TerminalTranscript("\u00A0");
+            int previous = 0;
+            foreach ((int start, int length) in content.CommandExamples)
+            {
+                int end = start + length;
+                // Keep an authored link whole if it includes a command example.
+                if (content.Content.Spans.Any(span => span.Start < end && span.End > start)) continue;
+                if (start > previous) parts.Add(content.Slice(previous, start - previous));
+                parts.Add(space);
+                parts.Add(content.Slice(start, length));
+                parts.Add(space);
+                previous = end;
+            }
+            if (previous == 0) return content;
+            if (previous < content.Text.Length) parts.Add(content.Slice(previous, content.Text.Length - previous));
+            return TerminalTranscript.Join("", parts);
         }
 
         private string WrapResponse(string response, float width)
