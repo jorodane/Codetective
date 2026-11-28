@@ -15,7 +15,7 @@ namespace Codetective.Gameplay
         private DialoguePresentationDefinition presentation;
         private Camera cameraView;
         private Renderer[] terminalParts;
-        private RectTransform viewport, bubble;
+        private RectTransform viewport, bubble, timeGauge, timeGaugeFill;
         private Text speaker, sentence, feedback;
         private ObjectReferenceTextView sentenceLinks;
         private Button main, clue, firstResponse, secondResponse;
@@ -38,6 +38,7 @@ namespace Codetective.Gameplay
             main = bubble.gameObject.AddComponent<Button>(); main.targetGraphic = image;
             main.transition = Selectable.Transition.None;
             main.onClick.AddListener(() => Acknowledge(nextAcknowledgement++ % 2));
+            BuildTimeGauge();
             speaker = OverlayWidgets.Label(bubble, font, new Vector2(16, -8), new Vector2(640, 26), "", 20);
             sentence = OverlayWidgets.Label(bubble, font, new Vector2(16, -39), new Vector2(640, 96), "", 22);
             sentenceLinks = ObjectReferenceTextView.Attach(sentence, (id, label) =>
@@ -60,6 +61,39 @@ namespace Codetective.Gameplay
             audioSource = gameObject.AddComponent<AudioSource>(); audioSource.playOnAwake = false; audioSource.spatialBlend = 0;
             Refresh();
         }
+
+        private void BuildTimeGauge()
+        {
+            timeGauge = OverlayWidgets.Rect("ConsultationTimeGauge", bubble, Vector2.zero, Vector2.zero);
+            timeGauge.anchorMax = Vector2.one;
+            timeGauge.offsetMin = new Vector2(0f, -4f);
+            timeGauge.offsetMax = Vector2.zero;
+            Image track = timeGauge.gameObject.AddComponent<Image>();
+            track.color = new Color(0.20f, 0.29f, 0.23f);
+            track.raycastTarget = false;
+
+            timeGaugeFill = OverlayWidgets.Rect("Fill", timeGauge, Vector2.zero, Vector2.zero, Vector2.zero);
+            timeGaugeFill.anchorMax = Vector2.up;
+            timeGaugeFill.offsetMin = timeGaugeFill.offsetMax = Vector2.zero;
+            Image fill = timeGaugeFill.gameObject.AddComponent<Image>();
+            fill.color = new Color(0.55f, 0.82f, 0.63f);
+            fill.raycastTarget = false;
+            timeGauge.gameObject.SetActive(false);
+        }
+
+        private void RefreshTimeGauge(AppointmentProgress visit, double minute)
+        {
+            // Let an expired visit show a full gauge during its closing line.
+            bool visible = visit?.phase == VisitPhase.Talking || (visit?.phase == VisitPhase.Closing && minute >= visit.endMinute);
+            timeGauge.gameObject.SetActive(visible);
+            if (!visible) return;
+
+            double start = visit.SessionStart;
+            double duration = visit.endMinute - start;
+            float elapsed = duration > 0d ? Mathf.Clamp01((float)((minute - start) / duration)) : 1f;
+            timeGaugeFill.anchorMax = new Vector2(elapsed, 1f);
+        }
+
         private void LateUpdate()
         {
             if (game == null || bubble == null) return;
@@ -122,6 +156,7 @@ namespace Codetective.Gameplay
                 !inspection.ModalInputBlocked && (game.Carry == null || game.Carry.HeldItem == null);
             bubble.gameObject.SetActive(visible); if (!visible) return;
             Position();
+            RefreshTimeGauge(visit, game.Runtime.Minute);
             bool hasClue = !sequence && !string.IsNullOrWhiteSpace(line.keyword);
             int choices = sequence ? 0 : line.ResponseCount;
             bool routine = !string.IsNullOrEmpty(visit?.episodeId);

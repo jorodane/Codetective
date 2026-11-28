@@ -703,7 +703,7 @@ namespace Codetective.Terminal.Tests.UI
         }
 
         [Test]
-        public void ConsultationClipsTheSpeechBubbleWithoutReframingTheCamera()
+        public void ConsultationKeepsTheTimeGaugeInTheClippedSpeechBubbleWithoutReframing()
         {
             var system = new GameObject("Consultation"); system.SetActive(false);
             var navigation = new GameObject("Navigation", typeof(Camera), typeof(CameraAngleController), FindType("Codetective.Interaction.PauseMenuView")); navigation.SetActive(false);
@@ -719,14 +719,49 @@ namespace Codetective.Terminal.Tests.UI
                 ((RectTransform)canvas.transform).sizeDelta = new Vector2(1280f, 720f);
                 Component inspection = navigation.AddComponent(FindType("Codetective.Interaction.InspectionController"));
                 Component game = system.AddComponent(FindType("Codetective.Gameplay.KernelGameController"));
-                Set(game, "<Runtime>k__BackingField", ClinicScenario.Create());
+                KernelRuntime runtime = ClinicScenario.Create();
+                runtime.RegisterClinicDay(new ClinicDayPlan { appointments = new[] { new PatientAppointment
+                {
+                    id = "morning", endMinute = 11 * 60,
+                    dialogue = new[] { new ConsultationLine { sentence = "첫 이야기" }, new ConsultationLine { sentence = "다음 이야기" } }
+                } } });
+                runtime.Tick(1);
+                string visitId = runtime.CurrentAppointment.id;
+                Set(game, "<Runtime>k__BackingField", runtime);
                 Component overlay = system.AddComponent(FindType("Codetective.Gameplay.ConsultationOverlay"));
                 Call(overlay, "Initialize", game, inspection, canvas.transform, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), null, camera, terminal.transform);
 
                 RectMask2D mask = canvas.GetComponentInChildren<RectMask2D>();
                 RectTransform bubble = (RectTransform)mask.transform.Find("PatientSpeechBubble");
+                RectTransform gauge = (RectTransform)bubble.Find("ConsultationTimeGauge");
+                RectTransform fill = (RectTransform)gauge.Find("Fill");
                 Assert.That(bubble.gameObject.activeSelf, Is.True);
                 Assert.That(((RectTransform)mask.transform).rect.height, Is.GreaterThan(0f).And.LessThan(bubble.rect.height));
+                Assert.That(gauge.gameObject.activeSelf, Is.False);
+
+                runtime.AdvanceVisitPresentation(visitId, VisitPhase.Arriving);
+                Call(overlay, "Refresh");
+                Assert.That(gauge.gameObject.activeSelf, Is.True);
+                Assert.That(gauge.rect.height, Is.LessThan(((RectTransform)mask.transform).rect.height));
+                Assert.That(fill.anchorMin, Is.EqualTo(Vector2.zero));
+                Assert.That(fill.anchorMax, Is.EqualTo(Vector2.up));
+                Assert.That(gauge.GetComponent<Image>().raycastTarget || fill.GetComponent<Image>().raycastTarget, Is.False);
+
+                runtime.Tick(30.5);
+                Call(overlay, "Refresh");
+                Assert.That(fill.rect.width / gauge.rect.width, Is.EqualTo(30.5f / 120f).Within(0.001f));
+                runtime.Reply();
+                Call(overlay, "Refresh");
+                Assert.That(fill.rect.width / gauge.rect.width, Is.EqualTo(30.5f / 120f).Within(0.001f));
+
+                runtime.Tick(120);
+                Call(overlay, "Refresh");
+                Assert.That(runtime.CurrentAppointment.phase, Is.EqualTo(VisitPhase.Closing));
+                Assert.That(gauge.gameObject.activeSelf, Is.True);
+                Assert.That(fill.anchorMax, Is.EqualTo(Vector2.one));
+                runtime.AdvanceVisitPresentation(visitId, VisitPhase.Closing);
+                Call(overlay, "Refresh");
+                Assert.That(gauge.gameObject.activeSelf, Is.False);
                 Assert.That(camera.projectionMatrix, Is.EqualTo(projection));
             }
             finally { Object.DestroyImmediate(system); Object.DestroyImmediate(navigation); Object.DestroyImmediate(canvas); Object.DestroyImmediate(terminal); }
